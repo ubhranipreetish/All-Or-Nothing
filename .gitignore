@@ -1,0 +1,61 @@
+# =========================
+# ENV FILES (SECRETS)
+# =========================
+.env
+.env.*
+!.env.example
+
+# =========================
+# NODE / JS
+# =========================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# =========================
+# BUILD OUTPUTS
+# =========================
+dist/
+build/
+.next/
+out/
+
+# =========================
+# CACHE / TEMP
+# =========================
+.cache/
+.eslintcache
+coverage/
+*.log
+
+# =========================
+# OS FILES
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# IDE / EDITOR
+# =========================
+.vscode/
+.idea/
+*.swp
+
+# =========================
+# TYPESCRIPT
+# =========================
+*.tsbuildinfo
+
+# =========================
+# ENV-SPECIFIC (OPTIONAL)
+# =========================
+.env.local
+.env.development
+.env.production
+
+# =========================
+# MISC
+# =========================
+*.pem
