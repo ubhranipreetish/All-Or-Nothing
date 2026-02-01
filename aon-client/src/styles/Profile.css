@@ -298,6 +298,30 @@
     font-size: 0.9rem;
 }
 
+/* See All Button */
+.see-all-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 14px 24px;
+    margin-top: 1rem;
+    background: linear-gradient(135deg, rgba(245, 193, 108, 0.1) 0%, rgba(245, 193, 108, 0.05) 100%);
+    border: 1px dashed var(--primary-gold);
+    border-radius: 10px;
+    color: var(--primary-gold);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.see-all-btn:hover {
+    background: linear-gradient(135deg, rgba(245, 193, 108, 0.2) 0%, rgba(245, 193, 108, 0.1) 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(245, 193, 108, 0.2);
+}
+
 /* Empty State */
 .empty-state {
     text-align: center;

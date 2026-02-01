@@ -6,11 +6,11 @@ import Link from "next/link";
 import { useWallet } from "../contexts/WalletContext";
 import { useAuth } from "../contexts/AuthContext";
 import { GoogleLogin } from "@react-oauth/google";
-import { Wallet, Plus, Menu, X, Gamepad2, HelpCircle, Shield } from "lucide-react";
+import { Wallet, Plus, Menu, X, Gamepad2, HelpCircle, Shield, Gift } from "lucide-react";
 import "../styles/Navbar.css";
 
 export default function Navbar() {
-    const { wallet, addMoney, loading } = useWallet();
+    const { wallet, addMoney, loading, hasClaimed100Bonus, claimWelcomeBonus } = useWallet();
     const { user, login, logout } = useAuth();
     const router = useRouter();
     const [showAddModal, setShowAddModal] = useState(false);
@@ -18,6 +18,7 @@ export default function Navbar() {
     const [error, setError] = useState("");
     const [scrolled, setScrolled] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const [claiming, setClaiming] = useState(false);
 
     useEffect(() => {
         const handleScroll = () => {
@@ -31,15 +32,13 @@ export default function Navbar() {
     useEffect(() => {
         const hash = window.location.hash;
         if (hash) {
-            // Small delay to ensure DOM is ready after navigation
             setTimeout(() => {
                 const targetId = hash.replace('#', '');
                 const element = document.getElementById(targetId);
                 if (element) {
-                    const offset = 80; // navbar height
+                    const offset = 80;
                     const elementPosition = element.getBoundingClientRect().top;
                     const offsetPosition = elementPosition + window.pageYOffset - offset;
-
                     window.scrollTo({
                         top: offsetPosition,
                         behavior: "smooth"
@@ -75,28 +74,32 @@ export default function Navbar() {
         setError("");
     };
 
-    // Smooth scroll handler - handles navigation from any page
+    const handleClaimBonus = async () => {
+        setClaiming(true);
+        const success = await claimWelcomeBonus();
+        setClaiming(false);
+        if (!success) {
+            alert("Failed to claim bonus. Please try again.");
+        }
+    };
+
+    // Smooth scroll handler
     const handleSmoothScroll = (e: React.MouseEvent<HTMLAnchorElement>, targetId: string) => {
         e.preventDefault();
-
-        // Check if we're on the home page
         const isHomePage = window.location.pathname === "/" || window.location.pathname === "";
 
         if (isHomePage) {
-            // Already on home page - smooth scroll directly
             const element = document.getElementById(targetId);
             if (element) {
-                const offset = 80; // navbar height
+                const offset = 80;
                 const elementPosition = element.getBoundingClientRect().top;
                 const offsetPosition = elementPosition + window.pageYOffset - offset;
-
                 window.scrollTo({
                     top: offsetPosition,
                     behavior: "smooth"
                 });
             }
         } else {
-            // Navigate to home page with hash fragment
             router.push(`/#${targetId}`);
         }
         setMobileMenuOpen(false);
@@ -127,13 +130,17 @@ export default function Navbar() {
                     </div>
 
                     <div className="nav-right">
-                        <div className="wallet-section">
-                            <Wallet size={18} className="wallet-icon-svg" />
-                            <span className="wallet">₹{wallet.toFixed(2)}</span>
-                            <button className="add-money-btn" onClick={() => setShowAddModal(true)}>
-                                <Plus size={20} />
-                            </button>
-                        </div>
+                        {/* Wallet - Only show when logged in */}
+                        {user && (
+                            <div className="wallet-section">
+                                <Wallet size={18} className="wallet-icon-svg" />
+                                <span className="wallet">₹{wallet.toFixed(2)}</span>
+                                <button className="add-money-btn" onClick={() => setShowAddModal(true)}>
+                                    <Plus size={20} />
+                                </button>
+                            </div>
+                        )}
+
                         <button className="play-now-btn" onClick={() => {
                             const element = document.getElementById("games");
                             if (element) {
@@ -212,13 +219,37 @@ export default function Navbar() {
                             <Shield size={20} />
                             <span>Fairness</span>
                         </a>
-                        <div className="mobile-wallet">
-                            <span>Wallet: ₹{wallet.toFixed(2)}</span>
-                            <button onClick={() => { setShowAddModal(true); setMobileMenuOpen(false); }}>Add Money</button>
-                        </div>
+                        {user && (
+                            <div className="mobile-wallet">
+                                <span>Wallet: ₹{wallet.toFixed(2)}</span>
+                                <button onClick={() => { setShowAddModal(true); setMobileMenuOpen(false); }}>Add Money</button>
+                            </div>
+                        )}
                     </div>
                 )}
             </nav>
+
+            {/* Promo Banner */}
+            {!user && (
+                <div className="promo-banner promo-guest">
+                    <Gift size={20} />
+                    <span>Register with us & get <strong>FREE ₹100</strong> in your wallet (new users only)</span>
+                </div>
+            )}
+
+            {user && !hasClaimed100Bonus && (
+                <div className="promo-banner promo-claim">
+                    <Gift size={20} />
+                    <span>🎉 Welcome Bonus! Claim your <strong>₹100</strong> free bonus</span>
+                    <button
+                        className="claim-btn"
+                        onClick={handleClaimBonus}
+                        disabled={claiming}
+                    >
+                        {claiming ? "Claiming..." : "Claim ₹100"}
+                    </button>
+                </div>
+            )}
 
             {/* Add Money Modal */}
             {showAddModal && (

@@ -22,6 +22,10 @@ const UserSchema = new Schema(
       type: Number,
       default: 0,
     },
+    hasClaimed100Bonus: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true }
 );

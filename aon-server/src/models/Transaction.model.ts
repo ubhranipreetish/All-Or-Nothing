@@ -12,6 +12,8 @@ export interface ITransaction {
         multiplier?: number;
         result?: string;
         roundId?: string;
+        bonusType?: string;
+        description?: string;
     };
     createdAt: Date;
 }
@@ -49,6 +51,8 @@ const TransactionSchema = new Schema<ITransaction>(
             multiplier: Number,
             result: String,
             roundId: String,
+            bonusType: String,
+            description: String,
         },
     },
     { timestamps: true }

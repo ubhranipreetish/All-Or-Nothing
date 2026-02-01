@@ -8,6 +8,7 @@ import walletRoutes from "./routes/wallet.route";
 import transactionRoutes from "./routes/transaction.route";
 import leaderboardRoutes from "./routes/leaderboard.route";
 import profileRoutes from "./routes/profile.route";
+import bonusRoutes from "./routes/bonus.route";
 
 const app = express();
 
@@ -22,6 +23,7 @@ app.use("/api/wallet", walletRoutes);
 app.use("/api/transactions", transactionRoutes);
 app.use("/api/leaderboard", leaderboardRoutes);
 app.use("/api/profile", profileRoutes);
+app.use("/api/bonus", bonusRoutes);
 
 app.get("/health", (_, res) => {
   res.json({ status: "OK" });

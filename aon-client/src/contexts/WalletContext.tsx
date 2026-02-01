@@ -7,10 +7,12 @@ interface WalletContextType {
   wallet: number;
   totalEarnings: number;
   loading: boolean;
+  hasClaimed100Bonus: boolean;
   addMoney: (amount: number) => Promise<boolean>;
   deductMoney: (amount: number) => boolean;
   recordBet: (amount: number, gameType: string, gameId?: string) => Promise<boolean>;
   recordWin: (winAmount: number, betAmount: number, gameType: string, multiplier?: number, gameId?: string) => Promise<boolean>;
+  claimWelcomeBonus: () => Promise<boolean>;
   refreshWallet: () => Promise<void>;
 }
 
@@ -22,34 +24,42 @@ interface WalletProviderProps {
 
 export function WalletProvider({ children }: WalletProviderProps) {
   const { user } = useAuth();
-  const [wallet, setWallet] = useState<number>(0); // Start with 0, will sync from backend
+  const [wallet, setWallet] = useState<number>(0);
   const [totalEarnings, setTotalEarnings] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(false);
+  const [hasClaimed100Bonus, setHasClaimed100Bonus] = useState<boolean>(true); // Default true to hide until checked
 
   const getToken = () => localStorage.getItem("token");
   const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api";
 
-  // Fetch wallet balance from backend
+  // Fetch wallet balance and bonus status from backend
   const refreshWallet = useCallback(async () => {
     const token = getToken();
     if (!token) return;
 
     try {
-      const res = await fetch(`${API_URL}/wallet/balance`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+      // Fetch wallet balance
+      const walletRes = await fetch(`${API_URL}/wallet/balance`, {
+        headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (res.ok) {
-        const data = await res.json();
+      if (walletRes.ok) {
+        const data = await walletRes.json();
         setWallet(data.walletBalance ?? 0);
         setTotalEarnings(data.totalEarnings ?? 0);
-      } else {
-        console.error("Failed to fetch wallet:", res.status, await res.text());
+      }
+
+      // Fetch bonus status
+      const bonusRes = await fetch(`${API_URL}/bonus/status`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (bonusRes.ok) {
+        const bonusData = await bonusRes.json();
+        setHasClaimed100Bonus(bonusData.hasClaimed100Bonus ?? false);
       }
     } catch (error) {
-      console.error("Failed to fetch wallet balance:", error);
+      console.error("Failed to fetch wallet:", error);
     }
   }, [API_URL]);
 
@@ -58,22 +68,17 @@ export function WalletProvider({ children }: WalletProviderProps) {
     if (user) {
       refreshWallet();
     } else {
-      // Reset for non-logged in users
       setWallet(0);
       setTotalEarnings(0);
+      setHasClaimed100Bonus(true); // Hide banner for non-logged in
     }
   }, [user, refreshWallet]);
 
-  // Add money (deposit) - calls backend API
+  // Add money (deposit)
   const addMoney = async (amount: number): Promise<boolean> => {
-    if (isNaN(amount) || amount <= 0 || amount > 10000000) {
-      console.error("Invalid amount:", amount);
-      return false;
-    }
+    if (isNaN(amount) || amount <= 0 || amount > 10000000) return false;
 
     const token = getToken();
-
-    // If not logged in, use local state
     if (!token) {
       setWallet((prev) => prev + amount);
       return true;
@@ -81,8 +86,6 @@ export function WalletProvider({ children }: WalletProviderProps) {
 
     try {
       setLoading(true);
-      console.log("Depositing:", amount, "to", `${API_URL}/wallet/deposit`);
-
       const res = await fetch(`${API_URL}/wallet/deposit`, {
         method: "POST",
         headers: {
@@ -93,15 +96,12 @@ export function WalletProvider({ children }: WalletProviderProps) {
       });
 
       const data = await res.json();
-
       if (res.ok) {
         setWallet(data.newBalance);
-        console.log("Deposit success, new balance:", data.newBalance);
         return true;
-      } else {
-        console.error("Deposit failed:", data.message || data);
-        return false;
       }
+      console.error("Deposit failed:", data.message);
+      return false;
     } catch (error) {
       console.error("Deposit error:", error);
       return false;
@@ -110,30 +110,19 @@ export function WalletProvider({ children }: WalletProviderProps) {
     }
   };
 
-  // Deduct money (local only - for immediate UI feedback before bet is recorded)
+  // Deduct money (local)
   const deductMoney = (amount: number): boolean => {
-    if (isNaN(amount) || amount <= 0) {
-      return false;
-    }
-    if (wallet >= amount) {
-      setWallet((prev) => prev - amount);
-      return true;
-    }
-    return false;
+    if (isNaN(amount) || amount <= 0 || wallet < amount) return false;
+    setWallet((prev) => prev - amount);
+    return true;
   };
 
-  // Record a bet - calls backend API
+  // Record a bet
   const recordBet = async (amount: number, gameType: string, gameId?: string): Promise<boolean> => {
     const token = getToken();
-
-    // If not logged in, just use local deduction
-    if (!token) {
-      return deductMoney(amount);
-    }
+    if (!token) return deductMoney(amount);
 
     try {
-      console.log("Recording bet:", { amount, gameType }, "to", `${API_URL}/game/bet`);
-
       const res = await fetch(`${API_URL}/game/bet`, {
         method: "POST",
         headers: {
@@ -144,22 +133,19 @@ export function WalletProvider({ children }: WalletProviderProps) {
       });
 
       const data = await res.json();
-
       if (res.ok) {
         setWallet(data.newBalance);
-        console.log("Bet recorded, new balance:", data.newBalance);
         return true;
-      } else {
-        console.error("Bet error:", data.message || data);
-        return false;
       }
+      console.error("Bet error:", data.message);
+      return false;
     } catch (error) {
       console.error("Record bet error:", error);
       return false;
     }
   };
 
-  // Record a win - calls backend API
+  // Record a win
   const recordWin = async (
     winAmount: number,
     betAmount: number,
@@ -168,16 +154,12 @@ export function WalletProvider({ children }: WalletProviderProps) {
     gameId?: string
   ): Promise<boolean> => {
     const token = getToken();
-
-    // If not logged in, just add locally
     if (!token) {
       setWallet((prev) => prev + winAmount);
       return true;
     }
 
     try {
-      console.log("Recording win:", { winAmount, betAmount, gameType, multiplier });
-
       const res = await fetch(`${API_URL}/game/win`, {
         method: "POST",
         headers: {
@@ -188,19 +170,47 @@ export function WalletProvider({ children }: WalletProviderProps) {
       });
 
       const data = await res.json();
-
       if (res.ok) {
         setWallet(data.newBalance);
         setTotalEarnings(data.totalEarnings);
-        console.log("Win recorded, new balance:", data.newBalance);
         return true;
-      } else {
-        console.error("Win error:", data.message || data);
-        return false;
       }
+      console.error("Win error:", data.message);
+      return false;
     } catch (error) {
       console.error("Record win error:", error);
       return false;
+    }
+  };
+
+  // Claim welcome bonus
+  const claimWelcomeBonus = async (): Promise<boolean> => {
+    const token = getToken();
+    if (!token) return false;
+
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_URL}/bonus/claim-welcome`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setWallet(data.newBalance);
+        setHasClaimed100Bonus(true);
+        return true;
+      }
+      console.error("Claim bonus error:", data.message);
+      return false;
+    } catch (error) {
+      console.error("Claim bonus error:", error);
+      return false;
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -210,10 +220,12 @@ export function WalletProvider({ children }: WalletProviderProps) {
         wallet,
         totalEarnings,
         loading,
+        hasClaimed100Bonus,
         addMoney,
         deductMoney,
         recordBet,
         recordWin,
+        claimWelcomeBonus,
         refreshWallet,
       }}
     >

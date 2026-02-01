@@ -401,3 +401,92 @@
     font-size: 1.25rem;
   }
 }
+
+/* ==================== PROMO BANNER ==================== */
+.promo-banner {
+  position: fixed;
+  top: 72px;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 12px 24px;
+  font-size: 0.95rem;
+  z-index: 999;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.promo-guest {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  border-bottom: 1px solid rgba(255, 215, 0, 0.3);
+  color: #e0e0e0;
+}
+
+.promo-guest strong {
+  color: #ffd700;
+}
+
+.promo-claim {
+  background: linear-gradient(135deg, #1a3a1a 0%, #0d2818 100%);
+  border-bottom: 1px solid rgba(76, 175, 80, 0.4);
+  color: #e0e0e0;
+}
+
+.promo-claim strong {
+  color: #4caf50;
+}
+
+.claim-btn {
+  background: linear-gradient(135deg, #4caf50 0%, #388e3c 100%);
+  color: white;
+  border: none;
+  padding: 8px 20px;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
+}
+
+.claim-btn:hover:not(:disabled) {
+  transform: scale(1.05);
+  box-shadow: 0 4px 15px rgba(76, 175, 80, 0.5);
+}
+
+.claim-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+@media (max-width: 768px) {
+  .promo-banner {
+    top: 72px;
+    flex-wrap: wrap;
+    text-align: center;
+    font-size: 0.85rem;
+    padding: 10px 16px;
+  }
+
+  .promo-banner span {
+    flex: 1 1 100%;
+  }
+
+  .claim-btn {
+    margin-top: 8px;
+  }
+}
