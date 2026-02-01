@@ -9,6 +9,7 @@ import transactionRoutes from "./routes/transaction.route";
 import leaderboardRoutes from "./routes/leaderboard.route";
 import profileRoutes from "./routes/profile.route";
 import bonusRoutes from "./routes/bonus.route";
+import loanRoutes from "./routes/loan.route";
 
 const app = express();
 
@@ -24,6 +25,7 @@ app.use("/api/transactions", transactionRoutes);
 app.use("/api/leaderboard", leaderboardRoutes);
 app.use("/api/profile", profileRoutes);
 app.use("/api/bonus", bonusRoutes);
+app.use("/api/loan", loanRoutes);
 
 app.get("/health", (_, res) => {
   res.json({ status: "OK" });

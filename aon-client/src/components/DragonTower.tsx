@@ -6,7 +6,9 @@ import { Flame, Coins, ChevronUp } from "lucide-react";
 import "../styles/DragonTower.css";
 import Navbar from "./Navbar";
 import { useWallet } from "../contexts/WalletContext";
+import { useAuth } from "../contexts/AuthContext";
 import Footer from "./Footer";
+import SignInDialog from "./SignInDialog";
 
 type DifficultyLevel = "Low" | "Medium" | "High";
 
@@ -33,6 +35,8 @@ const generateDragons = (rows: number, difficulty: number): number[] => {
 
 export default function DragonTower() {
     const { wallet, recordBet, recordWin } = useWallet();
+    const { user } = useAuth();
+    const [showSignInDialog, setShowSignInDialog] = useState(false);
 
     const [difficulty, setDifficulty] = useState<DifficultyLevel>("Low");
     const [dragons, setDragons] = useState<number[]>([]);
@@ -91,6 +95,11 @@ export default function DragonTower() {
 
     const startGame = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        if (!user) {
+            setShowSignInDialog(true);
+            return;
+        }
 
         if (amount < MIN_BET) {
             showNotification(`Minimum bet is ₹${MIN_BET}`);
@@ -360,6 +369,7 @@ export default function DragonTower() {
                 </div>
             </div>
             <Footer />
+            <SignInDialog isOpen={showSignInDialog} onClose={() => setShowSignInDialog(false)} />
         </>
     );
 }

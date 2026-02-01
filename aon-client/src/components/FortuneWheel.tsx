@@ -3,9 +3,11 @@
 import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useWallet } from "../contexts/WalletContext";
+import { useAuth } from "../contexts/AuthContext";
 import "../styles/FortuneWheel.css";
 import Navbar from "./Navbar";
 import Footer from "./Footer";
+import SignInDialog from "./SignInDialog";
 
 type DifficultyLevel = "low" | "medium" | "hard";
 
@@ -18,6 +20,8 @@ const MIN_BET = 1;
 
 const FortuneWheel = () => {
     const { wallet, recordBet, recordWin } = useWallet();
+    const { user } = useAuth();
+    const [showSignInDialog, setShowSignInDialog] = useState(false);
 
     const [difficulty, setDifficulty] = useState<DifficultyLevel>("medium");
     const [segmentCount, setSegmentCount] = useState<number>(20);
@@ -265,6 +269,11 @@ const FortuneWheel = () => {
     const startGame = async (e: React.FormEvent) => {
         e.preventDefault();
 
+        if (!user) {
+            setShowSignInDialog(true);
+            return;
+        }
+
         if (amount < MIN_BET) {
             showNotification(`Minimum bet is ₹${MIN_BET}`);
             return;
@@ -462,6 +471,7 @@ const FortuneWheel = () => {
                 </div>
             </div>
             <Footer />
+            <SignInDialog isOpen={showSignInDialog} onClose={() => setShowSignInDialog(false)} />
         </>
     );
 };

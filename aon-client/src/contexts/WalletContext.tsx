@@ -3,17 +3,32 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
 import { useAuth } from "./AuthContext";
 
+interface Loan {
+  _id: string;
+  amount: number;
+  status: "ACTIVE" | "REPAID";
+  createdAt: string;
+  repaymentAmount?: number;
+  interestDays?: number;
+  interestRate?: number;
+}
+
 interface WalletContextType {
   wallet: number;
   totalEarnings: number;
   loading: boolean;
   hasClaimed100Bonus: boolean;
-  addMoney: (amount: number) => Promise<boolean>;
+  activeLoans: Loan[];
+  activeLoansCount: number;
+  canTakeLoan: boolean;
   deductMoney: (amount: number) => boolean;
   recordBet: (amount: number, gameType: string, gameId?: string) => Promise<boolean>;
   recordWin: (winAmount: number, betAmount: number, gameType: string, multiplier?: number, gameId?: string) => Promise<boolean>;
   claimWelcomeBonus: () => Promise<boolean>;
+  takeLoan: (amount: number) => Promise<boolean>;
+  repayLoan: (loanId: string) => Promise<boolean>;
   refreshWallet: () => Promise<void>;
+  fetchLoans: () => Promise<void>;
 }
 
 const WalletContext = createContext<WalletContextType | null>(null);
@@ -27,18 +42,39 @@ export function WalletProvider({ children }: WalletProviderProps) {
   const [wallet, setWallet] = useState<number>(0);
   const [totalEarnings, setTotalEarnings] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(false);
-  const [hasClaimed100Bonus, setHasClaimed100Bonus] = useState<boolean>(true); // Default true to hide until checked
+  const [hasClaimed100Bonus, setHasClaimed100Bonus] = useState<boolean>(true);
+  const [activeLoans, setActiveLoans] = useState<Loan[]>([]);
+  const [canTakeLoan, setCanTakeLoan] = useState<boolean>(true);
 
   const getToken = () => localStorage.getItem("token");
   const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api";
 
-  // Fetch wallet balance and bonus status from backend
+  // Fetch active loans
+  const fetchLoans = useCallback(async () => {
+    const token = getToken();
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${API_URL}/loan/active`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setActiveLoans(data.loans || []);
+        setCanTakeLoan(data.canTakeLoan ?? true);
+      }
+    } catch (error) {
+      console.error("Failed to fetch loans:", error);
+    }
+  }, [API_URL]);
+
+  // Fetch wallet balance and bonus status
   const refreshWallet = useCallback(async () => {
     const token = getToken();
     if (!token) return;
 
     try {
-      // Fetch wallet balance
       const walletRes = await fetch(`${API_URL}/wallet/balance`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -49,7 +85,6 @@ export function WalletProvider({ children }: WalletProviderProps) {
         setTotalEarnings(data.totalEarnings ?? 0);
       }
 
-      // Fetch bonus status
       const bonusRes = await fetch(`${API_URL}/bonus/status`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -58,10 +93,13 @@ export function WalletProvider({ children }: WalletProviderProps) {
         const bonusData = await bonusRes.json();
         setHasClaimed100Bonus(bonusData.hasClaimed100Bonus ?? false);
       }
+
+      // Also fetch loans
+      await fetchLoans();
     } catch (error) {
       console.error("Failed to fetch wallet:", error);
     }
-  }, [API_URL]);
+  }, [API_URL, fetchLoans]);
 
   // Sync wallet when user logs in
   useEffect(() => {
@@ -70,45 +108,11 @@ export function WalletProvider({ children }: WalletProviderProps) {
     } else {
       setWallet(0);
       setTotalEarnings(0);
-      setHasClaimed100Bonus(true); // Hide banner for non-logged in
+      setHasClaimed100Bonus(true);
+      setActiveLoans([]);
+      setCanTakeLoan(true);
     }
   }, [user, refreshWallet]);
-
-  // Add money (deposit)
-  const addMoney = async (amount: number): Promise<boolean> => {
-    if (isNaN(amount) || amount <= 0 || amount > 10000000) return false;
-
-    const token = getToken();
-    if (!token) {
-      setWallet((prev) => prev + amount);
-      return true;
-    }
-
-    try {
-      setLoading(true);
-      const res = await fetch(`${API_URL}/wallet/deposit`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ amount }),
-      });
-
-      const data = await res.json();
-      if (res.ok) {
-        setWallet(data.newBalance);
-        return true;
-      }
-      console.error("Deposit failed:", data.message);
-      return false;
-    } catch (error) {
-      console.error("Deposit error:", error);
-      return false;
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // Deduct money (local)
   const deductMoney = (amount: number): boolean => {
@@ -214,6 +218,71 @@ export function WalletProvider({ children }: WalletProviderProps) {
     }
   };
 
+  // Take a loan
+  const takeLoan = async (amount: number): Promise<boolean> => {
+    const token = getToken();
+    if (!token) return false;
+
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_URL}/loan/take`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ amount }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setWallet(data.newBalance);
+        setTotalEarnings(data.totalEarnings);
+        await fetchLoans();
+        return true;
+      }
+      console.error("Take loan error:", data.message);
+      return false;
+    } catch (error) {
+      console.error("Take loan error:", error);
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Repay a loan
+  const repayLoan = async (loanId: string): Promise<boolean> => {
+    const token = getToken();
+    if (!token) return false;
+
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_URL}/loan/repay/${loanId}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setWallet(data.newBalance);
+        setTotalEarnings(data.totalEarnings);
+        await fetchLoans();
+        return true;
+      }
+      console.error("Repay loan error:", data.message);
+      return false;
+    } catch (error) {
+      console.error("Repay loan error:", error);
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <WalletContext.Provider
       value={{
@@ -221,12 +290,17 @@ export function WalletProvider({ children }: WalletProviderProps) {
         totalEarnings,
         loading,
         hasClaimed100Bonus,
-        addMoney,
+        activeLoans,
+        activeLoansCount: activeLoans.length,
+        canTakeLoan,
         deductMoney,
         recordBet,
         recordWin,
         claimWelcomeBonus,
+        takeLoan,
+        repayLoan,
         refreshWallet,
+        fetchLoans,
       }}
     >
       {children}

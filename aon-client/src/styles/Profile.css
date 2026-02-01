@@ -138,6 +138,257 @@
     color: var(--text-muted);
 }
 
+/* ==================== LEADERBOARD + WALLET SECTION ==================== */
+.leaderboard-wallet-section {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.leaderboard-card,
+.wallet-loans-card {
+    background: linear-gradient(135deg, var(--deep-navy) 0%, var(--soft-navy) 100%);
+    border: 1px solid var(--divider);
+    border-radius: 16px;
+    padding: 1.5rem;
+}
+
+.leaderboard-card h3,
+.wallet-loans-card h3 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1.1rem;
+    color: var(--primary-gold);
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--divider);
+}
+
+/* Leaderboard Styles */
+.leaderboard-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.leaderboard-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 10px;
+    transition: all 0.2s ease;
+}
+
+.leaderboard-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.leaderboard-item.is-you {
+    background: rgba(245, 193, 108, 0.1);
+    border: 1px solid rgba(245, 193, 108, 0.3);
+}
+
+.rank {
+    min-width: 32px;
+    text-align: center;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+}
+
+.rank-1,
+.rank-2,
+.rank-3 {
+    font-size: 1.2rem;
+}
+
+.lb-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 2px solid var(--divider);
+}
+
+.lb-name {
+    flex: 1;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.you-badge {
+    padding: 2px 8px;
+    background: var(--primary-gold);
+    color: var(--midnight-navy);
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
+.lb-earnings {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--success);
+}
+
+.lb-earnings.negative {
+    color: var(--danger);
+}
+
+.your-rank-note {
+    margin-top: 1rem;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--divider);
+}
+
+/* Wallet Stats */
+.wallet-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 1.5rem;
+}
+
+.stat-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 10px;
+}
+
+.stat-label {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.stat-value {
+    font-weight: 700;
+    font-size: 1.1rem;
+}
+
+.stat-value.balance {
+    color: var(--electric-blue);
+}
+
+.stat-value.positive {
+    color: var(--success);
+}
+
+.stat-value.negative {
+    color: var(--danger);
+}
+
+.stat-value.golden {
+    color: var(--primary-gold);
+}
+
+/* Active Loans */
+.active-loans h4 {
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    margin-bottom: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--divider);
+}
+
+.no-loans {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    text-align: center;
+    padding: 1rem;
+}
+
+.loans-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.loan-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: 10px;
+}
+
+.loan-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.loan-principal {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.loan-repay-amount {
+    font-weight: 600;
+    color: var(--danger);
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.interest-badge {
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    background: rgba(245, 158, 11, 0.2);
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    border-radius: 12px;
+    color: #fbbf24;
+    font-weight: 500;
+}
+
+.loan-date {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.repay-btn {
+    padding: 8px 16px;
+    background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.repay-btn:hover:not(:disabled) {
+    transform: scale(1.05);
+    box-shadow: 0 4px 15px rgba(34, 197, 94, 0.4);
+}
+
+.repay-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+@media (max-width: 900px) {
+    .leaderboard-wallet-section {
+        grid-template-columns: 1fr;
+    }
+}
+
 /* ==================== TRANSACTION HISTORY ==================== */
 .transaction-section {
     background: linear-gradient(135deg, var(--deep-navy) 0%, var(--soft-navy) 100%);

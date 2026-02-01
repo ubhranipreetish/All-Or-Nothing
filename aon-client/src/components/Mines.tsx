@@ -6,7 +6,9 @@ import Tile from "./Tile";
 import "../styles/Mines.css";
 import Navbar from "./Navbar";
 import { useWallet } from "../contexts/WalletContext";
+import { useAuth } from "../contexts/AuthContext";
 import Footer from "./Footer";
+import SignInDialog from "./SignInDialog";
 
 const TILE_COUNT = 25;
 const MIN_BET = 1;
@@ -45,6 +47,8 @@ export default function Mines() {
     }, []);
 
     const { wallet, recordBet, recordWin } = useWallet();
+    const { user } = useAuth();
+    const [showSignInDialog, setShowSignInDialog] = useState(false);
 
     const [amount, setAmount] = useState<number>(100);
     const [mineCount, setMineCount] = useState<number>(3);
@@ -69,6 +73,11 @@ export default function Mines() {
 
     const startGame = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        if (!user) {
+            setShowSignInDialog(true);
+            return;
+        }
 
         if (amount < MIN_BET) {
             showNotification(`Minimum bet is ₹${MIN_BET}`);
@@ -293,6 +302,7 @@ export default function Mines() {
                 </div>
             </div>
             <Footer />
+            <SignInDialog isOpen={showSignInDialog} onClose={() => setShowSignInDialog(false)} />
         </>
     );
 }

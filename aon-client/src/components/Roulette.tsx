@@ -32,7 +32,7 @@ const getNumberColor = (num: number): "red" | "black" | "green" => {
 };
 
 export default function Roulette() {
-    const { wallet, deductMoney, addMoney } = useWallet();
+    const { wallet, recordBet, recordWin } = useWallet();
 
     const [bets, setBets] = useState<Bet[]>([]);
     const [spinning, setSpinning] = useState(false);
@@ -372,7 +372,7 @@ export default function Roulette() {
         ballAnimationRef.current = requestAnimationFrame(animate);
     }, []);
 
-    const spin = () => {
+    const spin = async () => {
         if (spinning || bets.length === 0) {
             if (bets.length === 0) showNotification("Place at least one bet!");
             return;
@@ -383,7 +383,7 @@ export default function Roulette() {
             return;
         }
 
-        const success = deductMoney(totalBet);
+        const success = await recordBet(totalBet, "ROULETTE");
         if (!success) {
             showNotification("Failed to place bets");
             return;
@@ -429,7 +429,7 @@ export default function Roulette() {
 
             if (!hasAddedWinnings.current && won > 0) {
                 hasAddedWinnings.current = true;
-                addMoney(won);
+                recordWin(won, totalBet, "ROULETTE");
                 if (winSound.current) {
                     winSound.current.currentTime = 0;
                     winSound.current.play().catch(() => { });

@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import User from "../models/User.model";
 import Transaction from "../models/Transaction.model";
-import { getIO } from "../socket";
+import { emitLeaderboardUpdate, emitTransactionUpdate, emitWalletUpdate } from "../socket";
 
 type GameType = "ROULETTE" | "AON" | "DICE" | "MINES" | "DRAGON_TOWER" | "WHEEL";
 
@@ -56,6 +56,10 @@ export const recordBet = async (req: Request, res: Response) => {
                 betAmount: amount,
             },
         });
+
+        // Emit real-time updates
+        emitTransactionUpdate(userId);
+        emitWalletUpdate(userId, { balance: newBalance, totalEarnings: user.totalEarnings });
 
         res.status(201).json({
             message: "Bet recorded successfully",
@@ -125,17 +129,10 @@ export const recordWin = async (req: Request, res: Response) => {
             },
         });
 
-        // Emit real-time leaderboard update
-        try {
-            const io = getIO();
-            io.emit("leaderboard:update", {
-                userId: user._id,
-                username: user.name,
-                totalEarnings: user.totalEarnings,
-            });
-        } catch {
-            // Socket.IO not initialized, skip emit
-        }
+        // Emit real-time updates
+        emitLeaderboardUpdate();
+        emitTransactionUpdate(userId);
+        emitWalletUpdate(userId, { balance: newBalance, totalEarnings: user.totalEarnings });
 
         res.status(201).json({
             message: "Win recorded successfully",
@@ -148,3 +145,4 @@ export const recordWin = async (req: Request, res: Response) => {
         res.status(500).json({ message: "Internal Server Error" });
     }
 };
+

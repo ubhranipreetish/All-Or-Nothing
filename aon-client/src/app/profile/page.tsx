@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../contexts/AuthContext";
-import { LogOut, Receipt, ChevronDown } from "lucide-react";
+import { useWallet } from "../../contexts/WalletContext";
+import { LogOut, Receipt, ChevronDown, Trophy, CreditCard } from "lucide-react";
 import "../../styles/Profile.css";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -43,6 +44,16 @@ interface ProfileData {
     } | null;
 }
 
+interface LeaderboardUser {
+    rank: number;
+    userId: string;
+    username: string;
+    avatar: string;
+    netWorth: number;
+    walletBalance: number;
+    loansToRepay: number;
+}
+
 interface PaginationData {
     page: number;
     limit: number;
@@ -54,16 +65,22 @@ interface PaginationData {
 
 export default function ProfilePage() {
     const { user, logout, isLoading: authLoading } = useAuth();
+    const { wallet, totalEarnings, activeLoans, repayLoan, loading: walletLoading, refreshWallet } = useWallet();
     const router = useRouter();
 
     const [profile, setProfile] = useState<ProfileData | null>(null);
     const [transactions, setTransactions] = useState<Transaction[]>([]);
+    const [leaderboard, setLeaderboard] = useState<LeaderboardUser[]>([]);
     const [pagination, setPagination] = useState<PaginationData | null>(null);
     const [loading, setLoading] = useState(true);
     const [transactionsLoading, setTransactionsLoading] = useState(false);
     const [activeFilter, setActiveFilter] = useState<string>("ALL");
     const [currentPage, setCurrentPage] = useState(1);
     const [showAllTransactions, setShowAllTransactions] = useState(false);
+    const [repayingLoanId, setRepayingLoanId] = useState<string | null>(null);
+    const [showRepayModal, setShowRepayModal] = useState(false);
+    const [selectedLoan, setSelectedLoan] = useState<{ _id: string; amount: number; repaymentAmount?: number; interestDays?: number } | null>(null);
+    const [repayState, setRepayState] = useState<"confirm" | "processing" | "success">("confirm");
 
     const fetchProfile = useCallback(async () => {
         try {
@@ -71,9 +88,7 @@ export default function ProfilePage() {
             if (!token) return;
 
             const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/profile/me`, {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
+                headers: { Authorization: `Bearer ${token}` },
             });
 
             if (res.ok) {
@@ -82,6 +97,18 @@ export default function ProfilePage() {
             }
         } catch (error) {
             console.error("Failed to fetch profile:", error);
+        }
+    }, []);
+
+    const fetchLeaderboard = useCallback(async () => {
+        try {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/leaderboard/all-time`);
+            if (res.ok) {
+                const data = await res.json();
+                setLeaderboard(data.leaderboard.slice(0, 10)); // Top 10
+            }
+        } catch (error) {
+            console.error("Failed to fetch leaderboard:", error);
         }
     }, []);
 
@@ -97,9 +124,7 @@ export default function ProfilePage() {
             }
 
             const res = await fetch(url, {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
+                headers: { Authorization: `Bearer ${token}` },
             });
 
             if (res.ok) {
@@ -121,11 +146,25 @@ export default function ProfilePage() {
         }
 
         if (user) {
-            Promise.all([fetchProfile(), fetchTransactions(1, "ALL", 5)]).finally(() => {
+            Promise.all([
+                fetchProfile(),
+                fetchTransactions(1, "ALL", 5),
+                fetchLeaderboard(),
+                refreshWallet(),
+            ]).finally(() => {
                 setLoading(false);
             });
+
+            // Real-time polling every 10 seconds
+            const pollInterval = setInterval(() => {
+                fetchLeaderboard();
+                fetchTransactions(currentPage, activeFilter, showAllTransactions ? 10 : 5);
+                refreshWallet();
+            }, 10000);
+
+            return () => clearInterval(pollInterval);
         }
-    }, [user, authLoading, router, fetchProfile, fetchTransactions]);
+    }, [user, authLoading, router, fetchProfile, fetchTransactions, fetchLeaderboard, refreshWallet, currentPage, activeFilter, showAllTransactions]);
 
     const handleFilterChange = (filter: string) => {
         setActiveFilter(filter);
@@ -144,6 +183,43 @@ export default function ProfilePage() {
         fetchTransactions(1, activeFilter, 10);
     };
 
+    const openRepayModal = (loan: { _id: string; amount: number; repaymentAmount?: number; interestDays?: number }) => {
+        setSelectedLoan(loan);
+        setRepayState("confirm");
+        setShowRepayModal(true);
+    };
+
+    const closeRepayModal = () => {
+        setShowRepayModal(false);
+        setSelectedLoan(null);
+        setRepayState("confirm");
+    };
+
+    const handleConfirmRepay = async () => {
+        if (!selectedLoan) return;
+
+        setRepayState("processing");
+        setRepayingLoanId(selectedLoan._id);
+
+        // Wait 1 second for visual feedback
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        const success = await repayLoan(selectedLoan._id);
+        setRepayingLoanId(null);
+
+        if (success) {
+            setRepayState("success");
+            fetchProfile();
+            // Auto close after 2 seconds
+            setTimeout(() => {
+                closeRepayModal();
+            }, 2000);
+        } else {
+            setRepayState("confirm");
+            alert("Failed to repay loan. Make sure you have sufficient balance.");
+        }
+    };
+
     const formatDate = (dateString: string) => {
         return new Date(dateString).toLocaleDateString("en-IN", {
             day: "2-digit",
@@ -160,28 +236,35 @@ export default function ProfilePage() {
     };
 
     const getTransactionNote = (tx: Transaction) => {
-        if (tx.meta?.bonusType === "WELCOME_100") {
-            return "Welcome Bonus";
-        }
+        if (tx.meta?.bonusType === "WELCOME_100") return "Welcome Bonus";
+        if (tx.meta?.bonusType === "LOAN") return "Loan Taken";
+        if (tx.meta?.bonusType === "LOAN_REPAY") return "Loan Repaid";
         return null;
+    };
+
+    const getUserRank = () => {
+        if (!user || !leaderboard.length) return null;
+        const userEntry = leaderboard.find((entry) => entry.userId === user.id);
+        return userEntry?.rank || null;
     };
 
     if (authLoading || loading) {
         return (
-            <div className="profile-page">
-                <div className="loading-state">
-                    <div className="loading-spinner"></div>
-                    <p>Loading profile...</p>
+            <>
+                <Navbar />
+                <div className="profile-page">
+                    <div className="loading-state">
+                        <div className="loading-spinner"></div>
+                        <p>Loading profile...</p>
+                    </div>
                 </div>
-            </div>
+                <Footer />
+            </>
         );
     }
 
-    if (!user) {
-        return null;
-    }
+    if (!user) return null;
 
-    // Only show first 5 if not expanded
     const displayedTransactions = showAllTransactions ? transactions : transactions.slice(0, 5);
 
     return (
@@ -218,34 +301,111 @@ export default function ProfilePage() {
                     </div>
                 </div>
 
-                {/* Wallet Summary */}
-                <div className="wallet-summary">
-                    <div className="summary-card balance">
-                        <div className="icon">💰</div>
-                        <div className="label">Wallet Balance</div>
-                        <div className="value">₹{(profile?.wallet.balance || 0).toFixed(2)}</div>
-                    </div>
-
-                    <div className="summary-card earnings">
-                        <div className="icon">📈</div>
-                        <div className="label">Total Earnings</div>
-                        <div className={`value ${(profile?.wallet.totalEarnings || 0) < 0 ? 'negative' : ''}`}>
-                            {(profile?.wallet.totalEarnings || 0) >= 0 ? '+' : ''}₹{(profile?.wallet.totalEarnings || 0).toFixed(2)}
+                {/* Leaderboard + Wallet Section */}
+                <div className="leaderboard-wallet-section">
+                    {/* Leaderboard (Left) */}
+                    <div className="leaderboard-card">
+                        <h3>
+                            <Trophy size={20} />
+                            Net Worth Leaderboard
+                        </h3>
+                        <div className="leaderboard-list">
+                            {leaderboard.map((entry) => (
+                                <div
+                                    key={entry.userId}
+                                    className={`leaderboard-item ${entry.userId === user.id ? 'is-you' : ''}`}
+                                >
+                                    <span className={`rank rank-${entry.rank}`}>
+                                        {entry.rank <= 3 ? ['🥇', '🥈', '🥉'][entry.rank - 1] : `#${entry.rank}`}
+                                    </span>
+                                    <img src={entry.avatar} alt={entry.username} className="lb-avatar" />
+                                    <span className="lb-name">
+                                        {entry.username}
+                                        {entry.userId === user.id && <span className="you-badge">You</span>}
+                                    </span>
+                                    <span className={`lb-earnings ${entry.netWorth < 0 ? 'negative' : ''}`}>
+                                        {entry.netWorth >= 0 ? '+' : ''}₹{entry.netWorth.toFixed(0)}
+                                    </span>
+                                </div>
+                            ))}
                         </div>
-                    </div>
-
-                    <div className="summary-card biggest-win">
-                        <div className="icon">🎉</div>
-                        <div className="label">Biggest Win</div>
-                        <div className="value">
-                            {profile?.biggestWin ? `₹${profile.biggestWin.amount.toFixed(2)}` : "₹0.00"}
-                        </div>
-                        {profile?.biggestWin && (
-                            <div className="biggest-win-details">
-                                {profile.biggestWin.gameType}
-                                {profile.biggestWin.multiplier && ` • ${profile.biggestWin.multiplier}x`}
+                        {getUserRank() && getUserRank()! > 10 && (
+                            <div className="your-rank-note">
+                                Your rank: #{getUserRank()}
                             </div>
                         )}
+                    </div>
+
+                    {/* Wallet + Loans (Right) */}
+                    <div className="wallet-loans-card">
+                        <h3>
+                            <CreditCard size={20} />
+                            Wallet & Loans
+                        </h3>
+
+                        {/* Wallet Stats */}
+                        <div className="wallet-stats">
+                            <div className="stat-item">
+                                <span className="stat-label">💰 Balance</span>
+                                <span className="stat-value balance">₹{wallet.toFixed(2)}</span>
+                            </div>
+                            <div className="stat-item">
+                                <span className="stat-label">📈 Total Earnings</span>
+                                <span className={`stat-value ${totalEarnings < 0 ? 'negative' : 'positive'}`}>
+                                    {totalEarnings >= 0 ? '+' : ''}₹{totalEarnings.toFixed(2)}
+                                </span>
+                            </div>
+                            <div className="stat-item">
+                                <span className="stat-label">🎉 Biggest Win</span>
+                                <span className="stat-value golden">
+                                    {profile?.biggestWin ? `₹${profile.biggestWin.amount.toFixed(2)}` : "₹0.00"}
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Active Loans */}
+                        <div className="active-loans">
+                            <h4>Active Loans ({activeLoans.length}/2)</h4>
+                            {activeLoans.length === 0 ? (
+                                <p className="no-loans">No active loans</p>
+                            ) : (
+                                <div className="loans-list">
+                                    {activeLoans.map((loan) => {
+                                        const repayAmount = loan.repaymentAmount ?? loan.amount;
+                                        const interest = repayAmount - loan.amount;
+                                        return (
+                                            <div key={loan._id} className="loan-item">
+                                                <div className="loan-info">
+                                                    <span className="loan-principal">Principal: ₹{loan.amount.toFixed(2)}</span>
+                                                    <span className="loan-repay-amount">
+                                                        Repay: ₹{repayAmount.toFixed(2)}
+                                                        {interest > 0 && (
+                                                            <span className="interest-badge">
+                                                                +₹{interest.toFixed(2)} ({loan.interestDays ?? 1}d)
+                                                            </span>
+                                                        )}
+                                                    </span>
+                                                    <span className="loan-date">
+                                                        Taken: {new Date(loan.createdAt).toLocaleDateString("en-IN", {
+                                                            day: "2-digit",
+                                                            month: "short",
+                                                        })}
+                                                    </span>
+                                                </div>
+                                                <button
+                                                    className="repay-btn"
+                                                    onClick={() => openRepayModal(loan)}
+                                                    disabled={repayingLoanId === loan._id || wallet < repayAmount}
+                                                    title={wallet < repayAmount ? `Need ₹${repayAmount.toFixed(2)}` : "Repay this loan"}
+                                                >
+                                                    {repayingLoanId === loan._id ? "..." : `₹${repayAmount.toFixed(0)}`}
+                                                </button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
 
@@ -312,7 +472,6 @@ export default function ProfilePage() {
                                 </tbody>
                             </table>
 
-                            {/* See All button - only show if not expanded and there might be more */}
                             {!showAllTransactions && transactions.length >= 5 && (
                                 <button className="see-all-btn" onClick={handleSeeAll}>
                                     <span>See All Transactions</span>
@@ -320,7 +479,6 @@ export default function ProfilePage() {
                                 </button>
                             )}
 
-                            {/* Pagination - only show when expanded */}
                             {showAllTransactions && pagination && pagination.totalPages > 1 && (
                                 <div className="pagination">
                                     <button
@@ -346,6 +504,66 @@ export default function ProfilePage() {
                     )}
                 </div>
             </div>
+
+            {/* Repay Loan Modal */}
+            {showRepayModal && selectedLoan && (
+                <div className="modal-overlay" onClick={closeRepayModal}>
+                    <div className="modal-content modal-3d loan-modal" onClick={(e) => e.stopPropagation()}>
+                        {repayState === "confirm" && (
+                            <>
+                                <h3>💳 Repay Loan</h3>
+                                <p className="loan-subtitle">Confirm your loan repayment</p>
+
+                                <div className="repay-info">
+                                    <div className="repay-principal">
+                                        <span>Principal:</span>
+                                        <span>₹{selectedLoan.amount.toFixed(2)}</span>
+                                    </div>
+                                    <div className="repay-interest">
+                                        <span>Interest ({selectedLoan.interestDays ?? 1} day{(selectedLoan.interestDays ?? 1) > 1 ? 's' : ''}):</span>
+                                        <span>₹{((selectedLoan.repaymentAmount ?? selectedLoan.amount) - selectedLoan.amount).toFixed(2)}</span>
+                                    </div>
+                                    <div className="repay-total">
+                                        <span>Total Repay:</span>
+                                        <span>₹{(selectedLoan.repaymentAmount ?? selectedLoan.amount).toFixed(2)}</span>
+                                    </div>
+                                </div>
+
+                                <div className="modal-buttons">
+                                    <button className="modal-cancel" onClick={closeRepayModal}>
+                                        Cancel
+                                    </button>
+                                    <button
+                                        className="modal-confirm"
+                                        onClick={handleConfirmRepay}
+                                        disabled={walletLoading || wallet < (selectedLoan.repaymentAmount ?? selectedLoan.amount)}
+                                    >
+                                        Confirm Repay
+                                    </button>
+                                </div>
+                            </>
+                        )}
+
+                        {repayState === "processing" && (
+                            <div className="loan-processing">
+                                <div className="processing-spinner"></div>
+                                <h3>Processing...</h3>
+                                <p>Repaying ₹{(selectedLoan.repaymentAmount ?? selectedLoan.amount).toFixed(2)}</p>
+                            </div>
+                        )}
+
+                        {repayState === "success" && (
+                            <div className="loan-success">
+                                <div className="success-icon">✅</div>
+                                <h3>Loan Repaid!</h3>
+                                <p className="success-amount">₹{(selectedLoan.repaymentAmount ?? selectedLoan.amount).toFixed(2)} deducted</p>
+                                <p className="success-hint">Principal added back to leaderboard</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
             <Footer />
         </>
     );

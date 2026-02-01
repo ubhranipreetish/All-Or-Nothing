@@ -2,23 +2,24 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { useWallet } from "../contexts/WalletContext";
 import { useAuth } from "../contexts/AuthContext";
 import { GoogleLogin } from "@react-oauth/google";
-import { Wallet, Plus, Menu, X, Gamepad2, HelpCircle, Shield, Gift } from "lucide-react";
+import { Wallet, Plus, Menu, X, Gamepad2, HelpCircle, Shield, Gift, AlertTriangle, Ban } from "lucide-react";
 import "../styles/Navbar.css";
 
 export default function Navbar() {
-    const { wallet, addMoney, loading, hasClaimed100Bonus, claimWelcomeBonus } = useWallet();
-    const { user, login, logout } = useAuth();
+    const { wallet, loading, hasClaimed100Bonus, claimWelcomeBonus, activeLoansCount, canTakeLoan, takeLoan } = useWallet();
+    const { user, login } = useAuth();
     const router = useRouter();
-    const [showAddModal, setShowAddModal] = useState(false);
-    const [addAmount, setAddAmount] = useState("");
+    const [showLoanModal, setShowLoanModal] = useState(false);
+    const [loanAmount, setLoanAmount] = useState("");
     const [error, setError] = useState("");
     const [scrolled, setScrolled] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [claiming, setClaiming] = useState(false);
+    const [loanState, setLoanState] = useState<"input" | "processing" | "success">("input");
+    const [loanedAmount, setLoanedAmount] = useState(0);
 
     useEffect(() => {
         const handleScroll = () => {
@@ -28,7 +29,6 @@ export default function Navbar() {
         return () => window.removeEventListener("scroll", handleScroll);
     }, []);
 
-    // Handle hash-based scrolling when navigating from other pages
     useEffect(() => {
         const hash = window.location.hash;
         if (hash) {
@@ -48,30 +48,45 @@ export default function Navbar() {
         }
     }, []);
 
-    const handleAddMoney = async () => {
-        const amount = parseFloat(addAmount) || 0;
+    const handleTakeLoan = async () => {
+        const amount = parseFloat(loanAmount) || 0;
         if (amount <= 0) {
             setError("Please enter a valid amount greater than 0");
             return;
         }
         if (amount > 10000000) {
-            setError("Maximum amount is ₹1,00,00,000 (1 Crore)");
+            setError("Maximum loan amount is ₹1,00,00,000");
             return;
         }
-        const success = await addMoney(amount);
+
+        // Show processing state
+        setLoanState("processing");
+        setLoanedAmount(amount);
+
+        // Wait 1 second for visual feedback
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        const success = await takeLoan(amount);
         if (success) {
-            setShowAddModal(false);
-            setAddAmount("");
+            setLoanState("success");
+            setLoanAmount("");
             setError("");
+            // Auto close after 2 seconds
+            setTimeout(() => {
+                handleCloseModal();
+            }, 2000);
         } else {
-            setError("Failed to add money");
+            setLoanState("input");
+            setError("Failed to take loan. Please try again.");
         }
     };
 
     const handleCloseModal = () => {
-        setShowAddModal(false);
-        setAddAmount("");
+        setShowLoanModal(false);
+        setLoanAmount("");
         setError("");
+        setLoanState("input");
+        setLoanedAmount(0);
     };
 
     const handleClaimBonus = async () => {
@@ -83,7 +98,6 @@ export default function Navbar() {
         }
     };
 
-    // Smooth scroll handler
     const handleSmoothScroll = (e: React.MouseEvent<HTMLAnchorElement>, targetId: string) => {
         e.preventDefault();
         const isHomePage = window.location.pathname === "/" || window.location.pathname === "";
@@ -113,7 +127,6 @@ export default function Navbar() {
                         <img src="/images/logo.png" alt="All Or Nothing" />
                     </div>
 
-                    {/* Desktop Nav Links */}
                     <div className="nav-links">
                         <a href="#games" className="nav-link" onClick={(e) => handleSmoothScroll(e, "games")}>
                             <Gamepad2 size={18} />
@@ -130,12 +143,11 @@ export default function Navbar() {
                     </div>
 
                     <div className="nav-right">
-                        {/* Wallet - Only show when logged in */}
                         {user && (
                             <div className="wallet-section">
                                 <Wallet size={18} className="wallet-icon-svg" />
                                 <span className="wallet">₹{wallet.toFixed(2)}</span>
-                                <button className="add-money-btn" onClick={() => setShowAddModal(true)}>
+                                <button className="add-money-btn" onClick={() => setShowLoanModal(true)}>
                                     <Plus size={20} />
                                 </button>
                             </div>
@@ -195,7 +207,6 @@ export default function Navbar() {
                         </div>
                     </div>
 
-                    {/* Mobile Menu Toggle */}
                     <button
                         className="mobile-menu-toggle"
                         onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -204,7 +215,6 @@ export default function Navbar() {
                     </button>
                 </div>
 
-                {/* Mobile Menu */}
                 {mobileMenuOpen && (
                     <div className="mobile-menu">
                         <a href="#games" className="mobile-nav-link" onClick={(e) => handleSmoothScroll(e, "games")}>
@@ -222,7 +232,7 @@ export default function Navbar() {
                         {user && (
                             <div className="mobile-wallet">
                                 <span>Wallet: ₹{wallet.toFixed(2)}</span>
-                                <button onClick={() => { setShowAddModal(true); setMobileMenuOpen(false); }}>Add Money</button>
+                                <button onClick={() => { setShowLoanModal(true); setMobileMenuOpen(false); }}>Take Loan</button>
                             </div>
                         )}
                     </div>
@@ -240,7 +250,7 @@ export default function Navbar() {
             {user && !hasClaimed100Bonus && (
                 <div className="promo-banner promo-claim">
                     <Gift size={20} />
-                    <span>🎉 Welcome Bonus! Claim your <strong>₹100</strong> free bonus</span>
+                    <span>Welcome Bonus! Claim your <strong>₹100</strong> free bonus</span>
                     <button
                         className="claim-btn"
                         onClick={handleClaimBonus}
@@ -251,33 +261,104 @@ export default function Navbar() {
                 </div>
             )}
 
-            {/* Add Money Modal */}
-            {showAddModal && (
+            {/* Loan Modal */}
+            {showLoanModal && (
                 <div className="modal-overlay" onClick={handleCloseModal}>
-                    <div className="modal-content modal-3d" onClick={(e) => e.stopPropagation()}>
-                        <h3>Add Virtual Currency</h3>
-                        <input
-                            type="number"
-                            value={addAmount}
-                            onChange={(e) => {
-                                setAddAmount(e.target.value);
-                                setError("");
-                            }}
-                            placeholder="Enter amount"
-                            min="1"
-                            max="10000000"
-                            step="any"
-                            autoFocus
-                        />
-                        {error && <p className="modal-error">{error}</p>}
-                        <div className="modal-buttons">
-                            <button className="modal-cancel" onClick={handleCloseModal}>
-                                Cancel
-                            </button>
-                            <button className="modal-confirm" onClick={handleAddMoney}>
-                                Add ₹{addAmount || 0}
-                            </button>
-                        </div>
+                    <div className="modal-content modal-3d loan-modal" onClick={(e) => e.stopPropagation()}>
+                        {canTakeLoan ? (
+                            <>
+                                {loanState === "input" && (
+                                    <>
+                                        <h3>💰 Take a Loan</h3>
+                                        <p className="loan-subtitle">Get instant funds for your wallet</p>
+
+                                        <div className="loan-input-section">
+                                            <label>Choose Amount:</label>
+                                            <input
+                                                type="number"
+                                                value={loanAmount}
+                                                onChange={(e) => {
+                                                    setLoanAmount(e.target.value);
+                                                    setError("");
+                                                }}
+                                                placeholder="Enter loan amount"
+                                                min="1"
+                                                max="10000000"
+                                                step="any"
+                                                autoFocus
+                                            />
+                                        </div>
+
+                                        <div className="loan-status">
+                                            <span className="loan-count">Active Loans: <strong>{activeLoansCount} / 2</strong></span>
+                                        </div>
+
+                                        <div className="loan-warnings">
+                                            <div className="warning-item">
+                                                <AlertTriangle size={16} />
+                                                <span>10% daily compound interest applies</span>
+                                            </div>
+                                            <div className="warning-item">
+                                                <AlertTriangle size={16} />
+                                                <span>Loan deducted from leaderboard instantly</span>
+                                            </div>
+                                        </div>
+
+                                        {error && <p className="modal-error">{error}</p>}
+
+                                        <div className="modal-buttons">
+                                            <button className="modal-cancel" onClick={handleCloseModal}>
+                                                Cancel
+                                            </button>
+                                            <button
+                                                className="modal-confirm loan-confirm"
+                                                onClick={handleTakeLoan}
+                                                disabled={loading}
+                                            >
+                                                Confirm Loan
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
+
+                                {loanState === "processing" && (
+                                    <div className="loan-processing">
+                                        <div className="processing-spinner"></div>
+                                        <h3>Processing...</h3>
+                                        <p>Lending ₹{loanedAmount.toFixed(2)}</p>
+                                    </div>
+                                )}
+
+                                {loanState === "success" && (
+                                    <div className="loan-success">
+                                        <div className="success-icon">✅</div>
+                                        <h3>Money Lended!</h3>
+                                        <p className="success-amount">₹{loanedAmount.toFixed(2)} added to wallet</p>
+                                        <p className="success-hint">Repay with 10% daily interest</p>
+                                    </div>
+                                )}
+                            </>
+                        ) : (
+                            <>
+                                <div className="loan-limit-reached">
+                                    <Ban size={48} className="limit-icon" />
+                                    <h3>🚫 Loan Limit Reached</h3>
+                                    <p>You already have <strong>2 active loans</strong>.</p>
+                                    <p className="limit-hint">Repay an existing loan to take another.</p>
+                                </div>
+                                <div className="modal-buttons">
+                                    <button className="modal-cancel" onClick={handleCloseModal}>
+                                        Close
+                                    </button>
+                                    <button
+                                        className="modal-confirm"
+                                        onClick={() => { handleCloseModal(); router.push('/profile'); }}
+                                    >
+                                        Go to Profile
+                                    </button>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
             )}
