@@ -14,8 +14,19 @@ const UserSchema = new Schema(
     },
     name: String,
     avatar: String,
+    walletBalance: {
+      type: Number,
+      default: 0,
+    },
+    totalEarnings: {
+      type: Number,
+      default: 0,
+    },
   },
   { timestamps: true }
 );
+
+// Index for leaderboard queries
+UserSchema.index({ totalEarnings: -1 });
 
 export default model("User", UserSchema);
