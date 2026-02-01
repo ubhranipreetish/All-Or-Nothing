@@ -1,0 +1,573 @@
+/* ==================== PREMIUM MINES GAME STYLES ==================== */
+
+:root {
+  --mine-danger: #ff4d4d;
+  --gem-success: #00ff88;
+  --bet-sidebar-bg: rgba(11, 28, 45, 0.95);
+  --tile-bg: #1a2c38;
+  --tile-hover: #213743;
+  --tile-shadow: #07121b;
+}
+
+.app-wrapper1 {
+  height: calc(100vh - 80px);
+  /* Fit within viewport */
+  background-color: var(--midnight-navy);
+  margin-top: 80px;
+  /* Instead of padding-top to keep height calculation clean */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Background elements for depth */
+.app-wrapper1::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 1000px;
+  height: 1000px;
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.05) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.main-layout1 {
+  display: flex;
+  max-width: 1100px;
+  max-height: calc(100vh - 120px);
+  /* Limit height to fit on screen */
+  width: 100%;
+  background: var(--bet-sidebar-bg);
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.5);
+  border: 1px solid var(--divider);
+  backdrop-filter: blur(10px);
+  margin: 1rem;
+  /* Slightly reduced margin */
+  position: relative;
+  z-index: 1;
+}
+
+/* ==================== SIDEBAR ==================== */
+.right-navbar1 {
+  width: 320px;
+  background: rgba(15, 37, 61, 0.8);
+  padding: 2rem;
+  border-right: 1px solid var(--divider);
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.right-navbar1 form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.right-navbar1 label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: -0.5rem;
+}
+
+.right-navbar1 input[type="number"] {
+  background: var(--tile-bg);
+  border: 2px solid var(--divider);
+  border-radius: 12px;
+  padding: 12px 16px;
+  color: var(--text-primary);
+  font-size: 1rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.right-navbar1 input[type="number"]:focus {
+  border-color: var(--electric-blue);
+  outline: none;
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.2);
+}
+
+.half-double {
+  display: flex;
+  gap: 8px;
+  margin-top: -0.5rem;
+}
+
+.half-double button {
+  flex: 1;
+  background: var(--tile-bg);
+  border: 1px solid var(--divider);
+  border-radius: 8px;
+  padding: 8px;
+  color: var(--text-primary);
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.half-double button:hover:not(:disabled) {
+  background: var(--tile-hover);
+  border-color: var(--text-muted);
+}
+
+.half-double button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+#bet1 {
+  background: linear-gradient(135deg, var(--primary-gold) 0%, var(--gold-dark) 100%);
+  color: var(--midnight-navy);
+  border: none;
+  border-radius: 12px;
+  padding: 16px;
+  font-size: 1.1rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-top: 1rem;
+  box-shadow: 0 4px 15px rgba(245, 193, 108, 0.2);
+}
+
+#bet1:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(245, 193, 108, 0.3);
+}
+
+#bet1:active {
+  transform: translateY(0);
+}
+
+/* ==================== GAME GRID ==================== */
+.container1 {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  grid-template-rows: repeat(5, 1fr);
+  gap: 12px;
+  padding: 3rem;
+  background: var(--midnight-navy);
+}
+
+/* ==================== TILE ANIMATIONS & REFINEMENTS ==================== */
+.tile-container {
+  perspective: 1000px;
+  width: 100%;
+  aspect-ratio: 1;
+  transition: opacity 0.3s ease, filter 0.3s ease;
+}
+
+.tile-container.dimmed {
+  opacity: 0.4;
+  filter: grayscale(0.5) blur(1px);
+  pointer-events: none;
+}
+
+.tile-container.spotlight {
+  opacity: 1;
+  filter: none;
+  z-index: 50 !important;
+}
+
+.tile-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  cursor: pointer;
+}
+
+.tile-front,
+.tile-back {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  border-radius: 12px;
+}
+
+.tile-front {
+  background: var(--tile-bg);
+  box-shadow: inset 0 2px 5px rgba(255, 255, 255, 0.05), 0 4px 0 var(--tile-shadow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+}
+
+.tile-inner-shadow {
+  position: absolute;
+  inset: 0;
+  box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+
+.tile-front-pattern {
+  width: 25%;
+  height: 25%;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 4px;
+  transform: rotate(45deg);
+  transition: all 0.2s ease;
+}
+
+.tile-container:hover .tile-front-pattern {
+  background: rgba(255, 255, 255, 0.08);
+  transform: rotate(45deg) scale(1.2);
+}
+
+.tile-back {
+  transform: rotateY(180deg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Gem Reveal */
+.gem-reveal .tile-back {
+  background: radial-gradient(circle at 30% 30%, #2f4553, #0f212e);
+  border: 2px solid var(--gem-success);
+  box-shadow: 0 0 30px rgba(0, 255, 136, 0.3);
+}
+
+.coin-flow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  pointer-events: none;
+}
+
+.mini-coin {
+  position: absolute;
+  filter: drop-shadow(0 0 5px var(--primary-gold));
+}
+
+/* Mine Reveal */
+.mine-reveal .tile-back {
+  background: radial-gradient(circle at 30% 30%, #3a1c1c, #2a0a0a);
+  border: 2px solid var(--mine-danger);
+}
+
+.mine-flash {
+  position: absolute;
+  inset: -20px;
+  background: white;
+  border-radius: 50%;
+  filter: blur(20px);
+  pointer-events: none;
+}
+
+.mine-reveal.tile-inner {
+  animation: shake 0.4s cubic-bezier(.36, .07, .19, .97) both;
+}
+
+@keyframes shake {
+
+  10%,
+  90% {
+    transform: translate3d(-1px, 0, 0) rotateY(180deg);
+  }
+
+  20%,
+  80% {
+    transform: translate3d(2px, 0, 0) rotateY(180deg);
+  }
+
+  30%,
+  50%,
+  70% {
+    transform: translate3d(-4px, 0, 0) rotateY(180deg);
+  }
+
+  40%,
+  60% {
+    transform: translate3d(4px, 0, 0) rotateY(180deg);
+  }
+}
+
+/* ==================== SIDEBAR & STATS ==================== */
+.right-navbar1 {
+  width: 340px;
+  background: rgba(15, 37, 61, 0.85);
+  padding: 2.5rem 2rem;
+  border-right: 1px solid var(--divider);
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+/* Gold-Glass Capsule */
+.stat-capsule {
+  background: linear-gradient(135deg, rgba(245, 193, 108, 0.1) 0%, rgba(11, 28, 45, 0.5) 100%);
+  border: 1px solid rgba(245, 193, 108, 0.3);
+  border-radius: 16px;
+  padding: 1.25rem;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  backdrop-filter: blur(5px);
+  transition: all 0.3s ease;
+}
+
+.stat-capsule::after {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(245, 193, 108, 0.05) 0%, transparent 60%);
+  animation: rotate-stat 10s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes rotate-stat {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.stat-label {
+  display: block;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
+  font-weight: 700;
+}
+
+.stat-value {
+  font-size: 1.75rem;
+  font-weight: 900;
+  color: var(--primary-gold);
+  text-shadow: 0 0 15px rgba(245, 193, 108, 0.4);
+}
+
+/* Refined Cash Out Button */
+#cashout {
+  background: linear-gradient(135deg, var(--success) 0%, #059669 100%);
+  color: var(--midnight-navy);
+  border: none;
+  border-radius: 14px;
+  padding: 18px;
+  font-size: 1.2rem;
+  font-weight: 900;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.19, 1, 0.22, 1);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  width: 100%;
+  margin-top: 1rem;
+  position: relative;
+  box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
+  animation: cashout-pulse 2s infinite;
+}
+
+@keyframes cashout-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
+  }
+
+  50% {
+    box-shadow: 0 0 30px 10px rgba(59, 130, 246, 0.3);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
+  }
+}
+
+#cashout:hover {
+  transform: scale(1.02) translateY(-4px);
+  filter: brightness(1.1);
+}
+
+/* Threshold Hint */
+.threshold-hint {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-style: italic;
+  text-align: center;
+  margin-top: 0.5rem;
+  opacity: 0.8;
+}
+
+/* ==================== FEEDBACK / EARNINGS ==================== */
+.earnings-display1 {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  /* Increased gap */
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+
+/* ==================== NOTIFICATIONS ==================== */
+.toast-notification {
+  position: fixed;
+  top: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bet-sidebar-bg);
+  border: 1px solid var(--electric-blue);
+  padding: 12px 24px;
+  border-radius: 30px;
+  color: white;
+  font-weight: 600;
+  z-index: 1000;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
+  animation: slideDown 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+/* ==================== RESPONSIVE ==================== */
+@media (max-width: 1024px) {
+  .app-wrapper1 {
+    height: auto;
+    min-height: calc(100vh - 80px);
+    padding: 1rem 0;
+  }
+
+  .main-layout1 {
+    flex-direction: column;
+    margin: 1rem;
+    max-height: none;
+  }
+
+  .right-navbar1 {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--divider);
+    order: 2;
+    padding: 1.5rem;
+  }
+
+  .container1 {
+    padding: 1.5rem;
+    order: 1;
+    gap: 10px;
+  }
+}
+
+@media (max-width: 600px) {
+  .app-wrapper1 {
+    margin-top: 64px;
+    min-height: calc(100vh - 64px);
+  }
+
+  .main-layout1 {
+    margin: 0.5rem;
+    border-radius: 16px;
+  }
+
+  .container1 {
+    padding: 1rem;
+    gap: 6px;
+  }
+
+  .right-navbar1 {
+    padding: 1.25rem;
+    gap: 1rem;
+  }
+
+  .right-navbar1 form {
+    gap: 1rem;
+  }
+
+  .right-navbar1 label {
+    font-size: 0.75rem;
+    margin-bottom: -0.75rem;
+  }
+
+  .right-navbar1 input[type="number"] {
+    padding: 10px 14px;
+    font-size: 0.95rem;
+  }
+
+  #bet1 {
+    padding: 14px;
+    font-size: 1rem;
+    margin-top: 0.75rem;
+  }
+
+  .half-double button {
+    padding: 6px;
+  }
+
+  .tile-front-pattern {
+    width: 20%;
+    height: 20%;
+  }
+
+  .stat-capsule {
+    padding: 1rem;
+  }
+
+  .stat-value {
+    font-size: 1.5rem;
+  }
+
+  #cashout {
+    padding: 14px;
+    font-size: 1rem;
+    letter-spacing: 1px;
+  }
+}
+
+/* Extra small mobile */
+@media (max-width: 375px) {
+  .container1 {
+    padding: 0.75rem;
+    gap: 4px;
+  }
+
+  .right-navbar1 {
+    padding: 1rem;
+  }
+
+  .tile-front {
+    border-radius: 8px;
+  }
+}

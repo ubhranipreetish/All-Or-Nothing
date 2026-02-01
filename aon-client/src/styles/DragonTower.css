@@ -1,0 +1,698 @@
+/* ==================== PREMIUM DRAGON TOWER GAME STYLES ==================== */
+/* Unified with Mines page layout */
+
+.app-wrapper2 {
+  height: calc(100vh - 80px);
+  background-color: var(--midnight-navy);
+  margin-top: 80px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.app-wrapper2::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 1000px;
+  height: 1000px;
+  background: radial-gradient(circle, rgba(239, 68, 68, 0.05) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.main-layout2 {
+  display: flex;
+  max-width: 1100px;
+  width: 100%;
+  background: rgba(11, 28, 45, 0.95);
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.5);
+  border: 1px solid var(--divider);
+  backdrop-filter: blur(10px);
+  margin: 1rem;
+  position: relative;
+  z-index: 1;
+}
+
+/* ==================== SIDEBAR ==================== */
+.right-navbar2 {
+  width: 320px;
+  background: rgba(15, 37, 61, 0.8);
+  padding: 2rem;
+  border-right: 1px solid var(--divider);
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.right-navbar2 form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.right-navbar2 label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: -0.5rem;
+}
+
+.right-navbar2 input[type="number"],
+.right-navbar2 select {
+  background: #1a2c38;
+  border: 2px solid var(--divider);
+  border-radius: 12px;
+  padding: 12px 16px;
+  color: var(--text-primary);
+  font-size: 1rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.right-navbar2 input[type="number"]:focus,
+.right-navbar2 select:focus {
+  border-color: var(--electric-blue);
+  outline: none;
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.2);
+}
+
+.half-double2 {
+  display: flex;
+  gap: 8px;
+  margin-top: -0.5rem;
+}
+
+#half2,
+#double2 {
+  flex: 1;
+  background: #1a2c38;
+  border: 1px solid var(--divider);
+  border-radius: 8px;
+  padding: 8px;
+  color: var(--text-primary);
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+#half2:hover:not(:disabled),
+#double2:hover:not(:disabled) {
+  background: #213743;
+  border-color: var(--text-muted);
+}
+
+#half2:disabled,
+#double2:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+#bet2 {
+  background: linear-gradient(135deg, var(--primary-gold) 0%, var(--gold-dark) 100%);
+  color: var(--midnight-navy);
+  border: none;
+  border-radius: 12px;
+  padding: 16px;
+  font-size: 1.1rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-top: 1rem;
+  box-shadow: 0 4px 15px rgba(245, 193, 108, 0.2);
+  /* Fix text centering */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  width: 100%;
+}
+
+#bet2:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(245, 193, 108, 0.3);
+}
+
+/* ==================== TOWER GAME GRID ==================== */
+.container2 {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 2rem 1.5rem;
+  background: var(--midnight-navy);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Vertical progression gradient - applied to container */
+.container2::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top,
+      rgba(0, 0, 0, 0.35) 0%,
+      rgba(15, 37, 61, 0.15) 40%,
+      rgba(245, 193, 108, 0.04) 80%,
+      rgba(255, 200, 120, 0.06) 100%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.tower2 {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 6px;
+  width: 100%;
+  max-width: 450px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+.row2 {
+  display: grid;
+  gap: 8px;
+  position: relative;
+}
+
+/* Horizontal glow line for current active row */
+.row2.active-row::before {
+  content: "";
+  position: absolute;
+  left: -20px;
+  right: -20px;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 2px;
+  background: linear-gradient(90deg,
+      transparent 0%,
+      rgba(59, 130, 246, 0.6) 20%,
+      rgba(59, 130, 246, 0.8) 50%,
+      rgba(59, 130, 246, 0.6) 80%,
+      transparent 100%);
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+  animation: row-glow-pulse 2s ease-in-out infinite;
+  z-index: -1;
+}
+
+@keyframes row-glow-pulse {
+
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+.tile2 {
+  height: 54px;
+  /* Increased from 50px for better screen fit */
+  background: #1a2c38;
+  border: 2px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.19, 1, 0.22, 1);
+  box-shadow: inset 0 2px 5px rgba(255, 255, 255, 0.03), 0 4px 0 #07121b;
+}
+
+.tile2:hover {
+  transform: translateY(-3px) scale(1.03);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+}
+
+.tile2.available2 {
+  background: linear-gradient(135deg, var(--electric-blue) 0%, #2563eb 100%) !important;
+  border-color: var(--neon-blue) !important;
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.5), 0 4px 0 #1e40af;
+  animation: pulse-dragon 1.5s infinite ease-in-out;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Animated top-edge highlight for available tiles */
+.tile2.available2::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 3px;
+  background: linear-gradient(90deg,
+      transparent,
+      rgba(255, 255, 255, 0.8),
+      transparent);
+  animation: shimmer-edge 2s ease-in-out infinite;
+}
+
+@keyframes shimmer-edge {
+  0% {
+    left: -100%;
+  }
+
+  50%,
+  100% {
+    left: 100%;
+  }
+}
+
+@keyframes pulse-dragon {
+
+  0%,
+  100% {
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.5), 0 4px 0 #1e40af;
+  }
+
+  50% {
+    box-shadow: 0 0 35px rgba(59, 130, 246, 0.8), 0 4px 0 #1e40af;
+  }
+}
+
+.tile2.dragon2 {
+  background: radial-gradient(circle at 30% 30%, #4a1c1c, #2a0a0a) !important;
+  border: 2px solid #ff4d4d !important;
+  box-shadow: 0 0 25px rgba(239, 68, 68, 0.5);
+}
+
+@keyframes shake-dragon {
+
+  10%,
+  90% {
+    transform: translate3d(-1px, 0, 0);
+  }
+
+  20%,
+  80% {
+    transform: translate3d(2px, 0, 0);
+  }
+
+  30%,
+  50%,
+  70% {
+    transform: translate3d(-3px, 0, 0);
+  }
+
+  40%,
+  60% {
+    transform: translate3d(3px, 0, 0);
+  }
+}
+
+.tile2.safe2 {
+  background: radial-gradient(circle at 30% 30%, #2f4553, #0f212e) !important;
+  border: 2px solid var(--success) !important;
+  box-shadow: 0 0 20px rgba(34, 197, 94, 0.4);
+  animation: safe-settle 0.5s ease-out forwards;
+}
+
+/* Safe tiles: glow reduces after 500ms (settle effect) */
+@keyframes safe-settle {
+  0% {
+    box-shadow: 0 0 30px rgba(34, 197, 94, 0.6);
+    transform: scale(1.05);
+  }
+
+  100% {
+    box-shadow: 0 0 8px rgba(34, 197, 94, 0.25);
+    transform: scale(1);
+  }
+}
+
+/* Dragon tiles: glow collapses after reveal (dead state) */
+.tile2.dragon2 {
+  animation: shake-dragon 0.4s cubic-bezier(.36, .07, .19, .97) both,
+    dragon-die 0.8s ease-out 0.4s forwards;
+}
+
+@keyframes dragon-die {
+  0% {
+    box-shadow: 0 0 25px rgba(239, 68, 68, 0.5);
+  }
+
+  100% {
+    box-shadow: 0 0 5px rgba(239, 68, 68, 0.15);
+    filter: brightness(0.7);
+  }
+}
+
+.tile2 .icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 0 8px currentColor);
+}
+
+.tile2.dragon2 .icon-wrapper {
+  color: #ff4d4d;
+}
+
+.tile2.safe2 .icon-wrapper {
+  color: var(--success);
+}
+
+/* ==================== GOLD-GLASS STATS ==================== */
+.earnings-display2 {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  animation: fadeIn-dt 0.3s ease;
+}
+
+@keyframes fadeIn-dt {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.stat-capsule {
+  background: linear-gradient(135deg, rgba(245, 193, 108, 0.1) 0%, rgba(11, 28, 45, 0.5) 100%);
+  border: 1px solid rgba(245, 193, 108, 0.3);
+  border-radius: 16px;
+  padding: 1.25rem;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  backdrop-filter: blur(5px);
+}
+
+.stat-capsule .stat-label {
+  display: block;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
+  font-weight: 700;
+}
+
+.stat-capsule .stat-value {
+  font-size: 1.75rem;
+  font-weight: 900;
+  color: var(--primary-gold);
+  text-shadow: 0 0 15px rgba(245, 193, 108, 0.4);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+/* Multiplier increase arrow */
+.stat-value .arrow-up {
+  font-size: 1rem;
+  color: var(--success);
+  animation: arrow-bounce 0.3s ease-out;
+}
+
+@keyframes arrow-bounce {
+  0% {
+    transform: translateY(5px);
+    opacity: 0;
+  }
+
+  50% {
+    transform: translateY(-3px);
+  }
+
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Multiplier pop animation on change */
+.stat-value.multiplier-pop {
+  animation: multiplier-scale-pop 0.12s ease-out;
+}
+
+@keyframes multiplier-scale-pop {
+  0% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.15);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+#cashout {
+  background: linear-gradient(135deg, var(--success) 0%, #059669 100%);
+  color: var(--midnight-navy);
+  border: none;
+  border-radius: 14px;
+  padding: 18px;
+  font-size: 1.2rem;
+  font-weight: 900;
+  cursor: pointer;
+  transition: all 0.08s ease-out;
+  /* Faster initial, delayed glow */
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  width: 100%;
+  margin-top: 0.5rem;
+  box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
+  animation: cashout-pulse 2s infinite;
+  position: relative;
+  overflow: hidden;
+}
+
+@keyframes cashout-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
+  }
+
+  50% {
+    box-shadow: 0 0 30px 10px rgba(59, 130, 246, 0.3);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
+  }
+}
+
+/* 80-120ms delay before glow intensifies on hover */
+#cashout:hover {
+  transition: all 0.12s ease-out 0.08s;
+  /* 80ms delay */
+  transform: scale(1.02) translateY(-4px);
+  filter: brightness(1.15);
+  box-shadow: 0 0 40px 15px rgba(34, 197, 94, 0.5);
+}
+
+/* Click compression animation */
+#cashout:active {
+  transform: scale(0.96) translateY(0);
+  transition: transform 0.06s ease-out;
+  box-shadow: 0 0 15px 5px rgba(34, 197, 94, 0.3);
+}
+
+/* ==================== NOTIFICATIONS ==================== */
+.toast-notification {
+  position: fixed;
+  top: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(11, 28, 45, 0.95);
+  border: 1px solid var(--electric-blue);
+  padding: 12px 24px;
+  border-radius: 30px;
+  color: white;
+  font-weight: 600;
+  z-index: 1000;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
+}
+
+/* ==================== RESPONSIVE ==================== */
+@media (max-width: 1024px) {
+  .app-wrapper2 {
+    height: auto;
+    min-height: calc(100vh - 80px);
+    padding: 1rem 0;
+  }
+
+  .main-layout2 {
+    flex-direction: column;
+    max-height: none;
+    margin: 1rem;
+  }
+
+  .right-navbar2 {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--divider);
+    order: 2;
+    padding: 1.5rem;
+  }
+
+  .container2 {
+    padding: 1.5rem;
+    order: 1;
+  }
+
+  .tower2 {
+    max-width: 380px;
+  }
+}
+
+@media (max-width: 600px) {
+  .app-wrapper2 {
+    margin-top: 64px;
+    min-height: calc(100vh - 64px);
+  }
+
+  .main-layout2 {
+    margin: 0.5rem;
+    border-radius: 16px;
+  }
+
+  .container2 {
+    padding: 1rem;
+  }
+
+  .right-navbar2 {
+    padding: 1.25rem;
+    gap: 1rem;
+  }
+
+  .right-navbar2 form {
+    gap: 1rem;
+  }
+
+  .right-navbar2 label {
+    font-size: 0.75rem;
+  }
+
+  .right-navbar2 input[type="number"],
+  .right-navbar2 select {
+    padding: 10px 14px;
+    font-size: 0.95rem;
+  }
+
+  #bet2 {
+    padding: 14px;
+    font-size: 1rem;
+    margin-top: 0.75rem;
+  }
+
+  .tower2 {
+    max-width: 320px;
+    gap: 5px;
+  }
+
+  /* Reduced tile height for mobile */
+  .tile2 {
+    height: 40px;
+    min-height: 44px;
+    border-radius: 10px;
+  }
+
+  .row2 {
+    gap: 5px;
+  }
+
+  .tile2 .icon-wrapper svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  .stat-capsule {
+    padding: 1rem;
+  }
+
+  .stat-capsule .stat-value {
+    font-size: 1.5rem;
+  }
+
+  #cashout {
+    padding: 14px;
+    font-size: 1rem;
+    letter-spacing: 1px;
+  }
+}
+
+/* Extra small mobile */
+@media (max-width: 375px) {
+  .tower2 {
+    max-width: 280px;
+    gap: 4px;
+  }
+
+  .tile2 {
+    height: 36px;
+    min-height: 40px;
+    border-radius: 8px;
+  }
+
+  .row2 {
+    gap: 4px;
+  }
+
+  .right-navbar2 {
+    padding: 1rem;
+  }
+
+  .half-double2 button {
+    padding: 6px;
+    font-size: 0.9rem;
+  }
+}
+
+/* Mobile sidebar collapse during active play */
+@media (max-width: 1024px) {
+  .right-navbar2.game-active {
+    padding: 1rem 1.5rem;
+  }
+
+  .right-navbar2.game-active form>label,
+  .right-navbar2.game-active form>input[type="number"],
+  .right-navbar2.game-active form>select,
+  .right-navbar2.game-active .half-double2 {
+    display: none;
+  }
+
+  .right-navbar2.game-active .earnings-display2 {
+    gap: 1rem;
+  }
+
+  .right-navbar2.game-active .stat-capsule {
+    padding: 1rem;
+  }
+
+  .right-navbar2.game-active .stat-capsule .stat-value {
+    font-size: 1.5rem;
+  }
+
+  /* Cash Out button above thumb zone */
+  #cashout {
+    padding: 16px;
+    margin-bottom: env(safe-area-inset-bottom, 0);
+  }
+}

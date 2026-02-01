@@ -1,0 +1,126 @@
+/* ==================== FOOTER ==================== */
+.footer {
+    background-color: var(--deep-navy);
+    border-top: 1px solid var(--divider);
+}
+
+.footer-content {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 48px 24px 32px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 3rem;
+}
+
+/* Main / Brand Section */
+.footer-main {
+    max-width: 400px;
+}
+
+.footer-logo {
+    margin-bottom: 1rem;
+}
+
+.footer-logo img {
+    height: 40px;
+    width: auto;
+}
+
+.footer-tagline {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    line-height: 1.6;
+}
+
+/* Navigation */
+.footer-nav {
+    display: flex;
+    gap: 4rem;
+}
+
+.footer-nav-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.footer-nav-group h4 {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--primary-gold);
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.footer-nav-group a {
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 0.9rem;
+    transition: color 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.footer-nav-group a:hover {
+    color: var(--gold-light);
+}
+
+/* Bottom Bar */
+.footer-bottom {
+    border-top: 1px solid var(--divider);
+    padding: 20px 24px;
+    text-align: center;
+}
+
+.footer-bottom p {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+/* ==================== RESPONSIVE ==================== */
+@media (max-width: 768px) {
+    .footer-content {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 2.5rem;
+    }
+
+    .footer-main {
+        max-width: 100%;
+    }
+
+    .footer-logo {
+        display: flex;
+        justify-content: center;
+    }
+
+    .footer-nav {
+        gap: 3rem;
+    }
+
+    .footer-nav-group {
+        align-items: center;
+    }
+
+    .footer-nav-group a {
+        justify-content: center;
+    }
+}
+
+@media (max-width: 480px) {
+    .footer-content {
+        padding: 32px 16px 24px;
+    }
+
+    .footer-nav {
+        flex-direction: column;
+        gap: 2rem;
+    }
+}

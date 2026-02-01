@@ -1,0 +1,192 @@
+@import "tailwindcss";
+
+/* Import component styles */
+@import "../styles/Home.css";
+@import "../styles/Navbar.css";
+@import "../styles/Footer.css";
+@import "../styles/Mines.css";
+@import "../styles/DragonTower.css";
+@import "../styles/FortuneWheel.css";
+@import "../styles/Profile.css";
+
+/* ==================== COLOR SCHEME VARIABLES ==================== */
+:root {
+  /* Primary Palette - Navy */
+  --midnight-navy: #0B1C2D;
+  --deep-navy: #0F253D;
+  --soft-navy: #142F4A;
+
+  /* Primary Palette - Gold */
+  --primary-gold: #F5C16C;
+  --gold-dark: #D4A94F;
+  --gold-light: #FFD98A;
+
+  /* Accent - Blue */
+  --electric-blue: #3B82F6;
+  --neon-blue: #60A5FA;
+
+  /* Functional Colors */
+  --success: #22C55E;
+  --danger: #EF4444;
+  --warning: #F59E0B;
+  --text-primary: #E5E7EB;
+  --text-muted: #9CA3AF;
+  --divider: #1F3A56;
+
+  /* Semantic Mapping */
+  --background: var(--midnight-navy);
+  --foreground: var(--text-primary);
+  --card-bg: var(--deep-navy);
+  --card-border: var(--divider);
+  --input-bg: var(--soft-navy);
+  --input-border: var(--divider);
+  --input-focus: var(--electric-blue);
+}
+
+/* Removed @theme inline block as it is not a standard CSS feature */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 80px;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: "Segoe UI", Arial, Helvetica, sans-serif;
+}
+
+/* ==================== SHARED FORM STYLES ==================== */
+form {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+form label {
+  margin-top: 1rem;
+  color: var(--text-muted);
+  align-self: flex-start;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+form input[type="number"],
+form input[type="text"] {
+  padding: 0.75rem;
+  width: 100%;
+  background-color: var(--input-bg);
+  color: var(--text-primary);
+  border: 2px solid var(--input-border);
+  border-radius: 8px;
+  font-size: 1rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+form input[type="number"]:focus,
+form input[type="text"]:focus {
+  outline: none;
+  border-color: var(--input-focus);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+form input[type="number"]:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+form select {
+  padding: 0.75rem;
+  width: 100%;
+  background-color: var(--input-bg);
+  color: var(--text-primary);
+  border: 2px solid var(--input-border);
+  border-radius: 8px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+form select:focus {
+  outline: none;
+  border-color: var(--input-focus);
+}
+
+form select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Primary Submit Button */
+form input[type="submit"] {
+  margin-top: 1rem;
+  height: 3rem;
+  width: 100%;
+  background-color: var(--primary-gold);
+  border: none;
+  border-radius: 8px;
+  color: var(--midnight-navy);
+  font-weight: bold;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.1s;
+}
+
+form input[type="submit"]:hover {
+  background-color: var(--gold-light);
+}
+
+form input[type="submit"]:active {
+  transform: scale(0.98);
+}
+
+form input[type="submit"]:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ==================== TOAST NOTIFICATION ==================== */
+.toast-notification {
+  position: fixed;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: var(--deep-navy);
+  color: var(--text-primary);
+  padding: 12px 24px;
+  border-radius: 8px;
+  border: 1px solid var(--primary-gold);
+  box-shadow: 0 4px 20px rgba(245, 193, 108, 0.3);
+  z-index: 1001;
+  animation: slideDown 0.3s ease-out, fadeOut 0.3s ease-in 2.7s;
+  font-weight: 500;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
