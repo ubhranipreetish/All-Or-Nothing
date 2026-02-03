@@ -390,7 +390,7 @@ const FortuneWheel = () => {
                                     </option>
                                 ))}
                             </select>
-                            <button id="bet1" type="submit" disabled={started}>Spin</button>
+                            <button id="bet3" type="submit" disabled={started}>Spin</button>
                         </form>
                     </div>
 

@@ -278,7 +278,7 @@ export default function DragonTower() {
                                 ))}
                             </select>
                             {!started ? (
-                                <button id="bet1" type="submit">Bet</button>
+                                <button id="bet2" type="submit">Bet</button>
                             ) : (
                                 <div className="earnings-display2">
                                     <div className="stat-capsule">

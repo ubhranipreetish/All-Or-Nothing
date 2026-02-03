@@ -10,14 +10,20 @@ import leaderboardRoutes from "./routes/leaderboard.route";
 import profileRoutes from "./routes/profile.route";
 import bonusRoutes from "./routes/bonus.route";
 import loanRoutes from "./routes/loan.route";
+import { validateOrigin, corsOptions } from "./middlewares/origin.middleware";
 
 const app = express();
 
-app.use(cors());
+// Security middlewares
+app.use(cors(corsOptions));
 app.use(helmet());
 app.use(compression());
 app.use(express.json());
 
+// Origin validation - blocks Postman/curl/non-website requests
+app.use(validateOrigin);
+
+// Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/game", gameRoutes);
 app.use("/api/wallet", walletRoutes);

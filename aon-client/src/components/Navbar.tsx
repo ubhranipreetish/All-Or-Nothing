@@ -63,18 +63,18 @@ export default function Navbar() {
         setLoanState("processing");
         setLoanedAmount(amount);
 
-        // Wait 1 second for visual feedback
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Wait 0.5 second for visual feedback
+        await new Promise(resolve => setTimeout(resolve, 500));
 
         const success = await takeLoan(amount);
         if (success) {
             setLoanState("success");
             setLoanAmount("");
             setError("");
-            // Auto close after 2 seconds
+            // Auto close after 1 second
             setTimeout(() => {
                 handleCloseModal();
-            }, 2000);
+            }, 1000);
         } else {
             setLoanState("input");
             setError("Failed to take loan. Please try again.");

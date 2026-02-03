@@ -154,17 +154,8 @@ export default function ProfilePage() {
             ]).finally(() => {
                 setLoading(false);
             });
-
-            // Real-time polling every 10 seconds
-            const pollInterval = setInterval(() => {
-                fetchLeaderboard();
-                fetchTransactions(currentPage, activeFilter, showAllTransactions ? 10 : 5);
-                refreshWallet();
-            }, 10000);
-
-            return () => clearInterval(pollInterval);
         }
-    }, [user, authLoading, router, fetchProfile, fetchTransactions, fetchLeaderboard, refreshWallet, currentPage, activeFilter, showAllTransactions]);
+    }, [user, authLoading, router, fetchProfile, fetchTransactions, fetchLeaderboard, refreshWallet]);
 
     const handleFilterChange = (filter: string) => {
         setActiveFilter(filter);
@@ -201,8 +192,8 @@ export default function ProfilePage() {
         setRepayState("processing");
         setRepayingLoanId(selectedLoan._id);
 
-        // Wait 1 second for visual feedback
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Wait 0.5 second for visual feedback
+        await new Promise(resolve => setTimeout(resolve, 500));
 
         const success = await repayLoan(selectedLoan._id);
         setRepayingLoanId(null);
@@ -210,10 +201,10 @@ export default function ProfilePage() {
         if (success) {
             setRepayState("success");
             fetchProfile();
-            // Auto close after 2 seconds
+            // Auto close after 1 second
             setTimeout(() => {
                 closeRepayModal();
-            }, 2000);
+            }, 1000);
         } else {
             setRepayState("confirm");
             alert("Failed to repay loan. Make sure you have sufficient balance.");
