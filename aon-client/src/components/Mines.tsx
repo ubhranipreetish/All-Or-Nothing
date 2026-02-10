@@ -132,9 +132,47 @@ export default function Mines() {
 
         gemSound.current.preload = "auto";
         mineSound.current.preload = "auto";
+
+        // Restore active game session
+        const restoreSession = async () => {
+            try {
+                const token = localStorage.getItem("token");
+                if (!token) return;
+
+                const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api"}/game/active?gameType=MINES`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.active) {
+                        sessionIdRef.current = data.sessionId;
+                        setAmount(data.betAmount);
+                        setMultiplier(data.multiplier.toFixed(2));
+
+                        if (data.gameConfig?.board) {
+                            setBoard(data.gameConfig.board);
+                            setMineCount(data.gameConfig.mineCount || 3);
+
+                            // Calculate state from restored board
+                            const revealed = data.gameConfig.board.filter((t: any) => t.revealed).length;
+                            setRevealedCount(revealed);
+                            setEarnings(data.betAmount * data.multiplier);
+                            setStarted(true);
+                            setGameOver(false);
+                            setCashedOut(false);
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to restore session:", err);
+            }
+        };
+
+        restoreSession();
     }, []);
 
-    const { wallet, recordBet, recordWin } = useWallet();
+    const { wallet, startGameSession, recordWin, recordLoss } = useWallet();
     const { user } = useAuth();
     const [showSignInDialog, setShowSignInDialog] = useState(false);
 
@@ -149,6 +187,7 @@ export default function Mines() {
     const [cashedOut, setCashedOut] = useState<boolean>(false);
     const [notification, setNotification] = useState<string>("");
     const [spotlightIndex, setSpotlightIndex] = useState<number | null>(null);
+    const sessionIdRef = useRef<string | null>(null);
 
     // Tutorial state
     const [isTutorialActive, setIsTutorialActive] = useState(false);
@@ -179,6 +218,57 @@ export default function Mines() {
         setRevealedCount(0);
     }, []);
 
+    // Check for active game session (Restoration Logic)
+    const checkActiveSession = useCallback(async () => {
+        try {
+            const token = localStorage.getItem("token");
+            if (!token) return;
+
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api"}/game/active?gameType=MINES`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                if (data.active) {
+                    setAmount(data.betAmount);
+                    setMultiplier(data.multiplier.toFixed(2));
+
+                    if (data.gameConfig?.board) {
+                        setBoard(data.gameConfig.board);
+                        setMineCount(data.gameConfig.mineCount || 3);
+
+                        const revealed = data.gameConfig.board.filter((t: any) => t.revealed).length;
+                        setRevealedCount(revealed);
+                        setEarnings(data.betAmount * data.multiplier);
+                        setStarted(true);
+                        setGameOver(false);
+                        setCashedOut(false);
+                    } else {
+                        // Found active session but no board data (likely legacy or corrupt)
+                        // Auto-close it so user can play new game
+                        console.warn("Found headless active session, auto-closing...");
+                        await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api"}/game/cashout`, {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                                Authorization: `Bearer ${token}`
+                            },
+                            body: JSON.stringify({ sessionId: data.sessionId })
+                        });
+                    }
+                }
+            }
+        } catch (err) {
+            console.error("Failed to check active session:", err);
+        }
+    }, []);
+
+    // Initial check on mount
+    useEffect(() => {
+        checkActiveSession();
+    }, [checkActiveSession]);
+
     // End tutorial
     const endTutorial = useCallback(() => {
         setIsTutorialActive(false);
@@ -187,7 +277,10 @@ export default function Mines() {
         setBoard([]);
         setMultiplier("1.00");
         setEarnings(0);
-    }, []);
+
+        // Re-check for any active real game session interrupted by tutorial
+        checkActiveSession();
+    }, [checkActiveSession]);
 
     // Advance to next tutorial step
     const nextTutorialStep = useCallback(() => {
@@ -233,8 +326,10 @@ export default function Mines() {
         e.preventDefault();
 
         // Handle tutorial bet button
-        if (isTutorialActive && isTutorialTarget("bet-button")) {
-            nextTutorialStep();
+        if (isTutorialActive) {
+            if (isTutorialTarget("bet-button")) {
+                nextTutorialStep();
+            }
             return;
         }
 
@@ -252,13 +347,22 @@ export default function Mines() {
             return;
         }
 
-        const success = await recordBet(amount, "MINES");
+        const initialBoard = generateBoard(mineCount);
+        const { success, newBalance, sessionId } = await startGameSession(amount, "MINES", {
+            board: initialBoard,
+            mineCount
+        });
+
         if (!success) {
             showNotification("Failed to place bet");
             return;
         }
 
-        setBoard(generateBoard(mineCount));
+        if (sessionId) {
+            sessionIdRef.current = sessionId;
+        }
+
+        setBoard(initialBoard);
         setStarted(true);
         setGameOver(false);
         setRevealedCount(0);
@@ -302,24 +406,26 @@ export default function Mines() {
     };
 
     const revealTile = async (index: number) => {
-        // Handle tutorial tile click (center tile = index 12)
-        if (isTutorialActive && currentTutorialStep?.id === "reveal-tile" && index === 12) {
-            if (gemSound.current) {
-                gemSound.current.currentTime = 0;
-                gemSound.current.play().catch(() => { });
+        if (isTutorialActive) {
+            // Handle tutorial tile click (center tile = index 12) ONLY if correct step and tile
+            if (currentTutorialStep?.id === "reveal-tile" && index === 12) {
+                if (gemSound.current) {
+                    gemSound.current.currentTime = 0;
+                    gemSound.current.play().catch(() => { });
+                }
+
+                setBoard(prev => {
+                    const next = [...prev];
+                    next[12] = { ...next[12], revealed: true };
+                    return next;
+                });
+                setRevealedCount(1);
+                setMultiplier("1.20");
+                setEarnings(120);
+
+                setTimeout(() => nextTutorialStep(), 600);
             }
-
-            setBoard(prev => {
-                const next = [...prev];
-                next[12] = { ...next[12], revealed: true };
-                return next;
-            });
-            setRevealedCount(1);
-            setMultiplier("1.20");
-            setEarnings(120);
-
-            setTimeout(() => nextTutorialStep(), 600);
-            return;
+            return; // Block all other tile interactions during tutorial
         }
 
         if (!started || board[index]?.revealed || gameOver || cashedOut) return;
@@ -340,6 +446,12 @@ export default function Mines() {
             setEarnings(0);
 
             await waveReveal(index);
+
+            // Notify backend of loss
+            if (sessionIdRef.current) {
+                await recordLoss(sessionIdRef.current);
+                sessionIdRef.current = null;
+            }
         } else {
             if (gemSound.current) {
                 gemSound.current.currentTime = 0;
@@ -363,8 +475,10 @@ export default function Mines() {
 
     const handleCashOut = async () => {
         // Handle tutorial cashout
-        if (isTutorialActive && isTutorialTarget("cashout-button")) {
-            nextTutorialStep();
+        if (isTutorialActive) {
+            if (isTutorialTarget("cashout-button")) {
+                nextTutorialStep();
+            }
             return;
         }
 
@@ -465,7 +579,10 @@ export default function Mines() {
                                     id="bet-amount-input"
                                     type="number"
                                     value={amount || ""}
-                                    onChange={(e) => setAmount(Number(e.target.value))}
+                                    onChange={(e) => {
+                                        if (isTutorialActive && !isTutorialTarget("bet-amount-input")) return;
+                                        setAmount(Number(e.target.value));
+                                    }}
                                     disabled={(started && !gameOver && !cashedOut) && !isTutorialActive}
                                 />
                             </div>
@@ -476,8 +593,14 @@ export default function Mines() {
                                     className={isHighlighted("half-btn") ? "tutorial-highlight-wrapper" : ""}
                                     type="button"
                                     onClick={() => {
-                                        if (handleTutorialClick("half-btn")) return;
+                                        if (isTutorialActive && !isTutorialTarget("half-btn")) return;
+
                                         setAmount(Math.max(MIN_BET, amount / 2));
+
+                                        // Advance step if it was the target
+                                        if (isTutorialActive && isTutorialTarget("half-btn")) {
+                                            nextTutorialStep();
+                                        }
                                     }}
                                     disabled={started && !isTutorialActive}
                                 >
@@ -485,7 +608,10 @@ export default function Mines() {
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={() => setAmount(Math.min(wallet, amount * 2))}
+                                    onClick={() => {
+                                        if (isTutorialActive) return; // Block 2x during tutorial as it's not a step target
+                                        setAmount(Math.min(wallet, amount * 2));
+                                    }}
                                     disabled={started || isTutorialActive}
                                 >
                                     2x
@@ -503,12 +629,15 @@ export default function Mines() {
                                     id="mine-count-input"
                                     type="number"
                                     value={mineCount}
-                                    onChange={(e) => setMineCount(Math.max(1, Math.min(24, Number(e.target.value))))}
+                                    onChange={(e) => {
+                                        if (isTutorialActive && !isTutorialTarget("mine-count-input")) return;
+                                        setMineCount(Math.max(1, Math.min(24, Number(e.target.value))));
+                                    }}
                                     disabled={started && !isTutorialActive}
                                 />
                             </div>
 
-                            {!started || gameOver || cashedOut ? (
+                            {(!started && !gameOver && !cashedOut) && (
                                 <button
                                     id="bet-button"
                                     className={isHighlighted("bet-button") ? "tutorial-highlight-wrapper" : ""}
@@ -516,7 +645,9 @@ export default function Mines() {
                                 >
                                     Bet
                                 </button>
-                            ) : (
+                            )}
+
+                            {(started && !gameOver && !cashedOut) && (
                                 <div className="earnings-display1">
                                     <div
                                         id="multiplier-capsule"
@@ -546,7 +677,11 @@ export default function Mines() {
                             )}
 
                             {(gameOver || cashedOut) && !isTutorialActive && (
-                                <button id="bet1" onClick={handleCashOut} type="button" style={{ background: 'var(--divider)', color: 'white', marginTop: '1rem' }}>
+                                <button
+                                    className="clear-table-btn"
+                                    onClick={handleCashOut}
+                                    type="button"
+                                >
                                     Clear Table
                                 </button>
                             )}
@@ -590,9 +725,7 @@ export default function Mines() {
                             exit={{ opacity: 0, y: -20, scale: 0.9 }}
                             key={tutorialStep}
                         >
-                            <div className="tutorial-step-indicator">
-                                Step {tutorialStep + 1} of {TUTORIAL_STEPS.length}
-                            </div>
+                            {/* Step indicator removed - step numbers are in the titles */}
                             <h3 className="tutorial-title">{currentTutorialStep.title}</h3>
                             <p className="tutorial-message">{currentTutorialStep.message}</p>
 

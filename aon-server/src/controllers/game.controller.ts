@@ -259,6 +259,45 @@ export const loseGame = async (req: Request, res: Response) => {
     }
 };
 
+/**
+ * Get active game session for the user
+ * GET /api/game/active
+ */
+export const getActiveSession = async (req: Request, res: Response) => {
+    try {
+        const userId = req.user?.userId;
+        const { gameType } = req.query as { gameType?: GameType };
+
+        if (!userId) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
+
+        const query: any = { userId, status: "ACTIVE" };
+        if (gameType) {
+            query.gameType = gameType;
+        }
+
+        const session = await GameSession.findOne(query).sort({ createdAt: -1 });
+
+        if (!session) {
+            return res.status(200).json({ active: false });
+        }
+
+        res.json({
+            active: true,
+            sessionId: session._id,
+            gameType: session.gameType,
+            betAmount: session.betAmount,
+            multiplier: session.multiplier,
+            gameConfig: session.gameConfig, // Returns board/dragons state
+            startTime: session.createdAt,
+        });
+    } catch (error) {
+        console.error("Get Active Session Error:", error);
+        res.status(500).json({ message: "Internal Server Error" });
+    }
+};
+
 // ============ LEGACY ENDPOINTS (for backward compatibility) ============
 
 /**
@@ -380,7 +419,7 @@ export const recordWin = async (req: Request, res: Response) => {
         }
 
         // SECURITY: Validate win amount against bet amount
-        const maxAllowedMultiplier = 100; // Maximum 100x win
+        const maxAllowedMultiplier = 100000; // Increased to allow Mines jackpot
         const maxAllowedWin = session.betAmount * maxAllowedMultiplier;
 
         if (winAmount > maxAllowedWin) {

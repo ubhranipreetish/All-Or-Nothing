@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../contexts/AuthContext";
 import { useWallet } from "../../contexts/WalletContext";
-import { LogOut, Receipt, ChevronDown, Trophy, CreditCard } from "lucide-react";
+import { LogOut, Receipt, ChevronDown, ChevronLeft, ChevronRight, Trophy, CreditCard } from "lucide-react";
 import "../../styles/Profile.css";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -112,7 +112,7 @@ export default function ProfilePage() {
         }
     }, []);
 
-    const fetchTransactions = useCallback(async (page: number, type?: string, limit: number = 10) => {
+    const fetchTransactions = useCallback(async (page: number, type?: string, limit: number = 8) => {
         try {
             setTransactionsLoading(true);
             const token = localStorage.getItem("token");
@@ -160,18 +160,24 @@ export default function ProfilePage() {
     const handleFilterChange = (filter: string) => {
         setActiveFilter(filter);
         setCurrentPage(1);
-        fetchTransactions(1, filter, showAllTransactions ? 10 : 5);
+        fetchTransactions(1, filter, showAllTransactions ? 8 : 5);
     };
+
+    const transactionSectionRef = useRef<HTMLDivElement>(null);
 
     const handlePageChange = (page: number) => {
         setCurrentPage(page);
-        fetchTransactions(page, activeFilter, 10);
+        fetchTransactions(page, activeFilter, 8);
+        // Smooth scroll to top of transaction section
+        setTimeout(() => {
+            transactionSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 100);
     };
 
     const handleSeeAll = () => {
         setShowAllTransactions(true);
         setCurrentPage(1);
-        fetchTransactions(1, activeFilter, 10);
+        fetchTransactions(1, activeFilter, 8);
     };
 
     const openRepayModal = (loan: { _id: string; amount: number; repaymentAmount?: number; interestDays?: number }) => {
@@ -401,7 +407,7 @@ export default function ProfilePage() {
                 </div>
 
                 {/* Transaction History */}
-                <div className="transaction-section">
+                <div className="transaction-section" ref={transactionSectionRef}>
                     <div className="transaction-header">
                         <h2>
                             <Receipt size={20} style={{ marginRight: "8px", verticalAlign: "middle" }} />
@@ -422,7 +428,7 @@ export default function ProfilePage() {
                         )}
                     </div>
 
-                    {transactionsLoading ? (
+                    {transactionsLoading && displayedTransactions.length === 0 ? (
                         <div className="loading-state">
                             <div className="loading-spinner"></div>
                             <p>Loading transactions...</p>
@@ -434,7 +440,7 @@ export default function ProfilePage() {
                         </div>
                     ) : (
                         <>
-                            <table className="transaction-table">
+                            <table className="transaction-table" style={{ opacity: transactionsLoading ? 0.4 : 1, transition: 'opacity 0.3s ease', pointerEvents: transactionsLoading ? 'none' : 'auto' }}>
                                 <thead>
                                     <tr>
                                         <th>Date</th>
@@ -477,7 +483,7 @@ export default function ProfilePage() {
                                         onClick={() => handlePageChange(currentPage - 1)}
                                         disabled={!pagination.hasPrev}
                                     >
-                                        Previous
+                                        <ChevronLeft size={20} />
                                     </button>
                                     <span className="pagination-info">
                                         Page {pagination.page} of {pagination.totalPages}
@@ -487,7 +493,7 @@ export default function ProfilePage() {
                                         onClick={() => handlePageChange(currentPage + 1)}
                                         disabled={!pagination.hasNext}
                                     >
-                                        Next
+                                        <ChevronRight size={20} />
                                     </button>
                                 </div>
                             )}

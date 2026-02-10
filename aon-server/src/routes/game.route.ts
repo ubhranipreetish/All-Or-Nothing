@@ -5,7 +5,8 @@ import {
     startGame,
     updateMultiplier,
     cashOut,
-    loseGame
+    loseGame,
+    getActiveSession
 } from "../controllers/game.controller";
 import { protect } from "../middlewares/auth.middleware";
 
@@ -15,6 +16,7 @@ const router = Router();
 router.use(protect);
 
 // New secure endpoints
+router.get("/active", getActiveSession);
 router.post("/start", startGame);
 router.post("/update-multiplier", updateMultiplier);
 router.post("/cashout", cashOut);

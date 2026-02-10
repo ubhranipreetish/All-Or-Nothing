@@ -23,10 +23,12 @@ interface WalletContextType {
   canTakeLoan: boolean;
   deductMoney: (amount: number) => boolean;
   recordBet: (amount: number, gameType: string, gameId?: string) => Promise<boolean>;
+  startGameSession: (amount: number, gameType: string, gameConfig?: any) => Promise<{ success: boolean; sessionId?: string; newBalance?: number }>;
   recordWin: (winAmount: number, betAmount: number, gameType: string, multiplier?: number, gameId?: string) => Promise<boolean>;
   claimWelcomeBonus: () => Promise<boolean>;
   takeLoan: (amount: number) => Promise<boolean>;
   repayLoan: (loanId: string) => Promise<boolean>;
+  recordLoss: (sessionId: string) => Promise<boolean>;
   refreshWallet: () => Promise<void>;
   fetchLoans: () => Promise<void>;
 }
@@ -146,6 +148,39 @@ export function WalletProvider({ children }: WalletProviderProps) {
     } catch (error) {
       console.error("Record bet error:", error);
       return false;
+    }
+  };
+
+  // Start a game session (New persistent way)
+  const startGameSession = async (amount: number, gameType: string, gameConfig?: any): Promise<{ success: boolean; sessionId?: string; newBalance?: number }> => {
+    const token = getToken();
+    if (!token) {
+      if (deductMoney(amount)) {
+        return { success: true };
+      }
+      return { success: false };
+    }
+
+    try {
+      const res = await fetch(`${API_URL}/game/start`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ amount, gameType, gameConfig }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setWallet(data.newBalance);
+        return { success: true, sessionId: data.sessionId, newBalance: data.newBalance };
+      }
+      console.error("Start game error:", data.message);
+      return { success: false };
+    } catch (error) {
+      console.error("Start game session error:", error);
+      return { success: false };
     }
   };
 
@@ -283,6 +318,33 @@ export function WalletProvider({ children }: WalletProviderProps) {
     }
   };
 
+  // Record a loss (End Game)
+  const recordLoss = async (sessionId: string): Promise<boolean> => {
+    const token = getToken();
+    if (!token) return true; // Local play doesn't need API call
+
+    try {
+      const res = await fetch(`${API_URL}/game/lose`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ sessionId }),
+      });
+
+      if (res.ok) {
+        return true;
+      }
+      const data = await res.json();
+      console.error("Record loss error:", data.message);
+      return false;
+    } catch (error) {
+      console.error("Record loss error:", error);
+      return false;
+    }
+  };
+
   return (
     <WalletContext.Provider
       value={{
@@ -295,10 +357,12 @@ export function WalletProvider({ children }: WalletProviderProps) {
         canTakeLoan,
         deductMoney,
         recordBet,
+        startGameSession,
         recordWin,
         claimWelcomeBonus,
         takeLoan,
         repayLoan,
+        recordLoss,
         refreshWallet,
         fetchLoans,
       }}
