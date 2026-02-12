@@ -167,11 +167,15 @@ export default function Navbar() {
                                 <GoogleLogin
                                     onSuccess={(credentialResponse) => {
                                         if (credentialResponse.credential) {
-                                            login(credentialResponse.credential);
+                                            login(credentialResponse.credential).catch((err) => {
+                                                console.error('Login failed:', err);
+                                                alert('Sign in failed. Please try again.');
+                                            });
                                         }
                                     }}
                                     onError={() => {
-                                        console.log('Login Failed');
+                                        console.error('Google Login Failed');
+                                        alert('Google sign in failed. Please try again.');
                                     }}
                                     theme="filled_black"
                                     shape="pill"
