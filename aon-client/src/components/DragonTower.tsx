@@ -9,6 +9,9 @@ import { useWallet } from "../contexts/WalletContext";
 import { useAuth } from "../contexts/AuthContext";
 import Footer from "./Footer";
 import SignInDialog from "./SignInDialog";
+import { useTutorial } from "./tutorial/useTutorial";
+import { DRAGON_TOWER_STEPS } from "./tutorial/steps";
+import TutorialController from "./tutorial/TutorialController";
 
 type DifficultyLevel = "Low" | "Medium" | "High";
 
@@ -33,6 +36,10 @@ const generateDragons = (rows: number, difficulty: number): number[] => {
     );
 };
 
+// Controlled tutorial tower: dragon sits in column 0 of every row, so column 1
+// is always a guaranteed-safe demo tile.
+const generateTutorialDragons = (): number[] => Array.from({ length: 10 }, () => 0);
+
 export default function DragonTower() {
     const { wallet, recordBet, recordWin } = useWallet();
     const { user } = useAuth();
@@ -56,6 +63,46 @@ export default function DragonTower() {
 
     // Ref for scrolling to tower on cashout
     const towerRef = useRef<HTMLDivElement>(null);
+
+    // Tutorial engine — shared across games. Owns the step machine; this
+    // component supplies the controlled demo tower and reset side-effects.
+    const tut = useTutorial(DRAGON_TOWER_STEPS, {
+        onStart: () => {
+            setStarted(false);
+            setGameOver(false);
+            setCashOut(false);
+            setSelected([]);
+            setDragons([]);
+            setRevealedRows([]);
+            setAmount(100);
+            setDifficulty("Low");
+            prevSelectedLength.current = 0;
+        },
+        onEnd: () => {
+            setStarted(false);
+            setGameOver(false);
+            setCashOut(false);
+            setSelected([]);
+            setDragons([]);
+            setRevealedRows([]);
+            prevSelectedLength.current = 0;
+        },
+    });
+
+    // Build the controlled demo tower when the player reaches the climb step.
+    useEffect(() => {
+        if (!tut.isActive) return;
+        if (tut.currentStep?.id === "climb" && dragons.length === 0) {
+            setDifficulty("Low");
+            setDragons(generateTutorialDragons());
+            setSelected([]);
+            setRevealedRows([]);
+            setGameOver(false);
+            setCashOut(false);
+            setStarted(true);
+            prevSelectedLength.current = 0;
+        }
+    }, [tut.isActive, tut.stepIndex, tut.currentStep, dragons.length]);
 
     // Handle staggered dragon reveal on game over
     useEffect(() => {
@@ -96,6 +143,14 @@ export default function DragonTower() {
     const startGame = async (e: React.FormEvent) => {
         e.preventDefault();
 
+        // Tutorial: the Bet button just advances the walkthrough.
+        if (tut.isActive) {
+            if (tut.isTarget("bet2")) {
+                tut.next();
+            }
+            return;
+        }
+
         if (!user) {
             setShowSignInDialog(true);
             return;
@@ -132,6 +187,15 @@ export default function DragonTower() {
     };
 
     const handleTileClick = (row: number, index: number) => {
+        // Tutorial: only the glowing safe tile (row 0, column 1) responds.
+        if (tut.isActive) {
+            if (tut.currentStep?.id === "climb" && row === 0 && index === 1) {
+                setSelected([1]);
+                setTimeout(() => tut.next(), 450);
+            }
+            return;
+        }
+
         if (!started || gameOver || cashOut || selected.length !== row) return;
 
         if (index === dragons[row]) {
@@ -157,6 +221,14 @@ export default function DragonTower() {
     const earnings = parseFloat((amount * parseFloat(multiplier)).toFixed(2));
 
     const handleCashOut = async () => {
+        // Tutorial: the Cash Out button just advances the walkthrough.
+        if (tut.isActive) {
+            if (tut.isTarget("cashout")) {
+                tut.next();
+            }
+            return;
+        }
+
         if (gameOver) {
             setGameOver(false);
             setCashOut(false);
@@ -204,6 +276,8 @@ export default function DragonTower() {
     };
 
     const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        // Lock real inputs while the tutorial is driving the UI.
+        if (tut.isActive && !tut.isTarget("amount2")) return;
         const value = e.target.value;
         if (value === "") {
             setAmount(0);
@@ -218,6 +292,8 @@ export default function DragonTower() {
         if (!gameOver) return false;
         return revealedRows.includes(row);
     };
+
+    const isHighlighted = (id: string) => tut.isHighlighted(id);
 
     return (
         <>
@@ -237,51 +313,90 @@ export default function DragonTower() {
                     )}
                 </AnimatePresence>
 
-                <div className="main-layout2">
-                    {/* Add game-active class for mobile sidebar collapse */}
-                    <div className={`right-navbar2 ${started ? 'game-active' : ''}`}>
+                {/* Shared tutorial: trigger button + backdrop + tooltip */}
+                <TutorialController tutorial={tut} triggerDisabled={started && !tut.isActive} />
+
+                <div className={`main-layout2 ${tut.isActive ? 'tutorial-active' : ''}`}>
+                    {/* Keep the sidebar visible during the tutorial (no mobile collapse). */}
+                    <div className={`right-navbar2 ${started && !tut.isActive ? 'game-active' : ''}`}>
                         <form onSubmit={startGame}>
                             <label htmlFor="amount2">Bet Amount</label>
-                            <input
-                                id="amount2"
-                                type="number"
-                                value={amount || ""}
-                                onChange={handleAmountChange}
-                                placeholder="Enter Amount"
-                                step="any"
-                                min={MIN_BET}
-                                disabled={started}
-                                required
-                            />
+                            <div
+                                className={isHighlighted("amount2") ? "tutorial-highlight-wrapper" : ""}
+                                onClick={() => { if (tut.handleClick("amount2")) return; }}
+                            >
+                                <input
+                                    id="amount2"
+                                    type="number"
+                                    value={amount || ""}
+                                    onChange={handleAmountChange}
+                                    placeholder="Enter Amount"
+                                    step="any"
+                                    min={MIN_BET}
+                                    disabled={started && !tut.isActive}
+                                    required
+                                />
+                            </div>
                             <div className="half-double2">
-                                <button type="button" id="half2" onClick={handleHalf} disabled={started}>
+                                <button
+                                    type="button"
+                                    id="half2"
+                                    className={isHighlighted("half2") ? "tutorial-highlight-wrapper" : ""}
+                                    onClick={(e) => {
+                                        if (tut.isActive && !tut.isTarget("half2")) return;
+                                        handleHalf(e);
+                                        if (tut.isActive && tut.isTarget("half2")) tut.next();
+                                    }}
+                                    disabled={started && !tut.isActive}
+                                >
                                     ½
                                 </button>
-                                <button type="button" id="double2" onClick={handleDouble} disabled={started}>
+                                <button
+                                    type="button"
+                                    id="double2"
+                                    onClick={handleDouble}
+                                    disabled={started || tut.isActive}
+                                >
                                     2x
                                 </button>
                             </div>
                             <label htmlFor="difficulty2">Difficulty Level</label>
-                            <select
-                                id="difficulty2"
-                                value={difficulty}
-                                onChange={(e) =>
-                                    setDifficulty(e.target.value as DifficultyLevel)
-                                }
-                                disabled={started}
-                                required
+                            <div
+                                className={isHighlighted("difficulty2") ? "tutorial-highlight-wrapper" : ""}
+                                onClick={() => { if (tut.handleClick("difficulty2")) return; }}
                             >
-                                {(Object.keys(difficulties) as DifficultyLevel[]).map((level) => (
-                                    <option key={level} value={level}>
-                                        {difficultyLabels[level]}
-                                    </option>
-                                ))}
-                            </select>
+                                <select
+                                    id="difficulty2"
+                                    value={difficulty}
+                                    onChange={(e) => {
+                                        if (tut.isActive && !tut.isTarget("difficulty2")) return;
+                                        setDifficulty(e.target.value as DifficultyLevel);
+                                    }}
+                                    disabled={started && !tut.isActive}
+                                    required
+                                >
+                                    {(Object.keys(difficulties) as DifficultyLevel[]).map((level) => (
+                                        <option key={level} value={level}>
+                                            {difficultyLabels[level]}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
                             {!started ? (
-                                <button id="bet2" type="submit">Bet</button>
+                                <button
+                                    id="bet2"
+                                    type="submit"
+                                    className={isHighlighted("bet2") ? "tutorial-highlight-wrapper" : ""}
+                                >
+                                    Bet
+                                </button>
                             ) : (
                                 <div className="earnings-display2">
-                                    <div className="stat-capsule">
+                                    <div
+                                        id="dt-multiplier"
+                                        className={`stat-capsule ${isHighlighted("dt-multiplier") ? "tutorial-highlight-wrapper" : ""}`}
+                                        onClick={() => tut.handleClick("dt-multiplier")}
+                                    >
                                         <span className="stat-label">Current Multiplier</span>
                                         <div className={`stat-value ${multiplierPop ? 'multiplier-pop' : ''}`}>
                                             {multiplier}x
@@ -297,7 +412,12 @@ export default function DragonTower() {
                                         <div className="stat-value" style={{ color: 'var(--success)' }}>₹{earnings.toFixed(2)}</div>
                                     </div>
 
-                                    <button id="cashout" onClick={handleCashOut} type="button">
+                                    <button
+                                        id="cashout"
+                                        className={isHighlighted("cashout") ? "tutorial-highlight-wrapper" : ""}
+                                        onClick={handleCashOut}
+                                        type="button"
+                                    >
                                         {gameOver ? "Play Again" : "Cash Out"}
                                     </button>
                                 </div>
@@ -330,6 +450,16 @@ export default function DragonTower() {
                                                 const shouldRevealDragon = gameOver ? isDragonRevealed(row) : false;
                                                 const isRevealed = isProgressRevealed || shouldRevealDragon || cashOut;
 
+                                                const isTutorialTile =
+                                                    tut.isActive &&
+                                                    tut.currentStep?.id === "climb" &&
+                                                    row === 0 &&
+                                                    index === 1;
+                                                const isTutorialDimmed =
+                                                    tut.isActive &&
+                                                    tut.currentStep?.id === "climb" &&
+                                                    !isTutorialTile;
+
                                                 return (
                                                     <motion.div
                                                         key={index}
@@ -340,7 +470,8 @@ export default function DragonTower() {
                                                                 : isAvailable
                                                                     ? "available2"
                                                                     : ""
-                                                            }`}
+                                                            } ${isTutorialTile ? "tutorial-highlight-wrapper" : ""}`}
+                                                        style={isTutorialDimmed ? { opacity: 0.3 } : undefined}
                                                         onClick={() => handleTileClick(row, index)}
                                                         whileHover={isAvailable ? { scale: 1.08, y: -5 } : {}}
                                                         whileTap={isAvailable ? { scale: 0.95 } : {}}

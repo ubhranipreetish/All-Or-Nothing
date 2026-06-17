@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "aon-client",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "aon-client", "run", "dev:safe"],
+      "port": 3000
+    }
+  ]
+}

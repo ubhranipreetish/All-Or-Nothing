@@ -7,6 +7,9 @@
   background-color: rgba(11, 28, 45, 0.95);
   border-bottom: 1px solid var(--divider);
   padding: 0 24px;
+  /* Respect notches / rounded corners on phones. */
+  padding-left: max(24px, env(safe-area-inset-left));
+  padding-right: max(24px, env(safe-area-inset-right));
   z-index: 1000;
   transition: all 0.3s ease;
 }
@@ -367,38 +370,70 @@
 
 @media (max-width: 600px) {
   .navbar {
-    padding: 0 16px;
+    padding: 0 12px;
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
   }
 
   .navbar-container {
     height: 64px;
   }
 
+  .nav-right {
+    gap: 0.5rem;
+  }
+
   .logo img {
-    height: 38px;
+    height: 36px;
   }
 
   .wallet-section {
-    height: 40px;
+    height: 38px;
   }
 
   .wallet {
-    padding: 0 10px;
-    font-size: 0.875rem;
+    padding: 0 8px;
+    font-size: 0.8rem;
   }
 
   .add-money-btn {
-    width: 40px;
+    width: 38px;
+  }
+
+  /* Promo banner sits flush under the shorter mobile navbar. */
+  .promo-banner {
+    top: 64px;
   }
 
   .modal-content {
     min-width: auto;
     margin: 1rem;
-    padding: 2rem;
+    padding: 2rem 1.5rem;
+    max-width: calc(100% - 2rem);
   }
 
   .modal-content h3 {
     font-size: 1.25rem;
+  }
+
+  .modal-buttons {
+    gap: 0.75rem;
+  }
+}
+
+/* Very small phones: keep the top bar from overflowing. */
+@media (max-width: 360px) {
+  .nav-right {
+    gap: 0.35rem;
+  }
+
+  .wallet {
+    padding: 0 6px;
+    font-size: 0.72rem;
+  }
+
+  .logo img {
+    height: 32px;
   }
 }
 

@@ -1,6 +1,18 @@
 import { Schema, model } from "mongoose";
 
-const UserSchema = new Schema(
+export interface IUser {
+  googleId: string;
+  email: string;
+  name?: string;
+  avatar?: string;
+  walletBalance: number;
+  totalEarnings: number;
+  hasClaimed100Bonus: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const UserSchema = new Schema<IUser>(
   {
     googleId: {
       type: String,
@@ -33,4 +45,4 @@ const UserSchema = new Schema(
 // Index for leaderboard queries
 UserSchema.index({ totalEarnings: -1 });
 
-export default model("User", UserSchema);
+export default model<IUser>("User", UserSchema);

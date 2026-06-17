@@ -54,12 +54,44 @@
 html {
   scroll-behavior: smooth;
   scroll-padding-top: 80px;
+  /* Prevent iOS from auto-enlarging text on orientation change. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: "Segoe UI", Arial, Helvetica, sans-serif;
+  /* Mobile-first: never allow horizontal scrolling from wide game boards. */
+  overflow-x: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Media never overflows its container on small screens. */
+img,
+svg,
+video {
+  max-width: 100%;
+}
+
+/*
+ * The promo banner is position:fixed under the navbar. On phones/tablets its
+ * text wraps to two lines and would cover page content (which is only offset
+ * for the navbar). When the banner is present, push the whole page down by its
+ * height so nothing hides behind it. Desktop already clears it, so this is
+ * scoped to smaller screens.
+ */
+@media (max-width: 768px) {
+  body:has(.promo-banner) {
+    padding-top: 86px;
+  }
+}
+
+@media (max-width: 600px) {
+  body:has(.promo-banner) {
+    padding-top: 96px;
+  }
 }
 
 /* ==================== SHARED FORM STYLES ==================== */

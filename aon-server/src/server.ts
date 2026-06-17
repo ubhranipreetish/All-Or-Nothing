@@ -1,20 +1,18 @@
-import dotenv from "dotenv";
-dotenv.config();
-
 import { createServer } from "http";
+import { env } from "./config/env";
+import { database } from "./config/database";
 import app from "./app";
-import { connectDB } from "./config/db";
-import { initSocket } from "./socket";
-
-const PORT = process.env.PORT || 5000;
+import { socketServer } from "./realtime/SocketServer";
+import { container } from "./container";
 
 const httpServer = createServer(app);
 
-// Initialize Socket.IO
-initSocket(httpServer);
+// Bring up the websocket server and wire the realtime observer to the EventBus.
+socketServer.init(httpServer);
+container.socketNotifier.register();
 
-connectDB().then(() => {
-  httpServer.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-  });
+database.connect().then(() => {
+    httpServer.listen(env.port, () => {
+        console.log(`Server running on port ${env.port}`);
+    });
 });

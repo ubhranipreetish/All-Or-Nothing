@@ -9,6 +9,9 @@ import { useWallet } from "../contexts/WalletContext";
 import { useAuth } from "../contexts/AuthContext";
 import Footer from "./Footer";
 import SignInDialog from "./SignInDialog";
+import { useTutorial } from "./tutorial/useTutorial";
+import { MINES_STEPS } from "./tutorial/steps";
+import TutorialController from "./tutorial/TutorialController";
 
 const TILE_COUNT = 25;
 const MIN_BET = 1;
@@ -17,81 +20,6 @@ interface TileData {
     isMine: boolean;
     revealed: boolean;
 }
-
-// Tutorial step definitions
-interface TutorialStep {
-    id: string;
-    title: string;
-    message: string;
-    action: string;
-    highlight: string;
-}
-
-const TUTORIAL_STEPS: TutorialStep[] = [
-    {
-        id: "welcome",
-        title: "Welcome to Mines!",
-        message: "Let's learn how to play this exciting game.",
-        action: "start-button", // Special: shows Start button
-        highlight: "",
-    },
-    {
-        id: "bet-amount",
-        title: "Step 1: Bet Amount",
-        message: "This is where you enter how much you want to bet.",
-        action: "Click on the Bet Amount input",
-        highlight: "bet-amount-input",
-    },
-    {
-        id: "half-double",
-        title: "Quick Adjust Buttons",
-        message: "Use these to quickly halve (½) or double (2x) your bet.",
-        action: "Click on the ½ button",
-        highlight: "half-btn",
-    },
-    {
-        id: "mine-count",
-        title: "Step 2: Mine Count",
-        message: "More mines = higher multiplier, but higher risk! Start with 3-5 mines.",
-        action: "Click on the Mines input",
-        highlight: "mine-count-input",
-    },
-    {
-        id: "start-game",
-        title: "Step 3: Start Playing",
-        message: "Click Bet to start the game. Your bet is deducted from your wallet.",
-        action: "Click the Bet button",
-        highlight: "bet-button",
-    },
-    {
-        id: "reveal-tile",
-        title: "Step 4: Reveal Tiles",
-        message: "Click on tiles to reveal them. Find gems 💎, avoid mines 💣!",
-        action: "Click on the glowing tile",
-        highlight: "tutorial-tile",
-    },
-    {
-        id: "multiplier-info",
-        title: "Step 5: Multiplier",
-        message: "Each safe tile increases your multiplier. This shows how much you'll win!",
-        action: "Click on the multiplier display",
-        highlight: "multiplier-capsule",
-    },
-    {
-        id: "cashout",
-        title: "Step 6: Cash Out",
-        message: "Click Cash Out anytime to secure your winnings. Don't get too greedy!",
-        action: "Click the Cash Out button",
-        highlight: "cashout-button",
-    },
-    {
-        id: "complete",
-        title: "You're Ready! 🎉",
-        message: "That's it! Now try a real game. Good luck!",
-        action: "start-button", // Special: shows Start Playing button
-        highlight: "",
-    },
-];
 
 const generateBoard = (mineCount: number): TileData[] => {
     const board: TileData[] = Array.from({ length: TILE_COUNT }, () => ({
@@ -189,34 +117,12 @@ export default function Mines() {
     const [spotlightIndex, setSpotlightIndex] = useState<number | null>(null);
     const sessionIdRef = useRef<string | null>(null);
 
-    // Tutorial state
-    const [isTutorialActive, setIsTutorialActive] = useState(false);
-    const [tutorialStep, setTutorialStep] = useState(0);
-
     const gridRef = useRef<HTMLDivElement>(null);
 
     const showNotification = (message: string) => {
         setNotification(message);
         setTimeout(() => setNotification(""), 3000);
     };
-
-    // Get current tutorial step
-    const currentTutorialStep = isTutorialActive ? TUTORIAL_STEPS[tutorialStep] : null;
-
-    // Start Tutorial
-    const startTutorial = useCallback(() => {
-        setIsTutorialActive(true);
-        setTutorialStep(0);
-        setStarted(false);
-        setGameOver(false);
-        setCashedOut(false);
-        setBoard([]);
-        setAmount(100);
-        setMineCount(5);
-        setMultiplier("1.00");
-        setEarnings(0);
-        setRevealedCount(0);
-    }, []);
 
     // Check for active game session (Restoration Logic)
     const checkActiveSession = useCallback(async () => {
@@ -269,66 +175,47 @@ export default function Mines() {
         checkActiveSession();
     }, [checkActiveSession]);
 
-    // End tutorial
-    const endTutorial = useCallback(() => {
-        setIsTutorialActive(false);
-        setTutorialStep(0);
-        setStarted(false);
-        setBoard([]);
-        setMultiplier("1.00");
-        setEarnings(0);
+    // Tutorial engine — shared across all games. The hook owns the step machine;
+    // this component supplies the demo board and the reset side-effects.
+    const tut = useTutorial(MINES_STEPS, {
+        onStart: () => {
+            setStarted(false);
+            setGameOver(false);
+            setCashedOut(false);
+            setBoard([]);
+            setAmount(100);
+            setMineCount(5);
+            setMultiplier("1.00");
+            setEarnings(0);
+            setRevealedCount(0);
+        },
+        onEnd: () => {
+            setStarted(false);
+            setBoard([]);
+            setMultiplier("1.00");
+            setEarnings(0);
+            // Re-check for any real session interrupted by the tutorial.
+            checkActiveSession();
+        },
+    });
 
-        // Re-check for any active real game session interrupted by tutorial
-        checkActiveSession();
-    }, [checkActiveSession]);
-
-    // Advance to next tutorial step
-    const nextTutorialStep = useCallback(() => {
-        if (tutorialStep < TUTORIAL_STEPS.length - 1) {
-            setTutorialStep(prev => prev + 1);
-        } else {
-            endTutorial();
-        }
-    }, [tutorialStep, endTutorial]);
-
-    // Check if current step matches the clicked element
-    const isTutorialTarget = useCallback((elementId: string) => {
-        if (!isTutorialActive || !currentTutorialStep) return false;
-        return currentTutorialStep.highlight === elementId;
-    }, [isTutorialActive, currentTutorialStep]);
-
-    // Handle tutorial element click - returns true if tutorial handled it
-    const handleTutorialClick = useCallback((elementId: string) => {
-        if (!isTutorialActive) return false;
-
-        if (isTutorialTarget(elementId)) {
-            nextTutorialStep();
-            return true;
-        }
-
-        return false;
-    }, [isTutorialActive, isTutorialTarget, nextTutorialStep]);
-
-    // Setup demo board when reaching reveal-tile step
+    // Setup the controlled demo board when the player reaches the reveal step.
     useEffect(() => {
-        if (!isTutorialActive) return;
-
-        const step = TUTORIAL_STEPS[tutorialStep];
-
-        if (step.id === "reveal-tile" && board.length === 0) {
+        if (!tut.isActive) return;
+        if (tut.currentStep?.id === "reveal-tile" && board.length === 0) {
             setBoard(generateTutorialBoard());
             setStarted(true);
             setEarnings(100);
         }
-    }, [isTutorialActive, tutorialStep, board.length]);
+    }, [tut.isActive, tut.stepIndex, tut.currentStep, board.length]);
 
     const startGame = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        // Handle tutorial bet button
-        if (isTutorialActive) {
-            if (isTutorialTarget("bet-button")) {
-                nextTutorialStep();
+        // Tutorial: the Bet button just advances the walkthrough.
+        if (tut.isActive) {
+            if (tut.isTarget("bet-button")) {
+                tut.next();
             }
             return;
         }
@@ -406,9 +293,9 @@ export default function Mines() {
     };
 
     const revealTile = async (index: number) => {
-        if (isTutorialActive) {
-            // Handle tutorial tile click (center tile = index 12) ONLY if correct step and tile
-            if (currentTutorialStep?.id === "reveal-tile" && index === 12) {
+        if (tut.isActive) {
+            // Tutorial: only the glowing center tile (index 12) responds.
+            if (tut.currentStep?.id === "reveal-tile" && index === 12) {
                 if (gemSound.current) {
                     gemSound.current.currentTime = 0;
                     gemSound.current.play().catch(() => { });
@@ -423,9 +310,9 @@ export default function Mines() {
                 setMultiplier("1.20");
                 setEarnings(120);
 
-                setTimeout(() => nextTutorialStep(), 600);
+                setTimeout(() => tut.next(), 600);
             }
-            return; // Block all other tile interactions during tutorial
+            return; // Block all other tile interactions during the tutorial.
         }
 
         if (!started || board[index]?.revealed || gameOver || cashedOut) return;
@@ -474,10 +361,10 @@ export default function Mines() {
     };
 
     const handleCashOut = async () => {
-        // Handle tutorial cashout
-        if (isTutorialActive) {
-            if (isTutorialTarget("cashout-button")) {
-                nextTutorialStep();
+        // Tutorial: the Cash Out button just advances the walkthrough.
+        if (tut.isActive) {
+            if (tut.isTarget("cashout-button")) {
+                tut.next();
             }
             return;
         }
@@ -515,9 +402,7 @@ export default function Mines() {
     };
 
     // Check if element should be highlighted
-    const isHighlighted = (elementId: string) => {
-        return isTutorialActive && currentTutorialStep?.highlight === elementId;
-    };
+    const isHighlighted = (elementId: string) => tut.isHighlighted(elementId);
 
     return (
         <>
@@ -537,42 +422,21 @@ export default function Mines() {
                     )}
                 </AnimatePresence>
 
-                {/* Tutorial Button */}
-                <button
-                    className="tutorial-trigger-btn"
-                    onClick={startTutorial}
-                    disabled={started && !gameOver && !cashedOut}
-                >
-                    🎮 How to Play
-                </button>
-
-                {/* Tutorial Backdrop */}
-                <AnimatePresence>
-                    {isTutorialActive && (
-                        <motion.div
-                            className="tutorial-backdrop"
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            onClick={() => {
-                                // Allow advancing on steps without specific targets
-                                if (!currentTutorialStep?.highlight) {
-                                    nextTutorialStep();
-                                }
-                            }}
-                        />
-                    )}
-                </AnimatePresence>
+                {/* Shared tutorial: trigger button + backdrop + tooltip */}
+                <TutorialController
+                    tutorial={tut}
+                    triggerDisabled={started && !gameOver && !cashedOut}
+                />
 
                 {/* Main game area - elevated during tutorial */}
-                <div className={`main-layout1 ${isTutorialActive ? 'tutorial-active' : ''}`}>
+                <div className={`main-layout1 ${tut.isActive ? 'tutorial-active' : ''}`}>
                     <div className="right-navbar1">
                         <form onSubmit={startGame}>
                             <label className="input-label">Bet Amount</label>
                             <div
                                 className={isHighlighted("bet-amount-input") ? "tutorial-highlight-wrapper" : ""}
                                 onClick={() => {
-                                    if (handleTutorialClick("bet-amount-input")) return;
+                                    if (tut.handleClick("bet-amount-input")) return;
                                 }}
                             >
                                 <input
@@ -580,10 +444,10 @@ export default function Mines() {
                                     type="number"
                                     value={amount || ""}
                                     onChange={(e) => {
-                                        if (isTutorialActive && !isTutorialTarget("bet-amount-input")) return;
+                                        if (tut.isActive && !tut.isTarget("bet-amount-input")) return;
                                         setAmount(Number(e.target.value));
                                     }}
-                                    disabled={(started && !gameOver && !cashedOut) && !isTutorialActive}
+                                    disabled={(started && !gameOver && !cashedOut) && !tut.isActive}
                                 />
                             </div>
 
@@ -593,26 +457,26 @@ export default function Mines() {
                                     className={isHighlighted("half-btn") ? "tutorial-highlight-wrapper" : ""}
                                     type="button"
                                     onClick={() => {
-                                        if (isTutorialActive && !isTutorialTarget("half-btn")) return;
+                                        if (tut.isActive && !tut.isTarget("half-btn")) return;
 
                                         setAmount(Math.max(MIN_BET, amount / 2));
 
                                         // Advance step if it was the target
-                                        if (isTutorialActive && isTutorialTarget("half-btn")) {
-                                            nextTutorialStep();
+                                        if (tut.isActive && tut.isTarget("half-btn")) {
+                                            tut.next();
                                         }
                                     }}
-                                    disabled={started && !isTutorialActive}
+                                    disabled={started && !tut.isActive}
                                 >
                                     ½
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => {
-                                        if (isTutorialActive) return; // Block 2x during tutorial as it's not a step target
+                                        if (tut.isActive) return; // Block 2x during tutorial as it's not a step target
                                         setAmount(Math.min(wallet, amount * 2));
                                     }}
-                                    disabled={started || isTutorialActive}
+                                    disabled={started || tut.isActive}
                                 >
                                     2x
                                 </button>
@@ -622,7 +486,7 @@ export default function Mines() {
                             <div
                                 className={isHighlighted("mine-count-input") ? "tutorial-highlight-wrapper" : ""}
                                 onClick={() => {
-                                    if (handleTutorialClick("mine-count-input")) return;
+                                    if (tut.handleClick("mine-count-input")) return;
                                 }}
                             >
                                 <input
@@ -630,10 +494,10 @@ export default function Mines() {
                                     type="number"
                                     value={mineCount}
                                     onChange={(e) => {
-                                        if (isTutorialActive && !isTutorialTarget("mine-count-input")) return;
+                                        if (tut.isActive && !tut.isTarget("mine-count-input")) return;
                                         setMineCount(Math.max(1, Math.min(24, Number(e.target.value))));
                                     }}
-                                    disabled={started && !isTutorialActive}
+                                    disabled={started && !tut.isActive}
                                 />
                             </div>
 
@@ -652,7 +516,7 @@ export default function Mines() {
                                     <div
                                         id="multiplier-capsule"
                                         className={`stat-capsule ${isHighlighted("multiplier-capsule") ? "tutorial-highlight-wrapper" : ""}`}
-                                        onClick={() => handleTutorialClick("multiplier-capsule")}
+                                        onClick={() => tut.handleClick("multiplier-capsule")}
                                     >
                                         <span className="stat-label">Current Multiplier</span>
                                         <div className="stat-value">{multiplier}x</div>
@@ -676,7 +540,7 @@ export default function Mines() {
                                 </div>
                             )}
 
-                            {(gameOver || cashedOut) && !isTutorialActive && (
+                            {(gameOver || cashedOut) && !tut.isActive && (
                                 <button
                                     className="clear-table-btn"
                                     onClick={handleCashOut}
@@ -690,8 +554,8 @@ export default function Mines() {
 
                     <div className="container1" ref={gridRef}>
                         {[...Array(TILE_COUNT)].map((_, index) => {
-                            const isTutorialTile = isTutorialActive &&
-                                currentTutorialStep?.id === "reveal-tile" &&
+                            const isTutorialTile = tut.isActive &&
+                                tut.currentStep?.id === "reveal-tile" &&
                                 index === 12;
 
                             return (
@@ -705,7 +569,7 @@ export default function Mines() {
                                     }
                                     isDimmed={
                                         (spotlightIndex !== null && spotlightIndex !== index) ||
-                                        (isTutorialActive && currentTutorialStep?.id === "reveal-tile" && index !== 12)
+                                        (tut.isActive && tut.currentStep?.id === "reveal-tile" && index !== 12)
                                     }
                                     isSpotlight={spotlightIndex === index || isTutorialTile}
                                     className={isTutorialTile ? "tutorial-highlight-wrapper" : ""}
@@ -714,48 +578,6 @@ export default function Mines() {
                         })}
                     </div>
                 </div>
-
-                {/* Tutorial Tooltip - always visible above everything */}
-                <AnimatePresence>
-                    {isTutorialActive && currentTutorialStep && (
-                        <motion.div
-                            className="tutorial-tooltip"
-                            initial={{ opacity: 0, y: 20, scale: 0.9 }}
-                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                            exit={{ opacity: 0, y: -20, scale: 0.9 }}
-                            key={tutorialStep}
-                        >
-                            {/* Step indicator removed - step numbers are in the titles */}
-                            <h3 className="tutorial-title">{currentTutorialStep.title}</h3>
-                            <p className="tutorial-message">{currentTutorialStep.message}</p>
-
-                            {/* Show start button for welcome/complete steps, otherwise show action text */}
-                            {currentTutorialStep.action === "start-button" ? (
-                                <button
-                                    className="tutorial-start-btn"
-                                    onClick={() => {
-                                        if (currentTutorialStep.id === "complete") {
-                                            endTutorial();
-                                        } else {
-                                            nextTutorialStep();
-                                        }
-                                    }}
-                                >
-                                    {currentTutorialStep.id === "complete" ? "Start Playing" : "Start Tutorial"}
-                                </button>
-                            ) : (
-                                <p className="tutorial-action">{currentTutorialStep.action}</p>
-                            )}
-
-                            <button
-                                className="tutorial-skip-btn"
-                                onClick={endTutorial}
-                            >
-                                Skip Tutorial
-                            </button>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
             </div>
             <Footer />
             <SignInDialog isOpen={showSignInDialog} onClose={() => setShowSignInDialog(false)} />

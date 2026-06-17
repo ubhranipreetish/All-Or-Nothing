@@ -8,6 +8,9 @@ import "../styles/FortuneWheel.css";
 import Navbar from "./Navbar";
 import Footer from "./Footer";
 import SignInDialog from "./SignInDialog";
+import { useTutorial } from "./tutorial/useTutorial";
+import { WHEEL_STEPS } from "./tutorial/steps";
+import TutorialController from "./tutorial/TutorialController";
 
 type DifficultyLevel = "low" | "medium" | "hard";
 
@@ -45,6 +48,48 @@ const FortuneWheel = () => {
         setNotification(message);
         setTimeout(() => setNotification(""), 3000);
     };
+
+    // Tutorial engine — shared across games. Owns the step machine; this
+    // component supplies a cosmetic demo spin (no bet, no payout).
+    const tut = useTutorial(WHEEL_STEPS, {
+        onStart: () => {
+            setStarted(false);
+            setEarningsDisplay(false);
+            setResult(null);
+            setWinningIndex(null);
+            setAmount(100);
+        },
+        onEnd: () => {
+            setStarted(false);
+            setEarningsDisplay(false);
+            setWinningIndex(null);
+        },
+    });
+
+    // Spin the wheel for show only — used inside the tutorial.
+    const demoSpin = () => {
+        const anglePerSegment = 360 / Math.max(segments.length, 1);
+        const picked = Math.floor(Math.random() * Math.max(segments.length, 1));
+        const rotate = 4 * 360 + (segments.length - picked) * anglePerSegment;
+
+        if (spinSound.current) {
+            spinSound.current.currentTime = 0;
+            spinSound.current.play().catch(() => { });
+        }
+
+        setRotation((prev) => {
+            const newRotation = prev + rotate;
+            if (wheelRef.current) {
+                wheelRef.current.style.transform = `rotate(${newRotation}deg)`;
+            }
+            return newRotation;
+        });
+
+        // Advance once the wheel has built up some momentum.
+        setTimeout(() => tut.next(), 2000);
+    };
+
+    const isHighlighted = (id: string) => tut.isHighlighted(id);
 
     const segment_structure: Record<"low" | "medium", string[]> = {
         low: [
@@ -269,6 +314,14 @@ const FortuneWheel = () => {
     const startGame = async (e: React.FormEvent) => {
         e.preventDefault();
 
+        // Tutorial: Spin triggers a cosmetic demo spin, no bet is placed.
+        if (tut.isActive) {
+            if (tut.isTarget("bet3")) {
+                demoSpin();
+            }
+            return;
+        }
+
         if (!user) {
             setShowSignInDialog(true);
             return;
@@ -311,6 +364,8 @@ const FortuneWheel = () => {
     };
 
     const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        // Lock real inputs while the tutorial is driving the UI.
+        if (tut.isActive && !tut.isTarget("amount3")) return;
         const value = e.target.value;
         if (value === "") {
             setAmount(0);
@@ -338,59 +393,98 @@ const FortuneWheel = () => {
                     )}
                 </AnimatePresence>
 
-                <div className="main-layout3">
+                {/* Shared tutorial: trigger button + backdrop + tooltip */}
+                <TutorialController tutorial={tut} triggerDisabled={started} />
+
+                <div className={`main-layout3 ${tut.isActive ? 'tutorial-active' : ''}`}>
                     <div className="right-navbar3">
                         <form onSubmit={startGame}>
                             <label htmlFor="amount3">Bet Amount</label>
-                            <input
-                                id="amount3"
-                                type="number"
-                                value={amount || ""}
-                                onChange={handleAmountChange}
-                                placeholder="Enter Amount"
-                                step="any"
-                                min={MIN_BET}
-                                disabled={started}
-                                required
-                            />
+                            <div
+                                className={isHighlighted("amount3") ? "tutorial-highlight-wrapper" : ""}
+                                onClick={() => { if (tut.handleClick("amount3")) return; }}
+                            >
+                                <input
+                                    id="amount3"
+                                    type="number"
+                                    value={amount || ""}
+                                    onChange={handleAmountChange}
+                                    placeholder="Enter Amount"
+                                    step="any"
+                                    min={MIN_BET}
+                                    disabled={started}
+                                    required
+                                />
+                            </div>
                             <div className="half-double3">
-                                <button type="button" onClick={handleHalf} disabled={started}>
+                                <button
+                                    type="button"
+                                    id="half3"
+                                    className={isHighlighted("half3") ? "tutorial-highlight-wrapper" : ""}
+                                    onClick={(e) => {
+                                        if (tut.isActive && !tut.isTarget("half3")) return;
+                                        handleHalf(e);
+                                        if (tut.isActive && tut.isTarget("half3")) tut.next();
+                                    }}
+                                    disabled={started}
+                                >
                                     ½
                                 </button>
-                                <button type="button" onClick={handleDouble} disabled={started}>
+                                <button type="button" onClick={handleDouble} disabled={started || tut.isActive}>
                                     2x
                                 </button>
                             </div>
                             <label htmlFor="difficulty3">Risk</label>
-                            <select
-                                id="difficulty3"
-                                value={difficulty}
-                                onChange={(e) =>
-                                    setDifficulty(e.target.value as DifficultyLevel)
-                                }
-                                disabled={started}
-                                required
+                            <div
+                                className={isHighlighted("difficulty3") ? "tutorial-highlight-wrapper" : ""}
+                                onClick={() => { if (tut.handleClick("difficulty3")) return; }}
                             >
-                                {(Object.keys(difficulties) as DifficultyLevel[]).map((level) => (
-                                    <option key={level}>{level}</option>
-                                ))}
-                            </select>
+                                <select
+                                    id="difficulty3"
+                                    value={difficulty}
+                                    onChange={(e) => {
+                                        if (tut.isActive && !tut.isTarget("difficulty3")) return;
+                                        setDifficulty(e.target.value as DifficultyLevel);
+                                    }}
+                                    disabled={started}
+                                    required
+                                >
+                                    {(Object.keys(difficulties) as DifficultyLevel[]).map((level) => (
+                                        <option key={level}>{level}</option>
+                                    ))}
+                                </select>
+                            </div>
 
                             <label htmlFor="segments-count">Segments</label>
-                            <select
-                                id="segments-count"
-                                value={segmentCount}
-                                onChange={(e) => setSegmentCount(Number(e.target.value))}
-                                disabled={started}
-                                required
+                            <div
+                                className={isHighlighted("segments-count") ? "tutorial-highlight-wrapper" : ""}
+                                onClick={() => { if (tut.handleClick("segments-count")) return; }}
                             >
-                                {no_of_segments.map((count) => (
-                                    <option key={count} value={count}>
-                                        {count}
-                                    </option>
-                                ))}
-                            </select>
-                            <button id="bet3" type="submit" disabled={started}>Spin</button>
+                                <select
+                                    id="segments-count"
+                                    value={segmentCount}
+                                    onChange={(e) => {
+                                        if (tut.isActive && !tut.isTarget("segments-count")) return;
+                                        setSegmentCount(Number(e.target.value));
+                                    }}
+                                    disabled={started}
+                                    required
+                                >
+                                    {no_of_segments.map((count) => (
+                                        <option key={count} value={count}>
+                                            {count}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                            <button
+                                id="bet3"
+                                type="submit"
+                                className={isHighlighted("bet3") ? "tutorial-highlight-wrapper" : ""}
+                                disabled={started}
+                            >
+                                Spin
+                            </button>
                         </form>
                     </div>
 
@@ -437,7 +531,11 @@ const FortuneWheel = () => {
 
                         </div>
                         {difficulty === "hard" ? (
-                            <div className="multipliers">
+                            <div
+                                id="multipliers-legend"
+                                className={`multipliers ${isHighlighted("multipliers-legend") ? "tutorial-highlight-wrapper" : ""}`}
+                                onClick={() => tut.handleClick("multipliers-legend")}
+                            >
                                 <div
                                     className="multi"
                                     style={{ borderBottomColor: multiplierColors["0.00x"] }}
@@ -455,7 +553,11 @@ const FortuneWheel = () => {
                                 </div>
                             </div>
                         ) : (
-                            <div className="multipliers">
+                            <div
+                                id="multipliers-legend"
+                                className={`multipliers ${isHighlighted("multipliers-legend") ? "tutorial-highlight-wrapper" : ""}`}
+                                onClick={() => tut.handleClick("multipliers-legend")}
+                            >
                                 {multi_divs[difficulty].map((elem, i) => (
                                     <div
                                         className="multi"

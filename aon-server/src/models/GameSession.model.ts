@@ -1,6 +1,6 @@
-import mongoose, { Document, Schema } from "mongoose";
+import mongoose, { Schema } from "mongoose";
 
-export interface IGameSession extends Document {
+export interface IGameSession {
     userId: mongoose.Types.ObjectId;
     gameType: string;
     betAmount: number;

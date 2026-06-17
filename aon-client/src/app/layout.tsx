@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { GoogleOAuthProvider } from "@react-oauth/google";
@@ -18,6 +18,16 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "All Or Nothing",
   description: "Test your luck and win big with exciting casino games!",
+};
+
+// Mobile-first viewport: fit device width, allow zoom for accessibility,
+// and respect notches/safe areas on phones.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  viewportFit: "cover",
+  themeColor: "#0B1C2D",
 };
 
 export default function RootLayout({

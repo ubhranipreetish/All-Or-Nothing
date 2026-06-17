@@ -11,6 +11,7 @@ import profileRoutes from "./routes/profile.route";
 import bonusRoutes from "./routes/bonus.route";
 import loanRoutes from "./routes/loan.route";
 import { validateOrigin, corsOptions } from "./middlewares/origin.middleware";
+import { errorHandler } from "./middlewares/error.middleware";
 
 const app = express();
 
@@ -36,5 +37,8 @@ app.use("/api/loan", loanRoutes);
 app.get("/health", (_, res) => {
   res.json({ status: "OK" });
 });
+
+// Central error handler — must be registered last.
+app.use(errorHandler);
 
 export default app;
