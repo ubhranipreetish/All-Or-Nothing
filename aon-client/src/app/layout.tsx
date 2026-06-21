@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Anton, Fraunces } from "next/font/google";
 import "./globals.css";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import { AuthProvider } from "../contexts/AuthContext";
@@ -15,9 +15,28 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// Display: heavy condensed poster face for impact headlines.
+const anton = Anton({
+  variable: "--font-display",
+  subsets: ["latin"],
+  weight: "400",
+});
+
+// Editorial serif (with italics) for expressive accent words.
+const fraunces = Fraunces({
+  variable: "--font-serif",
+  subsets: ["latin"],
+  axes: ["SOFT", "opsz"],
+});
+
 export const metadata: Metadata = {
   title: "All Or Nothing",
   description: "Test your luck and win big with exciting casino games!",
+  icons: {
+    icon: "/images/aon-favicon.png",
+    shortcut: "/images/aon-favicon.png",
+    apple: "/images/aon-favicon.png",
+  },
 };
 
 // Mobile-first viewport: fit device width, allow zoom for accessibility,
@@ -27,7 +46,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5,
   viewportFit: "cover",
-  themeColor: "#0B1C2D",
+  themeColor: "#07060A",
 };
 
 export default function RootLayout({
@@ -38,7 +57,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${anton.variable} ${fraunces.variable} antialiased`}
         suppressHydrationWarning
       >
         <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!}>

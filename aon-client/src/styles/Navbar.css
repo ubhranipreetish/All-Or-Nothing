@@ -4,7 +4,9 @@
   top: 0;
   left: 0;
   right: 0;
-  background-color: rgba(11, 28, 45, 0.95);
+  background-color: rgba(7, 6, 10, 0.72);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
   border-bottom: 1px solid var(--divider);
   padding: 0 24px;
   /* Respect notches / rounded corners on phones. */
@@ -15,10 +17,10 @@
 }
 
 .navbar-scrolled {
-  background-color: rgba(11, 28, 45, 0.85);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+  background-color: rgba(7, 6, 10, 0.82);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
 }
 
 .navbar-container {
@@ -41,8 +43,11 @@
 }
 
 .logo img {
-  height: 45px;
+  height: auto;
+  max-height: 42px;
+  max-width: 230px;
   width: auto;
+  display: block;
 }
 
 /* Nav Links */
@@ -384,7 +389,8 @@
   }
 
   .logo img {
-    height: 36px;
+    max-height: 32px;
+    max-width: 160px;
   }
 
   .wallet-section {
@@ -433,7 +439,8 @@
   }
 
   .logo img {
-    height: 32px;
+    max-height: 28px;
+    max-width: 130px;
   }
 }
 
@@ -466,23 +473,23 @@
 }
 
 .promo-guest {
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-  border-bottom: 1px solid rgba(255, 215, 0, 0.3);
-  color: #e0e0e0;
+  background: linear-gradient(135deg, #15101d 0%, #1c1410 100%);
+  border-bottom: 1px solid rgba(233, 185, 73, 0.28);
+  color: var(--bone-dim);
 }
 
 .promo-guest strong {
-  color: #ffd700;
+  color: var(--gold-bright);
 }
 
 .promo-claim {
-  background: linear-gradient(135deg, #1a3a1a 0%, #0d2818 100%);
-  border-bottom: 1px solid rgba(76, 175, 80, 0.4);
-  color: #e0e0e0;
+  background: linear-gradient(135deg, #131a14 0%, #0c130d 100%);
+  border-bottom: 1px solid rgba(43, 212, 160, 0.35);
+  color: var(--bone-dim);
 }
 
 .promo-claim strong {
-  color: #4caf50;
+  color: var(--jade);
 }
 
 .claim-btn {

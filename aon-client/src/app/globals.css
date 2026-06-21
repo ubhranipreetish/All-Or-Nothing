@@ -1,7 +1,8 @@
 @import "tailwindcss";
 
 /* Import component styles */
-@import "../styles/Home.css";
+@import "../styles/Landing.css";
+@import "../styles/Game.css";
 @import "../styles/Navbar.css";
 @import "../styles/Footer.css";
 @import "../styles/Mines.css";
@@ -9,38 +10,67 @@
 @import "../styles/FortuneWheel.css";
 @import "../styles/Profile.css";
 
-/* ==================== COLOR SCHEME VARIABLES ==================== */
+/* ====================================================================
+   BRAND: "FORTUNE'S EDGE" — cinematic noir luxe
+   Warm near-black · molten gold · ember risk-red · electric violet ·
+   bone-white editorial text. Legacy variable names are remapped so the
+   whole app (navbar, games, profile) inherits the rebrand cohesively.
+   ==================================================================== */
 :root {
-  /* Primary Palette - Navy */
-  --midnight-navy: #0B1C2D;
-  --deep-navy: #0F253D;
-  --soft-navy: #142F4A;
+  /* Core brand tokens */
+  --void: #07060A;
+  --void-2: #0B0910;
+  --obsidian: #110D18;
+  --ink: #181221;
+  --line: #261E33;
 
-  /* Primary Palette - Gold */
-  --primary-gold: #F5C16C;
-  --gold-dark: #D4A94F;
-  --gold-light: #FFD98A;
+  --bone: #F2ECDD;
+  --bone-dim: #A79FB2;
+  --bone-faint: #6E6678;
 
-  /* Accent - Blue */
-  --electric-blue: #3B82F6;
-  --neon-blue: #60A5FA;
+  --gold: #E9B949;
+  --gold-bright: #FFD877;
+  --gold-deep: #A9791F;
 
-  /* Functional Colors */
-  --success: #22C55E;
-  --danger: #EF4444;
+  --ember: #FF4438;
+  --ember-deep: #C21F1A;
+
+  --violet: #8B5CF6;
+  --violet-bright: #A78BFA;
+  --jade: #2BD4A0;
+
+  /* Fonts */
+  --font-body: var(--font-geist-sans), "Segoe UI", system-ui, sans-serif;
+  --font-display: var(--font-display), "Arial Narrow", sans-serif;
+  --font-serif: var(--font-serif), Georgia, serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  /* ---- Legacy aliases (keep the rest of the site working) ---- */
+  --midnight-navy: var(--void);
+  --deep-navy: var(--void-2);
+  --soft-navy: var(--ink);
+
+  --primary-gold: var(--gold);
+  --gold-dark: var(--gold-deep);
+  --gold-light: var(--gold-bright);
+
+  --electric-blue: var(--violet);
+  --neon-blue: var(--violet-bright);
+
+  --success: var(--jade);
+  --danger: var(--ember);
   --warning: #F59E0B;
-  --text-primary: #E5E7EB;
-  --text-muted: #9CA3AF;
-  --divider: #1F3A56;
+  --text-primary: var(--bone);
+  --text-muted: var(--bone-dim);
+  --divider: var(--line);
 
-  /* Semantic Mapping */
-  --background: var(--midnight-navy);
-  --foreground: var(--text-primary);
-  --card-bg: var(--deep-navy);
-  --card-border: var(--divider);
-  --input-bg: var(--soft-navy);
-  --input-border: var(--divider);
-  --input-focus: var(--electric-blue);
+  --background: var(--void);
+  --foreground: var(--bone);
+  --card-bg: var(--obsidian);
+  --card-border: var(--line);
+  --input-bg: var(--ink);
+  --input-border: var(--line);
+  --input-focus: var(--violet);
 }
 
 /* Removed @theme inline block as it is not a standard CSS feature */
@@ -62,9 +92,7 @@ html {
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: "Segoe UI", Arial, Helvetica, sans-serif;
-  /* Mobile-first: never allow horizontal scrolling from wide game boards. */
-  overflow-x: hidden;
+  font-family: var(--font-body);
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -76,21 +104,24 @@ video {
 }
 
 /*
- * The promo banner is position:fixed under the navbar. On phones/tablets its
- * text wraps to two lines and would cover page content (which is only offset
- * for the navbar). When the banner is present, push the whole page down by its
- * height so nothing hides behind it. Desktop already clears it, so this is
- * scoped to smaller screens.
+ * The promo banner is position:fixed beneath the navbar. When it's present,
+ * offset the whole document so page content always sits BELOW it (never behind
+ * it) at EVERY breakpoint. The value tracks the banner's height — taller on
+ * phones/tablets, where its text wraps to two lines.
  */
+body:has(.promo-banner) {
+  padding-top: 52px;
+}
+
 @media (max-width: 768px) {
   body:has(.promo-banner) {
-    padding-top: 86px;
+    padding-top: 88px;
   }
 }
 
 @media (max-width: 600px) {
   body:has(.promo-banner) {
-    padding-top: 96px;
+    padding-top: 100px;
   }
 }
 

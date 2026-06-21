@@ -8,9 +8,7 @@ import "../styles/FortuneWheel.css";
 import Navbar from "./Navbar";
 import Footer from "./Footer";
 import SignInDialog from "./SignInDialog";
-import { useTutorial } from "./tutorial/useTutorial";
-import { WHEEL_STEPS } from "./tutorial/steps";
-import TutorialController from "./tutorial/TutorialController";
+// NOTE: guided tutorial intentionally deferred — see ./tutorial/* (to be re-added later).
 
 type DifficultyLevel = "low" | "medium" | "hard";
 
@@ -49,94 +47,37 @@ const FortuneWheel = () => {
         setTimeout(() => setNotification(""), 3000);
     };
 
-    // Tutorial engine — shared across games. Owns the step machine; this
-    // component supplies a cosmetic demo spin (no bet, no payout).
-    const tut = useTutorial(WHEEL_STEPS, {
-        onStart: () => {
-            setStarted(false);
-            setEarningsDisplay(false);
-            setResult(null);
-            setWinningIndex(null);
-            setAmount(100);
-        },
-        onEnd: () => {
-            setStarted(false);
-            setEarningsDisplay(false);
-            setWinningIndex(null);
-        },
-    });
-
-    // Spin the wheel for show only — used inside the tutorial.
-    const demoSpin = () => {
-        const anglePerSegment = 360 / Math.max(segments.length, 1);
-        const picked = Math.floor(Math.random() * Math.max(segments.length, 1));
-        const rotate = 4 * 360 + (segments.length - picked) * anglePerSegment;
-
-        if (spinSound.current) {
-            spinSound.current.currentTime = 0;
-            spinSound.current.play().catch(() => { });
-        }
-
-        setRotation((prev) => {
-            const newRotation = prev + rotate;
-            if (wheelRef.current) {
-                wheelRef.current.style.transform = `rotate(${newRotation}deg)`;
-            }
-            return newRotation;
-        });
-
-        // Advance once the wheel has built up some momentum.
-        setTimeout(() => tut.next(), 2000);
-    };
-
-    const isHighlighted = (id: string) => tut.isHighlighted(id);
-
     const segment_structure: Record<"low" | "medium", string[]> = {
-        low: [
-            "0.00x", "1.20x", "1.20x", "1.20x", "1.50x",
-            "0.00x", "1.20x", "1.20x", "1.20x", "1.20x",
-        ],
-        medium: [
-            "0.00x", "1.50x", "0.00x", "2.00x", "0.00x",
-            "1.50x", "0.00x", "3.00x", "0.00x", "1.50x",
-        ],
+        low: ["0.00x", "1.20x", "1.20x", "1.20x", "1.50x", "0.00x", "1.20x", "1.20x", "1.20x", "1.20x"],
+        medium: ["0.00x", "1.50x", "0.00x", "2.00x", "0.00x", "1.50x", "0.00x", "3.00x", "0.00x", "1.50x"],
     };
-
     const multi_divs: Record<"low" | "medium", string[]> = {
         low: ["0.00x", "1.20x", "1.50x"],
         medium: ["0.00x", "1.50x", "2.00x", "3.00x"],
     };
-
-    const difficulties: Record<DifficultyLevel, number> = {
-        low: 4,
-        medium: 3,
-        hard: 2,
-    };
+    const difficulties: Record<DifficultyLevel, number> = { low: 4, medium: 3, hard: 2 };
 
     const multiplierColors: Record<string, string> = {
-        "0.00x": "#2F3A44",      // Gunmetal Gray - loss state
-        "1.20x": "#2DFFB3",      // Neon Mint - low risk
-        "1.50x": "#2563EB",      // Royal Blue - mid-low reward
-        "2.00x": "#F59E0B",      // Amber Orange - attention
-        "3.00x": "#10B981",      // Emerald Green - rewarding
-        "9.50x": "#DC2626",      // Crimson Red - high danger
-        "19.50x": "#7C3AED",     // Electric Violet - rare
-        "29.50x": "#EC4899",     // Hot Magenta - extreme
-        "39.50x": "#22D3EE",     // Neon Cyan - jackpot
+        "0.00x": "#2A2533",
+        "1.20x": "#2BD4A0",
+        "1.50x": "#8B5CF6",
+        "2.00x": "#F59E0B",
+        "3.00x": "#2BD4A0",
+        "9.50x": "#FF4438",
+        "19.50x": "#A78BFA",
+        "29.50x": "#EC4899",
+        "39.50x": "#22D3EE",
     };
 
-
-
     const no_of_segments = [10, 20, 30, 40];
-    const strokeWidth = 20;
+    const strokeWidth = 26;
+    const radius = 250;
 
     useEffect(() => {
         winSound.current = new Audio("/sounds/win_wheel.mp3");
         spinSound.current = new Audio("/sounds/spin.mp3");
-
         winSound.current.preload = "auto";
         spinSound.current.preload = "auto";
-
         const unlockAudio = () => {
             winSound.current?.load();
             spinSound.current?.load();
@@ -145,90 +86,49 @@ const FortuneWheel = () => {
         window.addEventListener("touchstart", unlockAudio, { once: true });
     }, []);
 
-    const radius = 250;
-
-    const generateSegments = (
-        diff: DifficultyLevel,
-        count: number
-    ): Segment[] => {
+    const generateSegments = (diff: DifficultyLevel, count: number): Segment[] => {
         const segs: Segment[] = [];
-
         if (diff === "hard") {
-            const jackpotMultiplier = `${(count - 0.5).toFixed(2)}x`;
-            segs.push({
-                label: jackpotMultiplier,
-                color: multiplierColors[jackpotMultiplier] || "#FC1144",
-            });
-            for (let i = 1; i < count; i++) {
-                segs.push({
-                    label: "0.00x",
-                    color: multiplierColors["0.00x"],
-                });
-            }
+            const jackpot = `${(count - 0.5).toFixed(2)}x`;
+            segs.push({ label: jackpot, color: multiplierColors[jackpot] || "#FF4438" });
+            for (let i = 1; i < count; i++) segs.push({ label: "0.00x", color: multiplierColors["0.00x"] });
         } else {
             const times = Math.floor(count / 10);
-
             for (let i = 0; i < times; i++) {
                 for (let j = 0; j < 10; j++) {
                     const label = segment_structure[diff][j];
-                    segs.push({
-                        label,
-                        color: multiplierColors[label] || "#ccc",
-                    });
+                    segs.push({ label, color: multiplierColors[label] || "#ccc" });
                 }
             }
         }
-
         return segs;
     };
 
     const createSegments = () => {
         const paths: React.ReactElement[] = [];
         const anglePerSegment = (2 * Math.PI) / segments.length;
-
         for (let i = 0; i < segments.length; i++) {
-            const startAngle =
-                i * anglePerSegment - Math.PI / 2 - Math.PI / segments.length;
+            const startAngle = i * anglePerSegment - Math.PI / 2 - Math.PI / segments.length;
             const endAngle = startAngle + anglePerSegment;
-
             const x1 = radius + radius * Math.cos(startAngle);
             const y1 = radius + radius * Math.sin(startAngle);
             const x2 = radius + radius * Math.cos(endAngle);
             const y2 = radius + radius * Math.sin(endAngle);
-
             const path = `
         M ${radius + (radius - strokeWidth) * Math.cos(startAngle)} ${radius + (radius - strokeWidth) * Math.sin(startAngle)}
         A ${radius - strokeWidth} ${radius - strokeWidth} 0 0 1 ${radius + (radius - strokeWidth) * Math.cos(endAngle)} ${radius + (radius - strokeWidth) * Math.sin(endAngle)}
         L ${x2} ${y2}
         A ${radius} ${radius} 0 0 0 ${x1} ${y1}
-        Z
-      `;
+        Z`;
 
-            // Determine segment class based on winning state
-            const isWinningSegment = winningIndex === i;
-            const isLossResult = isWinningSegment && segments[i]?.label === '0.00x';
-            const isWinResult = isWinningSegment && segments[i]?.label !== '0.00x';
-            const isOtherSegment = winningIndex !== null && winningIndex !== i;
+            const isWinning = winningIndex === i;
+            let segmentClass = "";
+            if (isWinning && segments[i]?.label === "0.00x") segmentClass = "segment-loss";
+            else if (isWinning) segmentClass = "segment-winner";
+            else if (winningIndex !== null) segmentClass = "segment-loser";
 
-            let segmentClass = '';
-            if (isLossResult) {
-                segmentClass = 'segment-loss';
-            } else if (isWinResult) {
-                segmentClass = 'segment-winner';
-            } else if (isOtherSegment) {
-                segmentClass = 'segment-loser';
-            }
-
-            paths.push(
-                <path
-                    d={path}
-                    fill={segments[i].color}
-                    key={i}
-                    className={segmentClass}
-                />
-            );
+            paths.push(<path d={path} fill={segments[i].color} key={i} className={segmentClass} />);
         }
-
         return paths;
     };
 
@@ -237,56 +137,37 @@ const FortuneWheel = () => {
         const anglePerSegment = 360 / segments.length;
         const picked = Math.floor(Math.random() * segments.length);
         const rotate = spins * 360 + (segments.length - picked) * anglePerSegment;
-
         const resultIndex = (idx + picked) % segments.length;
-
         setIdx(resultIndex);
 
         if (spinSound.current) {
             spinSound.current.currentTime = 0;
-            spinSound.current.play().catch(() => { });
+            spinSound.current.play().catch(() => {});
         }
 
         setRotation((prevRotation) => {
             const newRotation = prevRotation + rotate;
-
-            if (wheelRef.current) {
-                wheelRef.current.style.transform = `rotate(${newRotation}deg)`;
-            }
+            if (wheelRef.current) wheelRef.current.style.transform = `rotate(${newRotation}deg)`;
 
             setTimeout(() => {
                 const resultText = segments[resultIndex]?.label || "Unknown";
                 setResult(resultText);
-
-                const label = segments[resultIndex]?.label || "0x";
-                const multiplierVal = parseFloat(label);
+                const multiplierVal = parseFloat(segments[resultIndex]?.label || "0x");
                 const totalReturn = amount * (isNaN(multiplierVal) ? 0 : multiplierVal);
 
-                // Prevent double-execution (React StrictMode can cause this)
                 if (!hasAddedWinnings.current) {
                     hasAddedWinnings.current = true;
-                    if (totalReturn > 0) {
-                        recordWin(totalReturn, amount, "WHEEL", multiplierVal);
-                    }
+                    if (totalReturn > 0) recordWin(totalReturn, amount, "WHEEL", multiplierVal);
                 }
                 setStarted(false);
                 setEarnings(totalReturn);
-
-                // Trigger winning segment highlight
                 setWinningIndex(resultIndex);
-
-                if (multiplierVal !== 0) {
-                    if (winSound.current) {
-                        winSound.current.currentTime = 0;
-                        winSound.current.play().catch(() => { });
-                    }
+                if (multiplierVal !== 0 && winSound.current) {
+                    winSound.current.currentTime = 0;
+                    winSound.current.play().catch(() => {});
                 }
                 setEarningsDisplay(true);
-
-                // Reset highlight after 1.2 seconds
-                setTimeout(() => {
-                    setWinningIndex(null);
-                }, 1200);
+                setTimeout(() => setWinningIndex(null), 1200);
             }, 4200);
 
             return newRotation;
@@ -294,39 +175,27 @@ const FortuneWheel = () => {
     };
 
     useEffect(() => {
-        const newSegments = generateSegments(difficulty, segmentCount);
-        setSegments(newSegments);
+        setSegments(generateSegments(difficulty, segmentCount));
         setEarningsDisplay(false);
         setIdx(0);
-
         const wheel = wheelRef.current;
         if (wheel) {
             wheel.classList.add("no-transition");
             wheel.style.transform = `rotate(0deg)`;
-
             setTimeout(() => {
                 wheel.classList.remove("no-transition");
                 setRotation(0);
             }, 50);
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [difficulty, segmentCount]);
 
     const startGame = async (e: React.FormEvent) => {
         e.preventDefault();
-
-        // Tutorial: Spin triggers a cosmetic demo spin, no bet is placed.
-        if (tut.isActive) {
-            if (tut.isTarget("bet3")) {
-                demoSpin();
-            }
-            return;
-        }
-
         if (!user) {
             setShowSignInDialog(true);
             return;
         }
-
         if (amount < MIN_BET) {
             showNotification(`Minimum bet is ₹${MIN_BET}`);
             return;
@@ -335,16 +204,12 @@ const FortuneWheel = () => {
             showNotification("Insufficient balance!");
             return;
         }
-
         const success = await recordBet(amount, "WHEEL");
         if (!success) {
             showNotification("Failed to place bet");
             return;
         }
-
-        // Reset the guard for new spin
         hasAddedWinnings.current = false;
-
         setStarted(true);
         setResult(null);
         setEarningsDisplay(false);
@@ -353,225 +218,149 @@ const FortuneWheel = () => {
 
     const handleHalf = (e: React.MouseEvent) => {
         e.preventDefault();
-        const newAmount = Math.max(MIN_BET, amount / 2);
-        setAmount(parseFloat(newAmount.toFixed(2)));
+        setAmount(parseFloat(Math.max(MIN_BET, amount / 2).toFixed(2)));
     };
-
     const handleDouble = (e: React.MouseEvent) => {
         e.preventDefault();
-        const newAmount = Math.min(wallet, amount * 2);
-        setAmount(parseFloat(newAmount.toFixed(2)));
+        setAmount(parseFloat(Math.min(wallet || amount * 2, amount * 2).toFixed(2)));
+    };
+    const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const v = e.target.value;
+        setAmount(v === "" ? 0 : isNaN(parseFloat(v)) ? 0 : parseFloat(v));
     };
 
-    const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        // Lock real inputs while the tutorial is driving the UI.
-        if (tut.isActive && !tut.isTarget("amount3")) return;
-        const value = e.target.value;
-        if (value === "") {
-            setAmount(0);
-        } else {
-            const parsed = parseFloat(value);
-            setAmount(isNaN(parsed) ? 0 : parsed);
-        }
-    };
+    const legend = difficulty === "hard"
+        ? ["0.00x", `${(segmentCount - 0.5).toFixed(2)}x`]
+        : multi_divs[difficulty];
 
     return (
         <>
             <Navbar />
 
-            <div className="app-wrapper3">
+            <main className="game-stage">
                 <AnimatePresence>
                     {notification && (
                         <motion.div
-                            className="toast-notification"
-                            initial={{ opacity: 0, y: -20, x: "-50%" }}
+                            className="game-toast"
+                            initial={{ opacity: 0, y: -16, x: "-50%" }}
                             animate={{ opacity: 1, y: 0, x: "-50%" }}
-                            exit={{ opacity: 0, y: -20, x: "-50%" }}
+                            exit={{ opacity: 0, y: -16, x: "-50%" }}
                         >
                             {notification}
                         </motion.div>
                     )}
                 </AnimatePresence>
 
-                {/* Shared tutorial: trigger button + backdrop + tooltip */}
-                <TutorialController tutorial={tut} triggerDisabled={started} />
-
-                <div className={`main-layout3 ${tut.isActive ? 'tutorial-active' : ''}`}>
-                    <div className="right-navbar3">
-                        <form onSubmit={startGame}>
-                            <label htmlFor="amount3">Bet Amount</label>
-                            <div
-                                className={isHighlighted("amount3") ? "tutorial-highlight-wrapper" : ""}
-                                onClick={() => { if (tut.handleClick("amount3")) return; }}
-                            >
-                                <input
-                                    id="amount3"
-                                    type="number"
-                                    value={amount || ""}
-                                    onChange={handleAmountChange}
-                                    placeholder="Enter Amount"
-                                    step="any"
-                                    min={MIN_BET}
-                                    disabled={started}
-                                    required
-                                />
-                            </div>
-                            <div className="half-double3">
-                                <button
-                                    type="button"
-                                    id="half3"
-                                    className={isHighlighted("half3") ? "tutorial-highlight-wrapper" : ""}
-                                    onClick={(e) => {
-                                        if (tut.isActive && !tut.isTarget("half3")) return;
-                                        handleHalf(e);
-                                        if (tut.isActive && tut.isTarget("half3")) tut.next();
-                                    }}
-                                    disabled={started}
-                                >
-                                    ½
-                                </button>
-                                <button type="button" onClick={handleDouble} disabled={started || tut.isActive}>
-                                    2x
-                                </button>
-                            </div>
-                            <label htmlFor="difficulty3">Risk</label>
-                            <div
-                                className={isHighlighted("difficulty3") ? "tutorial-highlight-wrapper" : ""}
-                                onClick={() => { if (tut.handleClick("difficulty3")) return; }}
-                            >
-                                <select
-                                    id="difficulty3"
-                                    value={difficulty}
-                                    onChange={(e) => {
-                                        if (tut.isActive && !tut.isTarget("difficulty3")) return;
-                                        setDifficulty(e.target.value as DifficultyLevel);
-                                    }}
-                                    disabled={started}
-                                    required
-                                >
-                                    {(Object.keys(difficulties) as DifficultyLevel[]).map((level) => (
-                                        <option key={level}>{level}</option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <label htmlFor="segments-count">Segments</label>
-                            <div
-                                className={isHighlighted("segments-count") ? "tutorial-highlight-wrapper" : ""}
-                                onClick={() => { if (tut.handleClick("segments-count")) return; }}
-                            >
-                                <select
-                                    id="segments-count"
-                                    value={segmentCount}
-                                    onChange={(e) => {
-                                        if (tut.isActive && !tut.isTarget("segments-count")) return;
-                                        setSegmentCount(Number(e.target.value));
-                                    }}
-                                    disabled={started}
-                                    required
-                                >
-                                    {no_of_segments.map((count) => (
-                                        <option key={count} value={count}>
-                                            {count}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                            <button
-                                id="bet3"
-                                type="submit"
-                                className={isHighlighted("bet3") ? "tutorial-highlight-wrapper" : ""}
-                                disabled={started}
-                            >
-                                Spin
-                            </button>
-                        </form>
-                    </div>
-
-                    <div className="container3">
-                        <div className="wheel-wrapper">
-                            <div className="pointer">
-                                <span className="pointer-highlight" />
-                            </div>
-
-                            <svg
-                                viewBox={`0 0 ${radius * 2} ${radius * 2}`}
-                                className="wheel-svg"
-                                ref={wheelRef}
-                                style={{ transform: `rotate(${rotation}deg)` }}
-                            >
-                                {createSegments()}
-                                <circle
-                                    cx={radius}
-                                    cy={radius}
-                                    r={radius / 3}
-                                    stroke="var(--primary-gold)"
-                                    strokeWidth="4"
-                                    fill="transparent"
-                                />
-                            </svg>
-
-                            {earningsDisplay && (
-                                <motion.div
-                                    className="earnings-overlay"
-                                    initial={{ scale: 0, opacity: 0 }}
-                                    animate={{ scale: 1, opacity: 1 }}
-                                    transition={{ type: "spring", stiffness: 300, damping: 15 }}
-                                >
-                                    <div className="earnings-overlay-inner">
-                                        <div className="earnings-content earn-box">
-                                            <div style={{ borderBottom: "3px solid #284654" }}>
-                                                {result}
-                                            </div>
-                                            <div>₹{earnings.toFixed(2)}</div>
-                                        </div>
-                                    </div>
-                                </motion.div>
-                            )}
-
+                <div className="game-shell">
+                    <header className="game-head">
+                        <div>
+                            <span className="game-eyebrow"><span className="dot" /> {difficulty} risk · {segmentCount} segments</span>
+                            <h1 className="game-title">FORTUNE <em>wheel</em></h1>
                         </div>
-                        {difficulty === "hard" ? (
-                            <div
-                                id="multipliers-legend"
-                                className={`multipliers ${isHighlighted("multipliers-legend") ? "tutorial-highlight-wrapper" : ""}`}
-                                onClick={() => tut.handleClick("multipliers-legend")}
-                            >
-                                <div
-                                    className="multi"
-                                    style={{ borderBottomColor: multiplierColors["0.00x"] }}
+                        <p className="game-sub">Set your risk. One spin. Live with where it lands.</p>
+                    </header>
+
+                    <div className="game-layout">
+                        {/* wheel */}
+                        <div className="game-board">
+                            <div className="fw-wrap">
+                                <div className="fw-pointer" />
+                                <svg
+                                    viewBox={`0 0 ${radius * 2} ${radius * 2}`}
+                                    className="wheel-svg"
+                                    ref={wheelRef}
+                                    style={{ transform: `rotate(${rotation}deg)` }}
                                 >
-                                    0.00x
-                                </div>
-                                <div
-                                    className="multi"
-                                    style={{
-                                        borderBottomColor:
-                                            multiplierColors[`${(segmentCount - 0.5).toFixed(2)}x`] || "#FC1144",
-                                    }}
-                                >
-                                    {(segmentCount - 0.5).toFixed(2)}x
-                                </div>
-                            </div>
-                        ) : (
-                            <div
-                                id="multipliers-legend"
-                                className={`multipliers ${isHighlighted("multipliers-legend") ? "tutorial-highlight-wrapper" : ""}`}
-                                onClick={() => tut.handleClick("multipliers-legend")}
-                            >
-                                {multi_divs[difficulty].map((elem, i) => (
-                                    <div
-                                        className="multi"
-                                        key={i}
-                                        style={{ borderBottomColor: multiplierColors[elem] }}
+                                    {createSegments()}
+                                    <circle cx={radius} cy={radius} r={radius / 3} stroke="var(--gold)" strokeWidth="3" fill="rgba(7,6,10,0.6)" />
+                                </svg>
+
+                                {earningsDisplay && (
+                                    <motion.div
+                                        className="fw-overlay"
+                                        initial={{ scale: 0, opacity: 0 }}
+                                        animate={{ scale: 1, opacity: 1 }}
+                                        transition={{ type: "spring", stiffness: 300, damping: 15 }}
                                     >
-                                        {elem}
-                                    </div>
-                                ))}
+                                        <span className="fw-overlay__result">{result}</span>
+                                        <span className={`fw-overlay__amt ${earnings > 0 ? "is-win" : "is-loss"}`}>
+                                            {earnings > 0 ? `+₹${earnings.toFixed(2)}` : "Busted"}
+                                        </span>
+                                    </motion.div>
+                                )}
+
+                                <div className="fw-legend">
+                                    {legend.map((m, i) => (
+                                        <span
+                                            key={i}
+                                            className="fw-multi"
+                                            style={{ borderBottomColor: multiplierColors[m] || "#FF4438" }}
+                                        >
+                                            {m}
+                                        </span>
+                                    ))}
+                                </div>
                             </div>
-                        )}
+                        </div>
+
+                        {/* control panel */}
+                        <aside className="game-panel">
+                            <form onSubmit={startGame}>
+                                <div className="game-field">
+                                    <label className="game-label">Bet Amount</label>
+                                    <input
+                                        className="game-input"
+                                        type="number"
+                                        value={amount || ""}
+                                        onChange={handleAmountChange}
+                                        placeholder="Enter amount"
+                                        step="any"
+                                        min={MIN_BET}
+                                        disabled={started}
+                                    />
+                                    <div className="game-adjust">
+                                        <button type="button" onClick={handleHalf} disabled={started}>½</button>
+                                        <button type="button" onClick={handleDouble} disabled={started}>2×</button>
+                                    </div>
+                                </div>
+
+                                <div className="game-field">
+                                    <label className="game-label">Risk</label>
+                                    <select
+                                        className="game-select"
+                                        value={difficulty}
+                                        onChange={(e) => setDifficulty(e.target.value as DifficultyLevel)}
+                                        disabled={started}
+                                    >
+                                        {(Object.keys(difficulties) as DifficultyLevel[]).map((lvl) => (
+                                            <option key={lvl} value={lvl}>{lvl}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="game-field">
+                                    <label className="game-label">Segments</label>
+                                    <select
+                                        className="game-select"
+                                        value={segmentCount}
+                                        onChange={(e) => setSegmentCount(Number(e.target.value))}
+                                        disabled={started}
+                                    >
+                                        {no_of_segments.map((c) => (
+                                            <option key={c} value={c}>{c}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <button className="game-primary" type="submit" disabled={started}>
+                                    {started ? "Spinning…" : "Spin the Wheel"}
+                                </button>
+                            </form>
+                        </aside>
                     </div>
                 </div>
-            </div>
+            </main>
+
             <Footer />
             <SignInDialog isOpen={showSignInDialog} onClose={() => setShowSignInDialog(false)} />
         </>

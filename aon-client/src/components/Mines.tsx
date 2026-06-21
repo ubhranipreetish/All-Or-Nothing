@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import Tile from "./Tile";
 import "../styles/Mines.css";
 import Navbar from "./Navbar";
@@ -9,9 +9,7 @@ import { useWallet } from "../contexts/WalletContext";
 import { useAuth } from "../contexts/AuthContext";
 import Footer from "./Footer";
 import SignInDialog from "./SignInDialog";
-import { useTutorial } from "./tutorial/useTutorial";
-import { MINES_STEPS } from "./tutorial/steps";
-import TutorialController from "./tutorial/TutorialController";
+// NOTE: guided tutorial intentionally deferred — see ./tutorial/* (to be re-added later).
 
 const TILE_COUNT = 25;
 const MIN_BET = 1;
@@ -37,68 +35,9 @@ const generateBoard = (mineCount: number): TileData[] => {
     return board;
 };
 
-// Generate a controlled tutorial board (safe tile at index 12 - center)
-const generateTutorialBoard = (): TileData[] => {
-    const board: TileData[] = Array.from({ length: TILE_COUNT }, () => ({
-        isMine: false,
-        revealed: false,
-    }));
-    const minePositions = [0, 4, 6, 18, 24];
-    minePositions.forEach(pos => {
-        board[pos] = { ...board[pos], isMine: true };
-    });
-    return board;
-};
-
 export default function Mines() {
     const gemSound = useRef<HTMLAudioElement | null>(null);
     const mineSound = useRef<HTMLAudioElement | null>(null);
-
-    useEffect(() => {
-        gemSound.current = new Audio("/sounds/gem.mp3");
-        mineSound.current = new Audio("/sounds/mine.mp3");
-
-        gemSound.current.preload = "auto";
-        mineSound.current.preload = "auto";
-
-        // Restore active game session
-        const restoreSession = async () => {
-            try {
-                const token = localStorage.getItem("token");
-                if (!token) return;
-
-                const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api"}/game/active?gameType=MINES`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
-
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data.active) {
-                        sessionIdRef.current = data.sessionId;
-                        setAmount(data.betAmount);
-                        setMultiplier(data.multiplier.toFixed(2));
-
-                        if (data.gameConfig?.board) {
-                            setBoard(data.gameConfig.board);
-                            setMineCount(data.gameConfig.mineCount || 3);
-
-                            // Calculate state from restored board
-                            const revealed = data.gameConfig.board.filter((t: any) => t.revealed).length;
-                            setRevealedCount(revealed);
-                            setEarnings(data.betAmount * data.multiplier);
-                            setStarted(true);
-                            setGameOver(false);
-                            setCashedOut(false);
-                        }
-                    }
-                }
-            } catch (err) {
-                console.error("Failed to restore session:", err);
-            }
-        };
-
-        restoreSession();
-    }, []);
 
     const { wallet, startGameSession, recordWin, recordLoss } = useWallet();
     const { user } = useAuth();
@@ -116,7 +55,6 @@ export default function Mines() {
     const [notification, setNotification] = useState<string>("");
     const [spotlightIndex, setSpotlightIndex] = useState<number | null>(null);
     const sessionIdRef = useRef<string | null>(null);
-
     const gridRef = useRef<HTMLDivElement>(null);
 
     const showNotification = (message: string) => {
@@ -124,45 +62,61 @@ export default function Mines() {
         setTimeout(() => setNotification(""), 3000);
     };
 
-    // Check for active game session (Restoration Logic)
+    // Restore an in-flight session on mount.
+    useEffect(() => {
+        gemSound.current = new Audio("/sounds/gem.mp3");
+        mineSound.current = new Audio("/sounds/mine.mp3");
+        gemSound.current.preload = "auto";
+        mineSound.current.preload = "auto";
+
+        const restoreSession = async () => {
+            try {
+                const token = localStorage.getItem("token");
+                if (!token) return;
+                const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api"}/game/active?gameType=MINES`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.active) {
+                        sessionIdRef.current = data.sessionId;
+                        setAmount(data.betAmount);
+                        setMultiplier(data.multiplier.toFixed(2));
+                        if (data.gameConfig?.board) {
+                            setBoard(data.gameConfig.board);
+                            setMineCount(data.gameConfig.mineCount || 3);
+                            const revealed = data.gameConfig.board.filter((t: TileData) => t.revealed).length;
+                            setRevealedCount(revealed);
+                            setEarnings(data.betAmount * data.multiplier);
+                            setStarted(true);
+                            setGameOver(false);
+                            setCashedOut(false);
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to restore session:", err);
+            }
+        };
+        restoreSession();
+    }, []);
+
+    // Auto-close a headless/legacy active session so the player can start fresh.
     const checkActiveSession = useCallback(async () => {
         try {
             const token = localStorage.getItem("token");
             if (!token) return;
-
             const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api"}/game/active?gameType=MINES`, {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: { Authorization: `Bearer ${token}` },
             });
-
             if (res.ok) {
                 const data = await res.json();
-                if (data.active) {
-                    setAmount(data.betAmount);
-                    setMultiplier(data.multiplier.toFixed(2));
-
-                    if (data.gameConfig?.board) {
-                        setBoard(data.gameConfig.board);
-                        setMineCount(data.gameConfig.mineCount || 3);
-
-                        const revealed = data.gameConfig.board.filter((t: any) => t.revealed).length;
-                        setRevealedCount(revealed);
-                        setEarnings(data.betAmount * data.multiplier);
-                        setStarted(true);
-                        setGameOver(false);
-                        setCashedOut(false);
-                    } else {
-                        // Found active session but no board data (likely legacy or corrupt)
-                        // Auto-close it so user can play new game
-                        console.warn("Found headless active session, auto-closing...");
-                        await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api"}/game/cashout`, {
-                            method: "POST",
-                            headers: {
-                                "Content-Type": "application/json",
-                                Authorization: `Bearer ${token}`
-                            },
-                            body: JSON.stringify({ sessionId: data.sessionId })
-                        });
-                    }
+                if (data.active && !data.gameConfig?.board) {
+                    await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api"}/game/cashout`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                        body: JSON.stringify({ sessionId: data.sessionId }),
+                    });
                 }
             }
         } catch (err) {
@@ -170,61 +124,17 @@ export default function Mines() {
         }
     }, []);
 
-    // Initial check on mount
     useEffect(() => {
         checkActiveSession();
     }, [checkActiveSession]);
 
-    // Tutorial engine — shared across all games. The hook owns the step machine;
-    // this component supplies the demo board and the reset side-effects.
-    const tut = useTutorial(MINES_STEPS, {
-        onStart: () => {
-            setStarted(false);
-            setGameOver(false);
-            setCashedOut(false);
-            setBoard([]);
-            setAmount(100);
-            setMineCount(5);
-            setMultiplier("1.00");
-            setEarnings(0);
-            setRevealedCount(0);
-        },
-        onEnd: () => {
-            setStarted(false);
-            setBoard([]);
-            setMultiplier("1.00");
-            setEarnings(0);
-            // Re-check for any real session interrupted by the tutorial.
-            checkActiveSession();
-        },
-    });
-
-    // Setup the controlled demo board when the player reaches the reveal step.
-    useEffect(() => {
-        if (!tut.isActive) return;
-        if (tut.currentStep?.id === "reveal-tile" && board.length === 0) {
-            setBoard(generateTutorialBoard());
-            setStarted(true);
-            setEarnings(100);
-        }
-    }, [tut.isActive, tut.stepIndex, tut.currentStep, board.length]);
-
     const startGame = async (e: React.FormEvent) => {
         e.preventDefault();
-
-        // Tutorial: the Bet button just advances the walkthrough.
-        if (tut.isActive) {
-            if (tut.isTarget("bet-button")) {
-                tut.next();
-            }
-            return;
-        }
 
         if (!user) {
             setShowSignInDialog(true);
             return;
         }
-
         if (amount < MIN_BET) {
             showNotification(`Minimum bet is ₹${MIN_BET}`);
             return;
@@ -235,19 +145,15 @@ export default function Mines() {
         }
 
         const initialBoard = generateBoard(mineCount);
-        const { success, newBalance, sessionId } = await startGameSession(amount, "MINES", {
+        const { success, sessionId } = await startGameSession(amount, "MINES", {
             board: initialBoard,
-            mineCount
+            mineCount,
         });
-
         if (!success) {
             showNotification("Failed to place bet");
             return;
         }
-
-        if (sessionId) {
-            sessionIdRef.current = sessionId;
-        }
+        if (sessionId) sessionIdRef.current = sessionId;
 
         setBoard(initialBoard);
         setStarted(true);
@@ -258,83 +164,54 @@ export default function Mines() {
         setCashedOut(false);
         setSpotlightIndex(null);
 
-        setTimeout(() => {
-            gridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }, 100);
+        setTimeout(() => gridRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 100);
     };
 
     const waveReveal = async (lastIndex: number) => {
-        const tilesWithDistance = board.map((_, i) => ({
-            index: i,
-            dist: Math.sqrt(
-                Math.pow(Math.floor(i / 5) - Math.floor(lastIndex / 5), 2) +
-                Math.pow((i % 5) - (lastIndex % 5), 2)
-            )
-        })).sort((a, b) => a.dist - b.dist);
+        const tilesWithDistance = board
+            .map((_, i) => ({
+                index: i,
+                dist: Math.sqrt(
+                    Math.pow(Math.floor(i / 5) - Math.floor(lastIndex / 5), 2) +
+                    Math.pow((i % 5) - (lastIndex % 5), 2)
+                ),
+            }))
+            .sort((a, b) => a.dist - b.dist);
 
         for (const item of tilesWithDistance) {
-            setBoard(prev => {
+            setBoard((prev) => {
                 const next = [...prev];
                 next[item.index] = { ...next[item.index], revealed: true };
                 return next;
             });
-            await new Promise(r => setTimeout(r, 40));
+            await new Promise((r) => setTimeout(r, 40));
         }
     };
 
     const calculateMultiplier = (revealed: number, mines: number): number => {
-        const totalTiles = TILE_COUNT;
-        const safeTiles = totalTiles - mines;
+        const safeTiles = TILE_COUNT - mines;
         let mult = 1;
         for (let i = 0; i < revealed; i++) {
-            mult *= (totalTiles - i) / (safeTiles - i);
+            mult *= (TILE_COUNT - i) / (safeTiles - i);
         }
         return mult * 0.96;
     };
 
     const revealTile = async (index: number) => {
-        if (tut.isActive) {
-            // Tutorial: only the glowing center tile (index 12) responds.
-            if (tut.currentStep?.id === "reveal-tile" && index === 12) {
-                if (gemSound.current) {
-                    gemSound.current.currentTime = 0;
-                    gemSound.current.play().catch(() => { });
-                }
-
-                setBoard(prev => {
-                    const next = [...prev];
-                    next[12] = { ...next[12], revealed: true };
-                    return next;
-                });
-                setRevealedCount(1);
-                setMultiplier("1.20");
-                setEarnings(120);
-
-                setTimeout(() => tut.next(), 600);
-            }
-            return; // Block all other tile interactions during the tutorial.
-        }
-
         if (!started || board[index]?.revealed || gameOver || cashedOut) return;
 
         setSpotlightIndex(index);
         setTimeout(() => setSpotlightIndex(null), 600);
 
-        const isMine = board[index].isMine;
-
-        if (isMine) {
+        if (board[index].isMine) {
             if (mineSound.current) {
                 mineSound.current.currentTime = 0;
-                mineSound.current.play().catch(() => { });
+                mineSound.current.play().catch(() => {});
             }
-
             setGameOver(true);
             setMultiplier("0.00");
             setEarnings(0);
-
             await waveReveal(index);
-
-            // Notify backend of loss
             if (sessionIdRef.current) {
                 await recordLoss(sessionIdRef.current);
                 sessionIdRef.current = null;
@@ -342,17 +219,14 @@ export default function Mines() {
         } else {
             if (gemSound.current) {
                 gemSound.current.currentTime = 0;
-                gemSound.current.play().catch(() => { });
+                gemSound.current.play().catch(() => {});
             }
-
             const newRevealed = revealedCount + 1;
             setRevealedCount(newRevealed);
-
             const newMult = calculateMultiplier(newRevealed, mineCount);
             setMultiplier(newMult.toFixed(2));
             setEarnings(amount * newMult);
-
-            setBoard(prev => {
+            setBoard((prev) => {
                 const next = [...prev];
                 next[index] = { ...next[index], revealed: true };
                 return next;
@@ -361,224 +235,148 @@ export default function Mines() {
     };
 
     const handleCashOut = async () => {
-        // Tutorial: the Cash Out button just advances the walkthrough.
-        if (tut.isActive) {
-            if (tut.isTarget("cashout-button")) {
-                tut.next();
-            }
-            return;
-        }
-
         if (gameOver || cashedOut) {
             setStarted(false);
             setGameOver(false);
             setCashedOut(false);
             setBoard([]);
             setMultiplier("1.00");
+            setEarnings(0);
+            setRevealedCount(0);
             return;
         }
 
         if (earnings > amount) {
-            const multValue = parseFloat(multiplier);
-            await recordWin(earnings, amount, "MINES", multValue);
+            await recordWin(earnings, amount, "MINES", parseFloat(multiplier));
             showNotification(`Cashed out ₹${earnings.toFixed(2)}!`);
         }
-
-        gridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-        await new Promise(r => setTimeout(r, 300));
-
+        gridRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        await new Promise((r) => setTimeout(r, 300));
         setStarted(false);
         setCashedOut(true);
         await waveReveal(Math.floor(TILE_COUNT / 2));
     };
 
     const getThresholdHint = () => {
-        const multVal = parseFloat(multiplier);
-        if (multVal >= 2 && multVal < 5) return "Many players cash out around 2x-3x";
-        if (multVal >= 5 && multVal < 10) return "Risk increases sharply beyond 5x!";
-        if (multVal >= 10) return "Legends are made here. Be careful.";
-        return "";
+        const m = parseFloat(multiplier);
+        if (m >= 2 && m < 5) return "Most players bank around 2–3×.";
+        if (m >= 5 && m < 10) return "Risk climbs sharply past 5×.";
+        if (m >= 10) return "Legend territory. Don't be greedy.";
+        return "Reveal a gem to start the climb.";
     };
 
-    // Check if element should be highlighted
-    const isHighlighted = (elementId: string) => tut.isHighlighted(elementId);
+    const idle = !started && !gameOver && !cashedOut;
+    const playing = started && !gameOver && !cashedOut;
 
     return (
         <>
             <Navbar />
 
-            <div className="app-wrapper1">
+            <main className="game-stage">
                 <AnimatePresence>
                     {notification && (
                         <motion.div
-                            className="toast-notification"
-                            initial={{ opacity: 0, y: -20, x: "-50%" }}
+                            className="game-toast"
+                            initial={{ opacity: 0, y: -16, x: "-50%" }}
                             animate={{ opacity: 1, y: 0, x: "-50%" }}
-                            exit={{ opacity: 0, y: -20, x: "-50%" }}
+                            exit={{ opacity: 0, y: -16, x: "-50%" }}
                         >
                             {notification}
                         </motion.div>
                     )}
                 </AnimatePresence>
 
-                {/* Shared tutorial: trigger button + backdrop + tooltip */}
-                <TutorialController
-                    tutorial={tut}
-                    triggerDisabled={started && !gameOver && !cashedOut}
-                />
+                <div className="game-shell">
+                    <header className="game-head">
+                        <div>
+                            <span className="game-eyebrow"><span className="dot" /> Provably fair · {mineCount} mines</span>
+                            <h1 className="game-title">MINES</h1>
+                        </div>
+                        <p className="game-sub">Flip gems, dodge the bombs, and bank it before the board blows.</p>
+                    </header>
 
-                {/* Main game area - elevated during tutorial */}
-                <div className={`main-layout1 ${tut.isActive ? 'tutorial-active' : ''}`}>
-                    <div className="right-navbar1">
-                        <form onSubmit={startGame}>
-                            <label className="input-label">Bet Amount</label>
-                            <div
-                                className={isHighlighted("bet-amount-input") ? "tutorial-highlight-wrapper" : ""}
-                                onClick={() => {
-                                    if (tut.handleClick("bet-amount-input")) return;
-                                }}
-                            >
-                                <input
-                                    id="bet-amount-input"
-                                    type="number"
-                                    value={amount || ""}
-                                    onChange={(e) => {
-                                        if (tut.isActive && !tut.isTarget("bet-amount-input")) return;
-                                        setAmount(Number(e.target.value));
-                                    }}
-                                    disabled={(started && !gameOver && !cashedOut) && !tut.isActive}
-                                />
+                    <div className="game-layout">
+                        {/* board */}
+                        <div className="game-board" ref={gridRef}>
+                            <div className="mines-grid">
+                                {[...Array(TILE_COUNT)].map((_, index) => (
+                                    <Tile
+                                        key={index}
+                                        tile={board[index] || { revealed: false, isMine: false }}
+                                        onClick={() => revealTile(index)}
+                                        disabled={gameOver || cashedOut || !started || spotlightIndex !== null}
+                                        isDimmed={spotlightIndex !== null && spotlightIndex !== index}
+                                        isSpotlight={spotlightIndex === index}
+                                    />
+                                ))}
                             </div>
+                        </div>
 
-                            <div className="half-double">
-                                <button
-                                    id="half-btn"
-                                    className={isHighlighted("half-btn") ? "tutorial-highlight-wrapper" : ""}
-                                    type="button"
-                                    onClick={() => {
-                                        if (tut.isActive && !tut.isTarget("half-btn")) return;
+                        {/* control panel */}
+                        <aside className="game-panel">
+                            {idle && (
+                                <form onSubmit={startGame}>
+                                    <div className="game-field">
+                                        <label className="game-label">Bet Amount</label>
+                                        <input
+                                            className="game-input"
+                                            type="number"
+                                            value={amount || ""}
+                                            onChange={(e) => setAmount(Number(e.target.value))}
+                                        />
+                                        <div className="game-adjust">
+                                            <button type="button" onClick={() => setAmount(Math.max(MIN_BET, Math.floor(amount / 2)))}>½</button>
+                                            <button type="button" onClick={() => setAmount(Math.min(wallet || amount * 2, amount * 2))}>2×</button>
+                                        </div>
+                                    </div>
 
-                                        setAmount(Math.max(MIN_BET, amount / 2));
+                                    <div className="game-field">
+                                        <label className="game-label">Mines (1–24)</label>
+                                        <input
+                                            className="game-input"
+                                            type="number"
+                                            value={mineCount}
+                                            onChange={(e) => setMineCount(Math.max(1, Math.min(24, Number(e.target.value))))}
+                                        />
+                                    </div>
 
-                                        // Advance step if it was the target
-                                        if (tut.isActive && tut.isTarget("half-btn")) {
-                                            tut.next();
-                                        }
-                                    }}
-                                    disabled={started && !tut.isActive}
-                                >
-                                    ½
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        if (tut.isActive) return; // Block 2x during tutorial as it's not a step target
-                                        setAmount(Math.min(wallet, amount * 2));
-                                    }}
-                                    disabled={started || tut.isActive}
-                                >
-                                    2x
-                                </button>
-                            </div>
-
-                            <label className="input-label">Mines</label>
-                            <div
-                                className={isHighlighted("mine-count-input") ? "tutorial-highlight-wrapper" : ""}
-                                onClick={() => {
-                                    if (tut.handleClick("mine-count-input")) return;
-                                }}
-                            >
-                                <input
-                                    id="mine-count-input"
-                                    type="number"
-                                    value={mineCount}
-                                    onChange={(e) => {
-                                        if (tut.isActive && !tut.isTarget("mine-count-input")) return;
-                                        setMineCount(Math.max(1, Math.min(24, Number(e.target.value))));
-                                    }}
-                                    disabled={started && !tut.isActive}
-                                />
-                            </div>
-
-                            {(!started && !gameOver && !cashedOut) && (
-                                <button
-                                    id="bet-button"
-                                    className={isHighlighted("bet-button") ? "tutorial-highlight-wrapper" : ""}
-                                    type="submit"
-                                >
-                                    Bet
-                                </button>
+                                    <button className="game-primary" type="submit">Place Bet</button>
+                                </form>
                             )}
 
-                            {(started && !gameOver && !cashedOut) && (
-                                <div className="earnings-display1">
-                                    <div
-                                        id="multiplier-capsule"
-                                        className={`stat-capsule ${isHighlighted("multiplier-capsule") ? "tutorial-highlight-wrapper" : ""}`}
-                                        onClick={() => tut.handleClick("multiplier-capsule")}
-                                    >
-                                        <span className="stat-label">Current Multiplier</span>
-                                        <div className="stat-value">{multiplier}x</div>
+                            {playing && (
+                                <div className="game-live">
+                                    <div className="game-stat game-stat--mult">
+                                        <div className="game-stat__label">Multiplier</div>
+                                        <div className="game-stat__value">{multiplier}×</div>
                                     </div>
-
-                                    <div className="stat-capsule cashout-capsule">
-                                        <span className="stat-label">Cash Out Amount</span>
-                                        <div className="stat-value">₹{earnings.toFixed(2)}</div>
+                                    <div className="game-stat game-stat--pay">
+                                        <div className="game-stat__label">Cash Out Value</div>
+                                        <div className="game-stat__value">₹{earnings.toFixed(2)}</div>
                                     </div>
-
-                                    {getThresholdHint() && <div className="threshold-hint">{getThresholdHint()}</div>}
-
-                                    <button
-                                        id="cashout-button"
-                                        className={`cashout-btn ${isHighlighted("cashout-button") ? "tutorial-highlight-wrapper" : ""}`}
-                                        onClick={handleCashOut}
-                                        type="button"
-                                    >
-                                        Cash Out
-                                    </button>
+                                    <p className="game-hint">{getThresholdHint()}</p>
+                                    <button className="game-cashout" onClick={handleCashOut}>Cash Out ₹{earnings.toFixed(2)}</button>
                                 </div>
                             )}
 
-                            {(gameOver || cashedOut) && !tut.isActive && (
-                                <button
-                                    className="clear-table-btn"
-                                    onClick={handleCashOut}
-                                    type="button"
-                                >
-                                    Clear Table
-                                </button>
+                            {(gameOver || cashedOut) && (
+                                <div className="game-live">
+                                    <div className={`mines-result ${gameOver ? "is-lost" : "is-won"}`}>
+                                        <div className="mines-result__title">{gameOver ? "Boom." : "Banked."}</div>
+                                        <div className="mines-result__sub">
+                                            {gameOver
+                                                ? "A mine caught you. The house keeps the bet."
+                                                : `You walked away with ₹${earnings.toFixed(2)}.`}
+                                        </div>
+                                    </div>
+                                    <button className="game-clear" onClick={handleCashOut}>New Round</button>
+                                </div>
                             )}
-                        </form>
-                    </div>
-
-                    <div className="container1" ref={gridRef}>
-                        {[...Array(TILE_COUNT)].map((_, index) => {
-                            const isTutorialTile = tut.isActive &&
-                                tut.currentStep?.id === "reveal-tile" &&
-                                index === 12;
-
-                            return (
-                                <Tile
-                                    key={index}
-                                    tile={board[index] || { revealed: false, isMine: false }}
-                                    onClick={() => revealTile(index)}
-                                    disabled={
-                                        (gameOver || cashedOut || !started || spotlightIndex !== null) &&
-                                        !isTutorialTile
-                                    }
-                                    isDimmed={
-                                        (spotlightIndex !== null && spotlightIndex !== index) ||
-                                        (tut.isActive && tut.currentStep?.id === "reveal-tile" && index !== 12)
-                                    }
-                                    isSpotlight={spotlightIndex === index || isTutorialTile}
-                                    className={isTutorialTile ? "tutorial-highlight-wrapper" : ""}
-                                />
-                            );
-                        })}
+                        </aside>
                     </div>
                 </div>
-            </div>
+            </main>
+
             <Footer />
             <SignInDialog isOpen={showSignInDialog} onClose={() => setShowSignInDialog(false)} />
         </>

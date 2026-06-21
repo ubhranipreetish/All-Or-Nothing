@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useWallet } from "../contexts/WalletContext";
 import { useAuth } from "../contexts/AuthContext";
 import { GoogleLogin } from "@react-oauth/google";
-import { Wallet, Plus, Menu, X, Gamepad2, HelpCircle, Shield, Gift, AlertTriangle, Ban } from "lucide-react";
+import { Wallet, Plus, Menu, X, Gamepad2, Trophy, Shield, Gift, AlertTriangle, Ban } from "lucide-react";
 import "../styles/Navbar.css";
 
 export default function Navbar() {
@@ -124,7 +124,7 @@ export default function Navbar() {
             <nav className={`navbar ${scrolled ? "navbar-scrolled" : ""}`}>
                 <div className="navbar-container">
                     <div className="logo" onClick={() => router.push("/")}>
-                        <img src="/images/logo.png" alt="All Or Nothing" />
+                        <img src="/images/aon-logo.png" alt="All Or Nothing" />
                     </div>
 
                     <div className="nav-links">
@@ -132,13 +132,13 @@ export default function Navbar() {
                             <Gamepad2 size={18} />
                             <span>Games</span>
                         </a>
-                        <a href="#how-it-works" className="nav-link" onClick={(e) => handleSmoothScroll(e, "how-it-works")}>
-                            <HelpCircle size={18} />
-                            <span>How to Play</span>
-                        </a>
                         <a href="#fairness" className="nav-link" onClick={(e) => handleSmoothScroll(e, "fairness")}>
                             <Shield size={18} />
                             <span>Fairness</span>
+                        </a>
+                        <a href="/profile" className="nav-link" onClick={(e) => { e.preventDefault(); router.push("/profile"); }}>
+                            <Trophy size={18} />
+                            <span>Leaderboard</span>
                         </a>
                     </div>
 
@@ -225,13 +225,13 @@ export default function Navbar() {
                             <Gamepad2 size={20} />
                             <span>Games</span>
                         </a>
-                        <a href="#how-it-works" className="mobile-nav-link" onClick={(e) => handleSmoothScroll(e, "how-it-works")}>
-                            <HelpCircle size={20} />
-                            <span>How to Play</span>
-                        </a>
                         <a href="#fairness" className="mobile-nav-link" onClick={(e) => handleSmoothScroll(e, "fairness")}>
                             <Shield size={20} />
                             <span>Fairness</span>
+                        </a>
+                        <a href="/profile" className="mobile-nav-link" onClick={(e) => { e.preventDefault(); setMobileMenuOpen(false); router.push("/profile"); }}>
+                            <Trophy size={20} />
+                            <span>Leaderboard</span>
                         </a>
                         {user && (
                             <div className="mobile-wallet">

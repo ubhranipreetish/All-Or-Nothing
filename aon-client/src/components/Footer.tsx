@@ -11,7 +11,7 @@ export default function Footer() {
                 {/* Logo & Info */}
                 <div className="footer-main">
                     <div className="footer-logo">
-                        <img src="/images/logo.png" alt="All Or Nothing" />
+                        <img src="/images/aon-logo.png" alt="All Or Nothing" />
                     </div>
                     <p className="footer-tagline">
                         High-risk, high-reward gaming for the bold. Virtual currency only — no real money involved.
@@ -37,8 +37,8 @@ export default function Footer() {
                     </div>
                     <div className="footer-nav-group">
                         <h4>Info</h4>
-                        <Link href="/#how-it-works">How to Play</Link>
                         <Link href="/#fairness">Trust & Transparency</Link>
+                        <Link href="/profile">Leaderboard</Link>
                     </div>
                 </div>
             </div>
