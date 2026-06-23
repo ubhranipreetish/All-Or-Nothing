@@ -453,17 +453,17 @@ export default function ProfilePage() {
                                 <tbody>
                                     {displayedTransactions.map((tx) => (
                                         <tr key={tx._id}>
-                                            <td>{formatDate(tx.createdAt)}</td>
-                                            <td>{getTransactionNote(tx) || tx.gameType || "-"}</td>
-                                            <td>
+                                            <td data-label="Date">{formatDate(tx.createdAt)}</td>
+                                            <td data-label="Game">{getTransactionNote(tx) || tx.gameType || "-"}</td>
+                                            <td data-label="Type">
                                                 <span className={`type-badge ${tx.type.toLowerCase()}`}>
                                                     {tx.type}
                                                 </span>
                                             </td>
-                                            <td className={tx.amount >= 0 ? "amount-positive" : "amount-negative"}>
+                                            <td data-label="Amount" className={tx.amount >= 0 ? "amount-positive" : "amount-negative"}>
                                                 {formatAmount(tx.amount)}
                                             </td>
-                                            <td>₹{tx.balanceAfter.toFixed(2)}</td>
+                                            <td data-label="Balance">₹{tx.balanceAfter.toFixed(2)}</td>
                                         </tr>
                                     ))}
                                 </tbody>

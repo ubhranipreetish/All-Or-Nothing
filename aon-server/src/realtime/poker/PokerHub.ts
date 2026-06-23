@@ -2,25 +2,25 @@ import { Server, Namespace, Socket } from "socket.io";
 import { PokerTable, ActionType } from "../../domain/poker/PokerTable";
 
 /**
- * PokerHub — the realtime edge for multiplayer poker.
+ * PokerHub — the realtime edge for multiplayer poker. Owns the live tables,
+ * exposes the `/poker` namespace, serialises a per-viewer sanitised snapshot,
+ * runs the turn clock (with timeout penalties) and the inter-hand pause, and
+ * supports stable identity + reconnect-to-seat so a refresh keeps your seat.
  *
- * Owns the live tables (in memory), exposes the `/poker` Socket.IO namespace,
- * and is the ONLY thing that talks to sockets. It serialises a per-viewer,
- * sanitised snapshot of each table (hole cards hidden until showdown), runs the
- * turn clock (auto check/fold on timeout) and auto-starts the next hand.
- *
- * It is fully self-contained: it touches none of the existing HTTP services, so
- * the platform's REST/socket behaviour is unchanged.
+ * Fully self-contained — it touches none of the existing HTTP services.
  */
 
-const TURN_SECONDS = 25;
-const NEXT_HAND_DELAY = 4500;
+const TURN_SECONDS = 20; // base time to act before auto check/fold
+const NEXT_HAND_DELAY = 5000; // showdown reveal pause before the next hand
+const RECONNECT_GRACE = 60000; // keep a disconnected player's seat this long
 
 class PokerHub {
     private nsp: Namespace | null = null;
     private tables = new Map<string, PokerTable>();
+    private playerTable = new Map<string, string>(); // playerId -> tableId (for reconnect)
     private turnTimers = new Map<string, NodeJS.Timeout>();
     private handTimers = new Map<string, NodeJS.Timeout>();
+    private removeTimers = new Map<string, NodeJS.Timeout>();
 
     register(io: Server): void {
         this.nsp = io.of("/poker");
@@ -29,20 +29,31 @@ class PokerHub {
     }
 
     private onConnection(socket: Socket): void {
-        socket.data.playerId = socket.id;
+        const pid = (socket.handshake.auth?.playerId as string) || socket.id;
+        socket.data.playerId = pid;
         socket.data.name = (socket.handshake.auth?.name as string)?.slice(0, 18) || "Guest";
 
-        socket.on("table:quickJoin", (cb?: (r: unknown) => void) => {
-            const table = this.findOpenTable();
-            this.joinTable(socket, table.id, cb);
-        });
+        // Reconnect: if this player still holds a seat, re-attach to it.
+        const prevTableId = this.playerTable.get(pid);
+        if (prevTableId && this.tables.has(prevTableId)) {
+            const table = this.tables.get(prevTableId)!;
+            const t = this.removeTimers.get(pid);
+            if (t) { clearTimeout(t); this.removeTimers.delete(pid); }
+            table.setDisconnected(pid, false);
+            socket.data.tableId = prevTableId;
+            socket.join(this.room(prevTableId));
+            socket.emit("poker:reconnected", { tableId: prevTableId });
+            this.afterChange(table);
+        }
 
+        socket.on("table:quickJoin", (cb?: (r: unknown) => void) => {
+            this.joinTable(socket, this.findOpenTable().id, cb);
+        });
         socket.on("table:join", (data: { tableId?: string }, cb?: (r: unknown) => void) => {
             const id = (data?.tableId || "").toUpperCase();
             if (!this.tables.has(id)) return cb?.({ error: "Table not found" });
             this.joinTable(socket, id, cb);
         });
-
         socket.on("action", (data: { type: ActionType; amount?: number }) => {
             const table = this.tableOf(socket);
             if (!table) return;
@@ -50,9 +61,18 @@ class PokerHub {
             if (err) return void socket.emit("poker:error", { message: err });
             this.afterChange(table);
         });
+        socket.on("sitOut", () => this.mutate(socket, (t, id) => t.sitOut(id)));
+        socket.on("sitIn", () => this.mutate(socket, (t, id) => t.sitIn(id)));
+        socket.on("rebuy", () => this.mutate(socket, (t, id) => t.rebuy(id)));
+        socket.on("table:leave", () => this.leave(socket, true));
+        socket.on("disconnect", () => this.onDisconnect(socket));
+    }
 
-        socket.on("table:leave", () => this.leave(socket));
-        socket.on("disconnect", () => this.leave(socket));
+    private mutate(socket: Socket, fn: (t: PokerTable, id: string) => void): void {
+        const table = this.tableOf(socket);
+        if (!table) return;
+        fn(table, socket.data.playerId);
+        this.afterChange(table);
     }
 
     /* -------------------------------------------------------------- tables */
@@ -71,15 +91,17 @@ class PokerHub {
         const seat = table.seatPlayer(socket.data.playerId, socket.data.name);
         if (seat === -1) return cb?.({ error: "Table is full" });
         socket.data.tableId = tableId;
+        this.playerTable.set(socket.data.playerId, tableId);
         socket.join(this.room(tableId));
         cb?.({ tableId, seat });
         this.afterChange(table);
     }
 
-    private leave(socket: Socket): void {
+    private leave(socket: Socket, intentional: boolean): void {
         const table = this.tableOf(socket);
         if (!table) return;
         table.removePlayer(socket.data.playerId);
+        if (intentional) this.playerTable.delete(socket.data.playerId);
         socket.leave(this.room(table.id));
         socket.data.tableId = undefined;
         if (table.occupied().length === 0) {
@@ -90,6 +112,26 @@ class PokerHub {
         this.afterChange(table);
     }
 
+    private onDisconnect(socket: Socket): void {
+        const table = this.tableOf(socket);
+        const pid = socket.data.playerId as string;
+        if (!table) return;
+        table.setDisconnected(pid, true);
+        // Hold the seat for a grace period so a refresh can reclaim it; the turn
+        // clock will auto-fold them if it's their turn meanwhile.
+        const timer = setTimeout(() => {
+            this.removeTimers.delete(pid);
+            const t = this.tables.get(table.id);
+            if (!t) return;
+            t.removePlayer(pid);
+            this.playerTable.delete(pid);
+            if (t.occupied().length === 0) { this.clearTimers(t.id); this.tables.delete(t.id); return; }
+            this.afterChange(t);
+        }, RECONNECT_GRACE);
+        this.removeTimers.set(pid, timer);
+        this.afterChange(table);
+    }
+
     private tableOf(socket: Socket): PokerTable | undefined {
         return socket.data.tableId ? this.tables.get(socket.data.tableId) : undefined;
     }
@@ -97,12 +139,9 @@ class PokerHub {
     /* ----------------------------------------------- state change pipeline */
 
     private afterChange(table: PokerTable): void {
-        // Start a hand if we're idle and now have enough players.
-        if (!table.handActive && !this.handTimers.has(table.id)) {
-            if (table.maybeStartHand()) { /* started immediately */ }
-        }
-        this.broadcast(table);
+        if (!table.handActive && !this.handTimers.has(table.id)) table.maybeStartHand();
         this.armTurnTimer(table);
+        this.broadcast(table);
         this.scheduleNextHand(table);
     }
 
@@ -112,8 +151,8 @@ class PokerHub {
         const timer = setTimeout(() => {
             this.handTimers.delete(table.id);
             if (table.maybeStartHand()) {
-                this.broadcast(table);
                 this.armTurnTimer(table);
+                this.broadcast(table);
             }
         }, NEXT_HAND_DELAY);
         this.handTimers.set(table.id, timer);
@@ -122,13 +161,11 @@ class PokerHub {
     private armTurnTimer(table: PokerTable): void {
         this.clearTurnTimer(table.id);
         const actorId = table.currentActorId();
-        if (!actorId) return;
+        if (!actorId) { table.deadlineTs = null; return; }
+        table.deadlineTs = Date.now() + TURN_SECONDS * 1000;
         const timer = setTimeout(() => {
-            // auto-act: check if possible, otherwise fold
-            const seat = table.seats[table.toAct];
-            if (!seat || seat.id !== actorId) return;
-            const canCheck = table.currentBet - seat.bet <= 0;
-            table.act(actorId, canCheck ? "check" : "fold");
+            if (table.currentActorId() !== actorId) return;
+            table.timeoutCurrent();
             this.afterChange(table);
         }, TURN_SECONDS * 1000);
         this.turnTimers.set(table.id, timer);
@@ -144,6 +181,8 @@ class PokerHub {
 
     private viewFor(table: PokerTable, viewerId: string) {
         const reveal = table.phase === "showdown";
+        const winnerSeats = new Set((table.winners || []).map((w) => w.seat));
+        const me = table.seats.find((s) => s?.id === viewerId);
         return {
             tableId: table.id,
             phase: table.phase,
@@ -152,13 +191,19 @@ class PokerHub {
             currentBet: table.currentBet,
             bigBlind: table.bigBlind,
             smallBlind: table.smallBlind,
+            startingStack: table.startingStack,
             dealer: table.dealer,
             toAct: table.toAct,
             handId: table.handId,
             handActive: table.handActive,
             winners: table.winners,
+            deadlineTs: table.deadlineTs,
+            serverNow: Date.now(),
             turnSeconds: TURN_SECONDS,
             youId: viewerId,
+            youSeated: !!me,
+            youAway: !!me?.away,
+            youCanRebuy: !!me && !me.inHand && me.stack < table.startingStack,
             seats: table.seats.map((s, i) =>
                 s
                     ? {
@@ -168,13 +213,16 @@ class PokerHub {
                           bet: s.bet,
                           folded: s.folded,
                           allIn: s.allIn,
-                          sittingOut: s.sittingOut,
-                          connected: s.connected,
+                          away: s.away,
+                          disconnected: s.disconnected,
                           lastAction: s.lastAction,
                           isTurn: table.toAct === i,
                           isYou: s.id === viewerId,
+                          isDealer: table.dealer === i && table.handActive,
+                          blind: table.handActive ? (table.sbSeat === i ? "SB" : table.bbSeat === i ? "BB" : null) : null,
+                          isWinner: winnerSeats.has(i),
                           hasCards: s.cards.length > 0,
-                          cards: s.id === viewerId || (reveal && !s.folded) ? s.cards : null,
+                          cards: s.id === viewerId || (reveal && !s.folded && s.inHand) ? s.cards : null,
                       }
                     : null,
             ),

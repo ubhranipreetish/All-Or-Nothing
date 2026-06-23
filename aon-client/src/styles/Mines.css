@@ -115,6 +115,90 @@
 .mines-result.is-won .mines-result__title { color: var(--jade); }
 .mines-result__sub { color: var(--bone-dim); margin-top: 0.55rem; font-size: 0.9rem; line-height: 1.5; }
 
+/* ==================== MINES — responsive layout ==================== */
+/* Scoped under .mines-page / .mines-layout so these only affect the Mines
+   page and reliably override the shared .game-* rules in Game.css.
+   No game logic / markup behavior changes — pure layout. */
+
+/* Never allow horizontal overflow on the Mines page. */
+.mines-page { overflow-x: hidden; }
+.mines-page .game-shell { max-width: 100%; }
+
+/* ---- Tablet & phone: stack board above a compact control panel ---- */
+@media (max-width: 900px) {
+  /* Single column; keep the board on top, controls right beneath it so a
+     player never has to hunt/scroll far to find the bet & cash-out controls. */
+  .mines-layout {
+    grid-template-columns: 1fr;
+    gap: clamp(0.8rem, 2.5vw, 1.4rem);
+    justify-items: center;
+  }
+  /* controls-first: bet/cash-out panel on top, board right below — matches the
+     other games and keeps the primary action visible without scrolling. */
+  .mines-layout .game-board { order: 2; width: 100%; }
+  .mines-layout .game-panel {
+    order: 1;
+    width: 100%;
+    max-width: 520px;   /* line panel width up with the board */
+  }
+
+  /* The board is the tallest element — cap its size so that the board *and*
+     the controls below it stay within a phone viewport without long scrolls.
+     min() against viewport height keeps the whole game reachable. */
+  .mines-layout .game-board {
+    min-height: 0;
+    padding: clamp(0.7rem, 2.5vw, 1.4rem);
+  }
+  .mines-layout .mines-grid {
+    /* width-bound, but also height-bound via the board cap below */
+    max-width: min(520px, 92vw, 62vh);
+  }
+}
+
+/* ---- Phones: tighten chrome, guarantee tap targets ---- */
 @media (max-width: 600px) {
-  .mines-grid { gap: 7px; max-width: 100%; }
+  /* Keep clearance for the fixed navbar but trim the rest of the top gap and
+     bottom padding so the player sees board + controls with minimal scroll. */
+  .mines-page.game-stage {
+    padding: 84px 14px 40px;
+  }
+
+  .mines-page .game-head {
+    margin-bottom: 1rem;
+  }
+  .mines-page .game-title {
+    font-size: clamp(2rem, 11vw, 2.8rem);
+    margin-top: 0.35rem;
+  }
+
+  .mines-grid { gap: 7px; max-width: min(100%, 70vh); }
+
+  /* Compact the live result / stats so the cash-out button stays above the
+     fold next to the board. */
+  .mines-page .game-stat { padding: 0.75rem 0.95rem; }
+  .mines-page .game-stat__value { font-size: clamp(1.6rem, 7vw, 2.1rem); }
+  .mines-page .mines-result { padding: 0.2rem 0 0.7rem; }
+  .mines-page .mines-result__title { font-size: 2.1rem; }
+
+  /* Tap targets >= 44px tall. */
+  .mines-page .game-input,
+  .mines-page .game-select {
+    min-height: 48px;
+    font-size: 16px;     /* prevents iOS zoom-on-focus */
+  }
+  .mines-page .game-adjust button { min-height: 44px; }
+  .mines-page .game-primary,
+  .mines-page .game-cashout,
+  .mines-page .game-clear { min-height: 50px; padding: 14px; }
+}
+
+/* ---- Short / landscape phones: keep board from eating the viewport ---- */
+@media (max-width: 900px) and (max-height: 560px) {
+  .mines-layout .mines-grid { max-width: min(420px, 80vh); }
+}
+
+/* ---- Very small phones (<=360px): squeeze adjust buttons & gaps ---- */
+@media (max-width: 360px) {
+  .mines-page.game-stage { padding-left: 10px; padding-right: 10px; }
+  .mines-grid { gap: 6px; }
 }

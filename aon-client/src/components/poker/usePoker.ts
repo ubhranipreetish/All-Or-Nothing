@@ -2,57 +2,22 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { io, Socket } from "socket.io-client";
+import type { TableState } from "./types";
 
-/* Types mirror the server's per-viewer snapshot (PokerHub.viewFor). */
-export interface Card {
-    r: number;
-    s: "s" | "h" | "d" | "c";
-}
-export interface SeatView {
-    seat: number;
-    name: string;
-    stack: number;
-    bet: number;
-    folded: boolean;
-    allIn: boolean;
-    sittingOut: boolean;
-    connected: boolean;
-    lastAction?: string;
-    isTurn: boolean;
-    isYou: boolean;
-    hasCards: boolean;
-    cards: Card[] | null;
-}
-export interface Legal {
-    toCall: number;
-    canCheck: boolean;
-    canCall: boolean;
-    callAmount: number;
-    canRaise: boolean;
-    minRaiseTo: number;
-    maxRaiseTo: number;
-    isBet: boolean;
-}
-export interface TableState {
-    tableId: string;
-    phase: "waiting" | "preflop" | "flop" | "turn" | "river" | "showdown";
-    community: Card[];
-    pot: number;
-    currentBet: number;
-    bigBlind: number;
-    smallBlind: number;
-    dealer: number;
-    toAct: number;
-    handId: number;
-    handActive: boolean;
-    winners: { seat: number; amount: number; handName: string }[] | null;
-    turnSeconds: number;
-    youId: string;
-    seats: (SeatView | null)[];
-    legal: Legal | null;
-}
+export type { Card, SeatView, Legal, TableState } from "./types";
 
 const SOCKET_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api").replace(/\/api\/?$/, "");
+
+/** A stable per-browser id so a refresh reconnects to the same seat. */
+function getPlayerId(): string {
+    if (typeof window === "undefined") return "ssr";
+    let id = localStorage.getItem("aon_poker_pid");
+    if (!id) {
+        id = "p_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+        localStorage.setItem("aon_poker_pid", id);
+    }
+    return id;
+}
 
 export function usePoker(name: string) {
     const [state, setState] = useState<TableState | null>(null);
@@ -62,7 +27,7 @@ export function usePoker(name: string) {
 
     useEffect(() => {
         const socket = io(`${SOCKET_URL}/poker`, {
-            auth: { name },
+            auth: { name, playerId: getPlayerId() },
             transports: ["websocket", "polling"],
         });
         socketRef.current = socket;
@@ -79,7 +44,6 @@ export function usePoker(name: string) {
             socket.disconnect();
             socketRef.current = null;
         };
-        // name is fixed for the lifetime of a room session
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -104,5 +68,9 @@ export function usePoker(name: string) {
         socketRef.current?.emit("action", { type, amount });
     }, []);
 
-    return { state, connected, error, quickJoin, joinTable, leave, act };
+    const sitOut = useCallback(() => socketRef.current?.emit("sitOut"), []);
+    const sitIn = useCallback(() => socketRef.current?.emit("sitIn"), []);
+    const rebuy = useCallback(() => socketRef.current?.emit("rebuy"), []);
+
+    return { state, connected, error, quickJoin, joinTable, leave, act, sitOut, sitIn, rebuy };
 }

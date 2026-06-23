@@ -94,6 +94,7 @@
   display: flex;
   align-items: center;
   gap: 1rem;
+  min-width: 0;
 }
 
 .wallet-section {
@@ -164,10 +165,15 @@
 /* Mobile Menu Toggle */
 .mobile-menu-toggle {
   display: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
   background: none;
   border: none;
   cursor: pointer;
   padding: 8px;
+  flex-shrink: 0;
   color: var(--text-primary);
   transition: color 0.3s ease;
 }
@@ -180,16 +186,25 @@
 .mobile-menu {
   display: none;
   flex-direction: column;
-  padding: 1rem;
+  padding: 0.5rem 1rem 1rem;
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
   border-top: 1px solid var(--divider);
   background: linear-gradient(180deg, var(--deep-navy) 0%, var(--midnight-navy) 100%);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  /* Scroll if the menu is taller than the viewport on short phones. */
+  max-height: calc(100vh - 64px);
+  max-height: calc(100dvh - 64px);
+  overflow-y: auto;
 }
 
 .mobile-nav-link {
   color: var(--text-primary);
   text-decoration: none;
   padding: 1rem;
+  min-height: 52px;
   font-weight: 500;
+  font-size: 1.05rem;
   border-bottom: 1px solid var(--divider);
   transition: all 0.3s ease;
   display: flex;
@@ -207,6 +222,8 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
   padding: 1rem;
   color: var(--success);
   font-weight: 600;
@@ -216,7 +233,8 @@
   background: linear-gradient(135deg, var(--primary-gold) 0%, var(--gold-dark) 100%);
   color: var(--midnight-navy);
   border: none;
-  padding: 10px 20px;
+  padding: 12px 22px;
+  min-height: 44px;
   border-radius: 8px;
   font-weight: 600;
   cursor: pointer;
@@ -388,6 +406,11 @@
     gap: 0.5rem;
   }
 
+  /* The inline 1rem margin pushes auth off-screen on small phones. */
+  .auth-container {
+    margin-left: 0.5rem !important;
+  }
+
   .logo img {
     max-height: 32px;
     max-width: 160px;
@@ -400,6 +423,10 @@
   .wallet {
     padding: 0 8px;
     font-size: 0.8rem;
+    max-width: 90px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .add-money-btn {
@@ -428,19 +455,24 @@
 }
 
 /* Very small phones: keep the top bar from overflowing. */
-@media (max-width: 360px) {
+@media (max-width: 380px) {
   .nav-right {
     gap: 0.35rem;
   }
 
-  .wallet {
-    padding: 0 6px;
-    font-size: 0.72rem;
+  .auth-container {
+    margin-left: 0.35rem !important;
+  }
+
+  /* Wallet is still reachable from the mobile menu; drop it from the
+     cramped top bar so auth + hamburger always fit. */
+  .wallet-section {
+    display: none;
   }
 
   .logo img {
     max-height: 28px;
-    max-width: 130px;
+    max-width: 120px;
   }
 }
 

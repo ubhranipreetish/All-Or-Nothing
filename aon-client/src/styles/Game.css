@@ -7,6 +7,8 @@
   position: relative;
   min-height: 100svh;
   padding: clamp(96px, 13vh, 140px) clamp(16px, 5vw, 56px) 72px;
+  padding-left: max(clamp(16px, 5vw, 56px), env(safe-area-inset-left));
+  padding-right: max(clamp(16px, 5vw, 56px), env(safe-area-inset-right));
   background:
     radial-gradient(110% 60% at 50% -5%, #160f1d 0%, transparent 60%),
     var(--void);
@@ -238,10 +240,33 @@
 /* responsive */
 @media (max-width: 900px) {
   .game-layout { grid-template-columns: 1fr; }
+  /* Default: board on top (wheel/roulette want the spin visible). Mines and
+     Dragon Tower override this to controls-first in their own stylesheets. */
   .game-board { order: 1; }
   .game-panel { order: 2; }
   .game-sub { display: none; }
 }
 @media (max-width: 600px) {
-  .game-stage { padding-top: 92px; }
+  .game-stage { padding-top: 86px; padding-bottom: 1.5rem; }
+  /* Compact the header on phones so the board + bet controls sit higher and the
+     primary action isn't buried below the fold. */
+  .game-head { align-items: flex-start; gap: 0.35rem; }
+  .game-title { font-size: 2rem; margin-top: 0.2rem; }
+  .game-eyebrow { font-size: 0.6rem; }
+  .game-layout { gap: 1rem; }
+  .game-panel { padding: 1.1rem; border-radius: 16px; }
+  .game-board { min-height: 220px; padding: 0.85rem; }
+  /* Guaranteed comfortable tap targets on phones. */
+  .game-input,
+  .game-select { min-height: 48px; font-size: 1rem; }
+  .game-adjust button { min-height: 44px; }
+  .game-primary,
+  .game-cashout,
+  .game-clear { min-height: 50px; }
+  .game-stat { padding: 0.85rem 1rem; }
+}
+@media (max-width: 380px) {
+  /* Single-column adjust controls so they don't squash on tiny phones. */
+  .game-adjust { grid-template-columns: 1fr; }
+  .game-stage { padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right)); }
 }

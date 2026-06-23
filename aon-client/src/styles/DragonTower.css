@@ -9,6 +9,9 @@
   margin: 0 auto;
 }
 
+/* tile icons scale with the tile so they never overflow on small phones */
+.dt-tile svg { width: clamp(16px, 5vw, 24px); height: clamp(16px, 5vw, 24px); }
+
 .dt-row {
   display: grid;
   gap: clamp(6px, 1vw, 10px);
@@ -63,6 +66,58 @@
 }
 .dt-arrow { color: var(--jade); }
 
+/* ==================== RESPONSIVE (scoped to .dt-game) ====================
+   Goal: on phones/tablets the bet & cash-out controls must be reachable
+   right away — the user shouldn't scroll past a 10-floor tower to find them.
+   Strategy: put the control panel ABOVE the tower on narrow screens and
+   scale the tower so the whole board fits without excessive scrolling.
+   All rules are scoped under .dt-game so the shared Game.css is untouched. */
+
+/* tablet & phone: single column, controls first, tower second */
+@media (max-width: 900px) {
+  .dt-game .game-layout {
+    grid-template-columns: 1fr;
+    gap: clamp(0.8rem, 2.5vw, 1.4rem);
+  }
+  /* override Game.css ordering: controls (panel) on top, board below */
+  .dt-game .game-panel { order: 0; }
+  .dt-game .game-board { order: 1; min-height: 0; }
+
+  /* compact the live stat panel so bet + cash-out sit in one screenful */
+  .dt-game .game-live { flex-direction: row; flex-wrap: wrap; align-items: stretch; }
+  .dt-game .game-stat { flex: 1 1 45%; padding: 0.7rem 0.9rem; }
+  .dt-game .game-stat__value { font-size: clamp(1.5rem, 6vw, 2.1rem); }
+  .dt-game .game-hint { flex: 1 1 100%; order: 3; }
+  .dt-game .game-cashout,
+  .dt-game .game-clear { flex: 1 1 100%; order: 4; }
+
+  /* tap targets: comfortable >= 44px on touch */
+  .dt-game .game-adjust button { padding: 13px; min-height: 44px; }
+}
+
+/* phones: scale the tower to fit the viewport height-wise */
 @media (max-width: 600px) {
-  .dt-tower { max-width: 100%; }
+  .dt-game .game-board { padding: clamp(0.7rem, 3vw, 1rem); border-radius: 16px; }
+
+  .dt-game .dt-tower {
+    /* cap by viewport so all 10 floors stay visible without long scrolling */
+    max-width: min(100%, 70vh);
+    gap: clamp(4px, 1.4vw, 8px);
+  }
+  .dt-game .dt-row { gap: clamp(4px, 1.4vw, 8px); }
+
+  /* shorter tiles -> the full tower is much closer to one screenful,
+     while staying tall enough to tap reliably */
+  .dt-game .dt-tile { aspect-ratio: 5 / 2; min-height: 30px; border-radius: 8px; }
+
+  /* keep the bet/cash-out buttons a full 44px tap target */
+  .dt-game .game-primary,
+  .dt-game .game-cashout,
+  .dt-game .game-clear { padding: 15px; min-height: 48px; }
+}
+
+/* very narrow phones (<=380px): tighten further, no horizontal overflow */
+@media (max-width: 380px) {
+  .dt-game .game-stat { flex: 1 1 100%; }
+  .dt-game .dt-tile { aspect-ratio: 7 / 3; }
 }

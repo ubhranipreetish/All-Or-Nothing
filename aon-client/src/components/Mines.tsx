@@ -272,7 +272,7 @@ export default function Mines() {
         <>
             <Navbar />
 
-            <main className="game-stage">
+            <main className="game-stage mines-page">
                 <AnimatePresence>
                     {notification && (
                         <motion.div
@@ -295,7 +295,7 @@ export default function Mines() {
                         <p className="game-sub">Flip gems, dodge the bombs, and bank it before the board blows.</p>
                     </header>
 
-                    <div className="game-layout">
+                    <div className="game-layout mines-layout">
                         {/* board */}
                         <div className="game-board" ref={gridRef}>
                             <div className="mines-grid">

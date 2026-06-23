@@ -215,11 +215,27 @@
 
 .lb-name {
     flex: 1;
+    min-width: 0;
     font-size: 0.9rem;
     color: var(--text-primary);
     display: flex;
     align-items: center;
     gap: 8px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.you-badge {
+    flex-shrink: 0;
+}
+
+.lb-avatar {
+    flex-shrink: 0;
+}
+
+.lb-earnings {
+    flex-shrink: 0;
 }
 
 .you-badge {
@@ -329,6 +345,7 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
+    min-width: 0;
 }
 
 .loan-principal {
@@ -363,6 +380,9 @@
 
 .repay-btn {
     padding: 8px 16px;
+    min-height: 44px;
+    min-width: 64px;
+    flex-shrink: 0;
     background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
     border: none;
     border-radius: 8px;
@@ -613,21 +633,47 @@
 @media (max-width: 768px) {
     .profile-page {
         padding: 90px 16px 32px;
+        padding-left: max(16px, env(safe-area-inset-left));
+        padding-right: max(16px, env(safe-area-inset-right));
     }
 
     .profile-header {
-        flex-direction: column;
-        align-items: flex-start;
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
         gap: 1rem;
+    }
+
+    .profile-header h1 {
+        font-size: 1.6rem;
+    }
+
+    .logout-btn {
+        margin-left: auto;
+        min-height: 44px;
     }
 
     .user-info-section {
         flex-direction: column;
         text-align: center;
+        padding: 1.5rem;
+    }
+
+    .user-details {
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .user-details p {
+        overflow-wrap: anywhere;
     }
 
     .wallet-summary {
         grid-template-columns: 1fr;
+    }
+
+    .transaction-section {
+        padding: 1.25rem 1rem;
     }
 
     .transaction-header {
@@ -638,11 +684,89 @@
     .filter-group {
         width: 100%;
         overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
         padding-bottom: 0.5rem;
     }
 
-    .transaction-table {
+    .filter-btn {
+        flex-shrink: 0;
+        min-height: 40px;
+    }
+
+    /* Reflow the transaction table into stacked cards (no horizontal scroll). */
+    .transaction-table,
+    .transaction-table tbody,
+    .transaction-table tr,
+    .transaction-table td {
         display: block;
-        overflow-x: auto;
+        width: 100%;
+    }
+
+    .transaction-table thead {
+        display: none;
+    }
+
+    .transaction-table tr {
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid var(--divider);
+        border-radius: 12px;
+        padding: 4px 14px;
+        margin-bottom: 12px;
+    }
+
+    .transaction-table tr:hover td {
+        background: transparent;
+    }
+
+    .transaction-table td {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 0;
+        border-bottom: 1px solid var(--divider);
+        font-size: 0.9rem;
+        text-align: right;
+    }
+
+    .transaction-table tr td:last-child {
+        border-bottom: none;
+    }
+
+    .transaction-table td::before {
+        content: attr(data-label);
+        color: var(--text-muted);
+        font-size: 0.72rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        text-align: left;
+        flex-shrink: 0;
+    }
+
+    .pagination-btn {
+        min-height: 44px;
+        min-width: 44px;
+    }
+
+    .see-all-btn {
+        min-height: 48px;
+    }
+}
+
+@media (max-width: 400px) {
+    .leaderboard-card,
+    .wallet-loans-card,
+    .transaction-section {
+        padding: 1.1rem 0.9rem;
+    }
+
+    .stat-item {
+        padding: 10px 12px;
+    }
+
+    .loan-item {
+        padding: 10px 12px;
+        gap: 8px;
     }
 }

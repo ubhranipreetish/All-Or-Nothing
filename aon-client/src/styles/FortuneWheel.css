@@ -2,7 +2,9 @@
 
 .fw-wrap {
   position: relative;
-  width: min(82vw, 460px);
+  /* scale to the board but never overflow the viewport; caps on desktop */
+  width: clamp(220px, 78vw, 460px);
+  max-width: 100%;
   margin: 0 auto;
 }
 
@@ -87,6 +89,47 @@
   background: var(--ink);
 }
 
+/* ==================== RESPONSIVE LAYOUT ==================== */
+
+/* Tablet / stacked layout: Game.css switches .game-layout to a single column
+   at <=900px (board first, panel second). Shrink the wheel so the bet
+   controls sit close to the fold instead of far below it. */
+@media (max-width: 900px) {
+  .fw-board.game-board {
+    min-height: 0;            /* drop the 340px floor that wasted vertical space */
+    padding: clamp(0.8rem, 3vw, 1.4rem);
+  }
+  .fw-wrap {
+    /* cap by viewport height too so wheel + controls share the screen */
+    width: min(72vw, 60vh, 400px);
+  }
+  .fw-legend { margin-top: 1rem; }
+  /* comfortable single-column panel that doesn't stretch full width awkwardly */
+  .fw-panel.game-panel {
+    width: 100%;
+    max-width: 460px;
+    margin: 0 auto;
+  }
+}
+
 @media (max-width: 600px) {
-  .fw-wrap { width: 86vw; }
+  .fw-board.game-board { padding: 0.6rem; }
+  .fw-wrap {
+    width: min(82vw, 52vh, 360px);
+  }
+  .fw-legend {
+    gap: 0.4rem;
+    margin-top: 0.85rem;
+  }
+  .fw-multi {
+    font-size: 0.72rem;
+    padding: 6px 11px;
+  }
+  /* keep half/double adjust buttons >= 44px tall for touch */
+  .game-adjust button { min-height: 44px; }
+}
+
+@media (max-width: 380px) {
+  .fw-wrap { width: min(86vw, 48vh, 320px); }
+  .fw-multi { font-size: 0.68rem; padding: 5px 9px; }
 }

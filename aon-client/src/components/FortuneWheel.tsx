@@ -260,9 +260,9 @@ const FortuneWheel = () => {
                         <p className="game-sub">Set your risk. One spin. Live with where it lands.</p>
                     </header>
 
-                    <div className="game-layout">
+                    <div className="game-layout fw-layout">
                         {/* wheel */}
-                        <div className="game-board">
+                        <div className="game-board fw-board">
                             <div className="fw-wrap">
                                 <div className="fw-pointer" />
                                 <svg
@@ -304,7 +304,7 @@ const FortuneWheel = () => {
                         </div>
 
                         {/* control panel */}
-                        <aside className="game-panel">
+                        <aside className="game-panel fw-panel">
                             <form onSubmit={startGame}>
                                 <div className="game-field">
                                     <label className="game-label">Bet Amount</label>

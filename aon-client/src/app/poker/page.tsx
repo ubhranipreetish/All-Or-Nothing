@@ -15,7 +15,7 @@ function PokerRoom({
     join: { mode: "quick" } | { mode: "code"; code: string };
     onExit: () => void;
 }) {
-    const { state, connected, error, quickJoin, joinTable, leave, act } = usePoker(name);
+    const { state, connected, error, quickJoin, joinTable, leave, act, sitOut, sitIn, rebuy } = usePoker(name);
     const [joined, setJoined] = useState(false);
 
     useEffect(() => {
@@ -26,8 +26,17 @@ function PokerRoom({
         }
     }, [connected, joined, join, quickJoin, joinTable]);
 
+    // Persist the live table so a full page refresh rejoins it (the server also
+    // holds the seat for a grace period).
+    useEffect(() => {
+        if (state?.tableId) {
+            localStorage.setItem("aon_poker_last", JSON.stringify({ name, tableId: state.tableId, ts: Date.now() }));
+        }
+    }, [state?.tableId, name]);
+
     const exit = () => {
         leave();
+        localStorage.removeItem("aon_poker_last");
         onExit();
     };
 
@@ -35,8 +44,24 @@ function PokerRoom({
         <div className="pk-page">
             {error && <div className="pk-toast">{error}</div>}
             {!connected && <div className="pk-loading">Connecting…</div>}
-            {connected && !state && <div className="pk-loading">Taking a seat…</div>}
-            {connected && state && <PokerTable state={state} onAct={act} onLeave={exit} />}
+            {connected && !state && (
+                <div className="pk-loading">
+                    Taking a seat…
+                    <button className="pk-mini" style={{ marginLeft: 12 }} onClick={exit}>
+                        Back to lobby
+                    </button>
+                </div>
+            )}
+            {connected && state && (
+                <PokerTable
+                    state={state}
+                    onAct={act}
+                    onLeave={exit}
+                    onSitOut={sitOut}
+                    onSitIn={sitIn}
+                    onRebuy={rebuy}
+                />
+            )}
         </div>
     );
 }
@@ -47,6 +72,20 @@ export default function PokerPage() {
     const [session, setSession] = useState<null | { name: string; join: { mode: "quick" } | { mode: "code"; code: string } }>(
         null,
     );
+
+    // Auto-rejoin the last table after a refresh (within 2 minutes).
+    useEffect(() => {
+        try {
+            const raw = localStorage.getItem("aon_poker_last");
+            if (!raw) return;
+            const last = JSON.parse(raw) as { name: string; tableId: string; ts: number };
+            if (last.tableId && Date.now() - last.ts < 120000) {
+                setSession({ name: last.name, join: { mode: "code", code: last.tableId } });
+            }
+        } catch {
+            /* ignore */
+        }
+    }, []);
 
     if (session) {
         return <PokerRoom name={session.name} join={session.join} onExit={() => setSession(null)} />;

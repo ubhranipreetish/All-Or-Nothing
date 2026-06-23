@@ -713,22 +713,31 @@
 @media (max-width: 1024px) {
     .app-wrapper-roulette {
         padding: 1rem;
-        padding-bottom: 100px;
+        padding-bottom: calc(76px + env(safe-area-inset-bottom));
     }
 
     .roulette-main-layout {
         flex-direction: column;
         align-items: center;
+        gap: 1.25rem;
     }
 
     .roulette-wheel-section {
         flex: none;
         width: 100%;
         max-width: 380px;
+        gap: 1rem;
+    }
+
+    /* Cap the wheel by viewport height so the betting table header is
+       reachable without a long scroll on stacked (tablet/phone) layouts. */
+    .wheel-container {
+        max-width: min(360px, 52vh);
     }
 
     .roulette-table-section {
         width: 100%;
+        max-width: 560px;
     }
 
     .mobile-sticky-footer {
@@ -748,6 +757,10 @@
 
     .roulette-wheel-section {
         max-width: 320px;
+    }
+
+    .wheel-container {
+        max-width: min(320px, 46vh);
     }
 
     .wheel-outer {

@@ -188,7 +188,7 @@ export default function DragonTower() {
                     )}
                 </AnimatePresence>
 
-                <div className="game-shell">
+                <div className="game-shell dt-game">
                     <header className="game-head">
                         <div>
                             <span className="game-eyebrow"><span className="dot" /> {difficultyLabels[difficulty]}</span>

@@ -5,9 +5,9 @@ import { evaluate7, compareScore, HandScore } from "./handEvaluator";
  * PokerTable — the authoritative Texas Hold'em engine for one table (max 6).
  *
  * Pure, in-memory game logic: seating, blinds, dealing, betting rounds, side
- * pots and showdown. It holds the FULL truth (including every hole card); the
- * realtime layer is responsible for serialising a per-viewer, sanitised view so
- * players never see each other's cards before showdown.
+ * pots, showdown, plus the production concerns that touch state — sitting
+ * out/in, rebuys, and timeout penalties. It holds the FULL truth (every hole
+ * card); the realtime layer serialises a sanitised per-viewer view.
  */
 
 export type Phase = "waiting" | "preflop" | "flop" | "turn" | "river" | "showdown";
@@ -21,10 +21,12 @@ export interface Seat {
     committed: number; // committed this hand (for side pots)
     folded: boolean;
     allIn: boolean;
-    acted: boolean; // has acted since the last bet/raise this street
+    acted: boolean;
     cards: Card[];
-    sittingOut: boolean;
-    connected: boolean;
+    away: boolean; // sitting out — not dealt in
+    disconnected: boolean;
+    missed: number; // consecutive turn timeouts
+    inHand: boolean; // was dealt into the current hand
     lastAction?: string;
 }
 
@@ -35,12 +37,15 @@ export interface Winner {
 }
 
 const MAX_SEATS = 6;
+const SIT_OUT_AFTER_MISSES = 2;
 
 export class PokerTable {
     seats: (Seat | null)[] = Array(MAX_SEATS).fill(null);
     phase: Phase = "waiting";
     community: Card[] = [];
     dealer = 0;
+    sbSeat = -1;
+    bbSeat = -1;
     currentBet = 0;
     minRaise: number;
     toAct = -1;
@@ -48,6 +53,7 @@ export class PokerTable {
     winners: Winner[] | null = null;
     handActive = false;
     lastResultAt = 0;
+    deadlineTs: number | null = null; // when the current actor times out
 
     private deck: Card[] = [];
 
@@ -63,15 +69,18 @@ export class PokerTable {
     /* ----------------------------------------------------------- seating */
 
     seatPlayer(id: string, name: string): number {
-        if (this.seats.some((s) => s && s.id === id)) {
-            return this.seats.findIndex((s) => s?.id === id);
+        const existing = this.seats.findIndex((s) => s?.id === id);
+        if (existing !== -1) {
+            this.seats[existing]!.disconnected = false;
+            this.seats[existing]!.name = name;
+            return existing;
         }
         const idx = this.seats.findIndex((s) => s === null);
         if (idx === -1) return -1;
         this.seats[idx] = {
             id, name, stack: this.startingStack, bet: 0, committed: 0,
             folded: false, allIn: false, acted: false, cards: [],
-            sittingOut: false, connected: true,
+            away: false, disconnected: false, missed: 0, inHand: false,
         };
         return idx;
     }
@@ -79,17 +88,45 @@ export class PokerTable {
     removePlayer(id: string): void {
         const idx = this.seats.findIndex((s) => s?.id === id);
         if (idx === -1) return;
-        // If they're in a live hand, treat leaving as a fold first.
-        if (this.handActive && !this.seats[idx]!.folded) {
+        if (this.handActive && this.seats[idx]!.inHand && !this.seats[idx]!.folded) {
             this.seats[idx]!.folded = true;
             if (this.toAct === idx) this.advanceAfterAction(idx);
         }
         this.seats[idx] = null;
     }
 
-    setConnected(id: string, connected: boolean): void {
+    setDisconnected(id: string, value: boolean): void {
         const s = this.seats.find((x) => x?.id === id);
-        if (s) s.connected = connected;
+        if (s) s.disconnected = value;
+    }
+
+    sitOut(id: string): void {
+        const idx = this.seats.findIndex((s) => s?.id === id);
+        if (idx === -1) return;
+        this.seats[idx]!.away = true;
+        // fold immediately if it's their turn in a live hand
+        if (this.handActive && this.toAct === idx) {
+            this.seats[idx]!.folded = true;
+            this.seats[idx]!.lastAction = "Fold";
+            this.advanceAfterAction(idx);
+        }
+    }
+
+    sitIn(id: string): void {
+        const s = this.seats.find((x) => x?.id === id);
+        if (s && s.stack > 0) { s.away = false; s.missed = 0; }
+    }
+
+    /** Top a player back up to the starting stack (between hands only). */
+    rebuy(id: string): boolean {
+        const s = this.seats.find((x) => x?.id === id);
+        if (!s) return false;
+        if (this.handActive && s.inHand) return false;
+        if (s.stack >= this.startingStack) return false;
+        s.stack = this.startingStack;
+        s.away = false;
+        s.missed = 0;
+        return true;
     }
 
     occupied(): number[] {
@@ -98,7 +135,7 @@ export class PokerTable {
 
     private dealtSeats(): number[] {
         return this.seats
-            .map((s, i) => (s && s.stack > 0 && !s.sittingOut ? i : -1))
+            .map((s, i) => (s && s.stack > 0 && !s.away ? i : -1))
             .filter((i) => i >= 0);
     }
 
@@ -113,9 +150,8 @@ export class PokerTable {
 
     private startHand(): void {
         const dealt = this.dealtSeats();
-        // advance the button to the next dealt seat
         this.dealer = this.nextSeatInList(dealt, this.dealer);
-        const ring = this.ringFromDealer(dealt); // ring[0] = dealer
+        const ring = this.ringFromDealer(dealt);
         const n = dealt.length;
 
         this.deck = shuffle(makeDeck());
@@ -125,28 +161,28 @@ export class PokerTable {
         this.handActive = true;
         this.handId++;
 
-        for (const i of dealt) {
-            const s = this.seats[i]!;
+        for (let i = 0; i < MAX_SEATS; i++) {
+            const s = this.seats[i];
+            if (!s) continue;
             s.bet = 0; s.committed = 0; s.folded = false; s.allIn = false;
             s.acted = false; s.cards = []; s.lastAction = undefined;
+            s.inHand = dealt.includes(i);
         }
-        // deal two hole cards each
         for (let k = 0; k < 2; k++) for (const i of dealt) this.seats[i]!.cards.push(this.deck.pop()!);
 
-        const sb = n === 2 ? ring[0] : ring[1];
-        const bb = n === 2 ? ring[1] : ring[2 % n];
-        this.postBlind(sb, this.smallBlind, "SB");
-        this.postBlind(bb, this.bigBlind, "BB");
+        this.sbSeat = n === 2 ? ring[0] : ring[1];
+        this.bbSeat = n === 2 ? ring[1] : ring[2 % n];
+        this.postBlind(this.sbSeat, this.smallBlind, "SB");
+        this.postBlind(this.bbSeat, this.bigBlind, "BB");
 
         this.currentBet = this.bigBlind;
         this.minRaise = this.bigBlind;
-        // first to act preflop: heads-up = dealer/SB, else seat after BB
-        this.toAct = n === 2 ? ring[0] : this.nextActiveAfter(bb);
+        this.toAct = n === 2 ? ring[0] : this.nextActiveAfter(this.bbSeat);
     }
 
     private postBlind(idx: number, amount: number, label: string): void {
         this.contribute(idx, amount);
-        this.seats[idx]!.acted = false; // blinds still get to act
+        this.seats[idx]!.acted = false;
         this.seats[idx]!.lastAction = label;
     }
 
@@ -161,7 +197,6 @@ export class PokerTable {
 
     /* ------------------------------------------------------------- actions */
 
-    /** Apply a player action. Returns an error string, or null on success. */
     act(playerId: string, action: ActionType, amount = 0): string | null {
         if (!this.handActive) return "No hand in progress";
         if (this.toAct < 0 || this.seats[this.toAct]?.id !== playerId) return "Not your turn";
@@ -171,22 +206,22 @@ export class PokerTable {
 
         switch (action) {
             case "fold":
-                s.folded = true; s.acted = true; s.lastAction = "Fold";
+                s.folded = true; s.lastAction = "Fold";
                 break;
             case "check":
                 if (toCall > 0) return "Cannot check facing a bet";
-                s.acted = true; s.lastAction = "Check";
+                s.lastAction = "Check";
                 break;
             case "call": {
                 if (toCall <= 0) return "Nothing to call";
                 this.contribute(idx, toCall);
-                s.acted = true; s.lastAction = s.allIn ? "All-in" : "Call";
+                s.lastAction = s.allIn ? "All-in" : "Call";
                 break;
             }
             case "bet":
             case "raise": {
                 const raiseTo = Math.floor(amount);
-                const maxTo = s.bet + s.stack; // shove ceiling
+                const maxTo = s.bet + s.stack;
                 if (raiseTo <= this.currentBet && raiseTo < maxTo) return "Raise must exceed the current bet";
                 const minTo = this.currentBet === 0 ? this.bigBlind : this.currentBet + this.minRaise;
                 const isAllIn = raiseTo >= maxTo;
@@ -194,15 +229,14 @@ export class PokerTable {
                 const finalTo = Math.min(raiseTo, maxTo);
                 const raiseSize = finalTo - this.currentBet;
                 this.contribute(idx, finalTo - s.bet);
+                // Only a full raise reopens the betting for players who already acted.
                 if (raiseSize >= this.minRaise) {
                     this.minRaise = raiseSize;
-                    // reopen the action for everyone still in
                     for (const j of this.dealtSeats()) {
                         if (j !== idx && !this.seats[j]!.folded && !this.seats[j]!.allIn) this.seats[j]!.acted = false;
                     }
                 }
                 this.currentBet = Math.max(this.currentBet, finalTo);
-                s.acted = true;
                 s.lastAction = s.allIn ? "All-in" : this.currentBet === finalTo && raiseSize === finalTo ? "Bet" : "Raise";
                 break;
             }
@@ -210,12 +244,27 @@ export class PokerTable {
                 return "Unknown action";
         }
 
+        s.acted = true;
+        s.missed = 0; // a voluntary action clears any timeout penalty progress
         this.advanceAfterAction(idx);
         return null;
     }
 
+    /** Force the timed-out actor to check (if possible) or fold, with a penalty. */
+    timeoutCurrent(): void {
+        if (!this.handActive || this.toAct < 0) return;
+        const s = this.seats[this.toAct]!;
+        const canCheck = this.currentBet - s.bet <= 0;
+        const id = s.id;
+        s.missed += 1;
+        const willSitOut = s.missed >= SIT_OUT_AFTER_MISSES;
+        // act() resets missed to 0, so capture/apply the penalty afterwards
+        this.act(id, canCheck ? "check" : "fold");
+        const after = this.seats.find((x) => x?.id === id);
+        if (after) { after.missed = willSitOut ? after.missed : s.missed; if (willSitOut) after.away = true; }
+    }
+
     private advanceAfterAction(from: number): void {
-        // Last player standing wins immediately.
         const live = this.dealtSeats().filter((i) => !this.seats[i]!.folded);
         if (live.length === 1) return this.endUncontested(live[0]);
 
@@ -234,11 +283,8 @@ export class PokerTable {
         else if (this.phase === "turn") { this.phase = "river"; this.deal(1); }
         else { return this.showdown(); }
 
-        const first = this.nextActiveAfter(this.dealer); // SB seat (or next live)
-        if (first === -1 || this.countCanAct() < 2) {
-            // everyone's all-in (or only one can act) — run the board out
-            return this.advanceStreet();
-        }
+        const first = this.nextActiveAfter(this.dealer);
+        if (first === -1 || this.countCanAct() < 2) return this.advanceStreet();
         this.toAct = first;
     }
 
@@ -260,7 +306,7 @@ export class PokerTable {
         const pots = this.buildPots();
         const scores = new Map<number, HandScore>();
         for (const i of this.dealtSeats()) {
-            if (!this.seats[i]!.folded) scores.set(i, evaluate7([...this.community, ...this.seats[i]!.cards]));
+            if (this.seats[i]!.inHand && !this.seats[i]!.folded) scores.set(i, evaluate7([...this.community, ...this.seats[i]!.cards]));
         }
         const winnings = new Map<number, { amount: number; handName: string }>();
         for (const pot of pots) {
@@ -282,9 +328,8 @@ export class PokerTable {
         this.finishHand();
     }
 
-    /** Layered side pots from each player's total contribution this hand. */
     private buildPots(): { amount: number; eligible: number[] }[] {
-        let contribs = this.dealtSeats()
+        let contribs = this.occupied()
             .map((i) => ({ i, amt: this.seats[i]!.committed, folded: this.seats[i]!.folded }))
             .filter((c) => c.amt > 0);
         const pots: { amount: number; eligible: number[] }[] = [];
@@ -302,10 +347,14 @@ export class PokerTable {
     private finishHand(): void {
         this.handActive = false;
         this.toAct = -1;
+        this.deadlineTs = null;
         this.lastResultAt = Date.now();
-        for (const i of this.dealtSeats()) this.seats[i]!.committed = 0;
-        // players who busted out sit out until they rebuy / leave
-        for (const s of this.seats) if (s && s.stack <= 0) s.sittingOut = true;
+        for (const s of this.seats) {
+            if (!s) continue;
+            s.committed = 0;
+            s.inHand = false;
+            if (s.stack <= 0) s.away = true; // busted players sit out until they rebuy
+        }
     }
 
     /* ----------------------------------------------------------- navigation */
@@ -331,7 +380,7 @@ export class PokerTable {
         for (let k = 1; k <= MAX_SEATS; k++) {
             const idx = (from + k) % MAX_SEATS;
             const s = this.seats[idx];
-            if (s && !s.folded && !s.allIn && s.stack > 0 && !s.sittingOut) return idx;
+            if (s && s.inHand && !s.folded && !s.allIn && s.stack > 0) return idx;
         }
         return -1;
     }
@@ -340,14 +389,14 @@ export class PokerTable {
         for (let k = 1; k <= MAX_SEATS; k++) {
             const idx = (from + k) % MAX_SEATS;
             const s = this.seats[idx];
-            if (!s || s.folded || s.allIn || s.sittingOut) continue;
+            if (!s || !s.inHand || s.folded || s.allIn) continue;
             if (!s.acted || s.bet < this.currentBet) return idx;
         }
         return -1;
     }
 
     private countCanAct(): number {
-        return this.dealtSeats().filter((i) => !this.seats[i]!.folded && !this.seats[i]!.allIn).length;
+        return this.dealtSeats().filter((i) => this.seats[i]!.inHand && !this.seats[i]!.folded && !this.seats[i]!.allIn).length;
     }
 
     potTotal(): number {
