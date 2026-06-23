@@ -1,831 +1,486 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Target, RotateCcw, Coins, ChevronDown } from "lucide-react";
+import { RotateCcw, Undo2, Copy } from "lucide-react";
 import "../styles/Roulette.css";
 import Navbar from "./Navbar";
-import { useWallet } from "../contexts/WalletContext";
 import Footer from "./Footer";
+import { useWallet } from "../contexts/WalletContext";
 
-// European roulette wheel order
-const WHEEL_NUMBERS = [
+/* ───────────────────────── constants ───────────────────────── */
+const WHEEL = [
     0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5,
-    24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26
+    24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26,
 ];
+const RED = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
+const SEG = 360 / WHEEL.length;
 
-const RED_NUMBERS = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
-const BLACK_NUMBERS = [2, 4, 6, 8, 10, 11, 13, 15, 17, 20, 22, 24, 26, 28, 29, 31, 33, 35];
+const colorOf = (n: number): "red" | "black" | "green" => (n === 0 ? "green" : RED.has(n) ? "red" : "black");
+const range = (a: number, b: number) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
 
-const CHIP_OPTIONS = [10, 50, 100];
+const CHIPS = [10, 25, 50, 100, 500];
+const chipClass = (v: number) => (v >= 500 ? "c500" : v >= 100 ? "c100" : v >= 50 ? "c50" : v >= 25 ? "c25" : "c10");
 
 interface Bet {
-    type: string;
-    value: number | string | number[];
-    amount: number;
+    key: string;
+    label: string;
     numbers: number[];
+    mult: number;
+    amount: number;
+    pos?: { left: string; top: string };
+}
+type Orient = "h" | "v";
+
+/* generic inside-bet spot generator for either felt orientation */
+function makeSpots(orient: Orient): Omit<Bet, "amount">[] {
+    const COLS = orient === "h" ? 12 : 3;
+    const ROWS = orient === "h" ? 3 : 12;
+    const cellNum = orient === "h" ? (r: number, c: number) => c * 3 + (3 - r) : (r: number, c: number) => r * 3 + c + 1;
+    const x = (l: number) => `${(l / COLS) * 100}%`;
+    const y = (l: number) => `${(l / ROWS) * 100}%`;
+    const out: Omit<Bet, "amount">[] = [];
+    const add = (label: string, nums: number[], left: string, top: string) =>
+        out.push({ key: `i${[...nums].sort((a, b) => a - b).join("-")}`, label, numbers: nums, mult: 36 / nums.length, pos: { left, top } });
+
+    // splits between horizontally-adjacent cells (same row)
+    for (let c = 0; c < COLS - 1; c++) for (let r = 0; r < ROWS; r++) add("Split", [cellNum(r, c), cellNum(r, c + 1)], x(c + 1), y(r + 0.5));
+    // splits between vertically-adjacent cells (same column)
+    for (let c = 0; c < COLS; c++) for (let r = 0; r < ROWS - 1; r++) add("Split", [cellNum(r, c), cellNum(r + 1, c)], x(c + 0.5), y(r + 1));
+    for (let c = 0; c < COLS - 1; c++) for (let r = 0; r < ROWS - 1; r++) add("Corner", [cellNum(r, c), cellNum(r, c + 1), cellNum(r + 1, c), cellNum(r + 1, c + 1)], x(c + 1), y(r + 1));
+    for (let k = 0; k < 12; k++) {
+        const nums = [3 * k + 1, 3 * k + 2, 3 * k + 3];
+        if (orient === "h") add("Street", nums, x(k + 0.5), y(ROWS));
+        else add("Street", nums, x(COLS), y(k + 0.5));
+    }
+    for (let k = 0; k < 11; k++) {
+        const nums = [3 * k + 1, 3 * k + 2, 3 * k + 3, 3 * k + 4, 3 * k + 5, 3 * k + 6];
+        if (orient === "h") add("Six Line", nums, x(k + 1), y(ROWS));
+        else add("Six Line", nums, x(COLS), y(k + 1));
+    }
+    if (orient === "h") {
+        add("Split", [0, 1], x(0), y(2.5));
+        add("Split", [0, 2], x(0), y(1.5));
+        add("Split", [0, 3], x(0), y(0.5));
+        add("Basket", [0, 1, 2, 3], x(0), y(3));
+    } else {
+        add("Split", [0, 1], x(0.5), y(0));
+        add("Split", [0, 2], x(1.5), y(0));
+        add("Split", [0, 3], x(2.5), y(0));
+        add("Basket", [0, 1, 2, 3], x(0), y(0));
+    }
+    return out;
 }
 
-const getNumberColor = (num: number): "red" | "black" | "green" => {
-    if (num === 0) return "green";
-    return RED_NUMBERS.includes(num) ? "red" : "black";
-};
-
-export default function Roulette() {
-    const { wallet, recordBet, recordWin } = useWallet();
+/* ───────────────────────── component ───────────────────────── */
+export default function Roulette({ testMode = false }: { testMode?: boolean }) {
+    const w = useWallet();
+    const [testBal, setTestBal] = useState(5000);
+    const wallet = testMode ? testBal : w.wallet;
+    const recordBet = testMode ? async (a: number) => { setTestBal((b) => b - a); return true; } : w.recordBet;
+    const recordWin = testMode ? async (win: number) => { setTestBal((b) => b + win); return true; } : w.recordWin;
 
     const [bets, setBets] = useState<Bet[]>([]);
+    const [history, setHistory] = useState<Bet[][]>([]);
+    const [lastRound, setLastRound] = useState<Bet[]>([]);
+    const [chip, setChip] = useState(10);
     const [spinning, setSpinning] = useState(false);
     const [result, setResult] = useState<number | null>(null);
+    const [winningIndex, setWinningIndex] = useState<number | null>(null);
     const [showResult, setShowResult] = useState(false);
     const [winnings, setWinnings] = useState(0);
-    const [notification, setNotification] = useState("");
-    const [ballAngle, setBallAngle] = useState(0); // Ball starts at 0 (pointing to number 0)
-    const [ballPhase, setBallPhase] = useState<"idle" | "fast" | "slowing" | "pockets" | "drama" | "settled">("idle");
-    const [winningSegmentIndex, setWinningSegmentIndex] = useState<number | null>(null);
-    const [chipValue, setChipValue] = useState(10);
-    const [showChipSelector, setShowChipSelector] = useState(false);
-    const [longPressTimer, setLongPressTimer] = useState<NodeJS.Timeout | null>(null);
-    const [ballScale, setBallScale] = useState(1);
-    const [ballOffset, setBallOffset] = useState({ x: 0, y: 0 });
-    const [hoveredBet, setHoveredBet] = useState<string | null>(null);
+    const [recent, setRecent] = useState<number[]>([]);
+    const [toast, setToast] = useState("");
+    const [hover, setHover] = useState<number[] | null>(null);
 
-    const rouletteSound = useRef<HTMLAudioElement | null>(null);
+    const wheelRef = useRef<SVGSVGElement>(null);
+    const ballRef = useRef<HTMLDivElement>(null);
+    const wheelAngle = useRef(0);
+    const ballAngle = useRef(0);
+    const raf = useRef<number | null>(null);
+    const spinSound = useRef<HTMLAudioElement | null>(null);
     const winSound = useRef<HTMLAudioElement | null>(null);
-    const tableRef = useRef<HTMLDivElement>(null);
-    const hasAddedWinnings = useRef(false);
-    const ballAnimationRef = useRef<number | null>(null);
-    const lastBallAngleRef = useRef(0); // Stores final angle for next round
+    const audioCtx = useRef<AudioContext | null>(null);
 
     useEffect(() => {
-        rouletteSound.current = new Audio("/sounds/roulette.mp3");
-        winSound.current = new Audio("/sounds/win.mp3");
+        spinSound.current = new Audio("/sounds/roulette.mp3");
+        winSound.current = new Audio("/sounds/win_wheel.mp3");
+        return () => { if (raf.current) cancelAnimationFrame(raf.current); };
     }, []);
 
-    const showNotification = (message: string) => {
-        setNotification(message);
-        setTimeout(() => setNotification(""), 3000);
-    };
+    const spotsH = useMemo(() => makeSpots("h"), []);
+    const spotsV = useMemo(() => makeSpots("v"), []);
 
-    const totalBet = bets.reduce((sum, bet) => sum + bet.amount, 0);
-
-    const addBet = (type: string, value: number | string | number[], numbers: number[]) => {
-        if (spinning) return;
-
-        const betKey = `${type}-${JSON.stringify(value)}`;
-        const existingBetIndex = bets.findIndex(
-            (bet) => `${bet.type}-${JSON.stringify(bet.value)}` === betKey
-        );
-
-        if (existingBetIndex >= 0) {
-            const newBets = [...bets];
-            newBets[existingBetIndex].amount += chipValue;
-            setBets(newBets);
-        } else {
-            setBets([...bets, { type, value, amount: chipValue, numbers }]);
-        }
-    };
-
-    const removeBet = (type: string, value: number | string | number[]) => {
-        if (spinning) return;
-
-        const betKey = `${type}-${JSON.stringify(value)}`;
-        const existingBetIndex = bets.findIndex(
-            (bet) => `${bet.type}-${JSON.stringify(bet.value)}` === betKey
-        );
-
-        if (existingBetIndex >= 0) {
-            const newBets = [...bets];
-            if (newBets[existingBetIndex].amount <= chipValue) {
-                newBets.splice(existingBetIndex, 1);
-            } else {
-                newBets[existingBetIndex].amount -= chipValue;
-            }
-            setBets(newBets);
-        }
-    };
-
-    const getBetAmount = (type: string, value: number | string | number[]): number => {
-        const betKey = `${type}-${JSON.stringify(value)}`;
-        const bet = bets.find((b) => `${b.type}-${JSON.stringify(b.value)}` === betKey);
-        return bet ? bet.amount : 0;
-    };
-
-    const clearBets = () => {
-        if (spinning) return;
-        setBets([]);
-    };
-
-    const handleTouchStart = (type: string, value: number | string | number[], numbers: number[]) => {
-        const timer = setTimeout(() => {
-            removeBet(type, value);
-        }, 500);
-        setLongPressTimer(timer);
-    };
-
-    const handleTouchEnd = () => {
-        if (longPressTimer) {
-            clearTimeout(longPressTimer);
-            setLongPressTimer(null);
-        }
-    };
-
-    // Check if number is highlighted by current hover
-    const isNumberHighlighted = (num: number): boolean => {
-        if (!hoveredBet) return false;
-
-        switch (hoveredBet) {
-            case "column1": return num !== 0 && num % 3 === 1;
-            case "column2": return num !== 0 && num % 3 === 2;
-            case "column3": return num !== 0 && num % 3 === 0;
-            case "dozen1": return num >= 1 && num <= 12;
-            case "dozen2": return num >= 13 && num <= 24;
-            case "dozen3": return num >= 25 && num <= 36;
-            case "low": return num >= 1 && num <= 18;
-            case "high": return num >= 19 && num <= 36;
-            case "red": return RED_NUMBERS.includes(num);
-            case "black": return BLACK_NUMBERS.includes(num);
-            case "odd": return num !== 0 && num % 2 === 1;
-            case "even": return num !== 0 && num % 2 === 0;
-            default: return false;
-        }
-    };
-
-    const calculateWinnings = (resultNum: number): { total: number; winningBets: string[] } => {
-        let total = 0;
-        const winningBets: string[] = [];
-        const color = getNumberColor(resultNum);
-
-        for (const bet of bets) {
-            let payout = 0;
-            let won = false;
-
-            switch (bet.type) {
-                case "straight":
-                    if (bet.numbers.includes(resultNum)) {
-                        payout = bet.amount * 36;
-                        won = true;
-                    }
-                    break;
-                case "split":
-                    if (bet.numbers.includes(resultNum)) {
-                        payout = bet.amount * 18;
-                        won = true;
-                    }
-                    break;
-                case "street":
-                    if (bet.numbers.includes(resultNum)) {
-                        payout = bet.amount * 12;
-                        won = true;
-                    }
-                    break;
-                case "corner":
-                    if (bet.numbers.includes(resultNum)) {
-                        payout = bet.amount * 9;
-                        won = true;
-                    }
-                    break;
-                case "sixline":
-                    if (bet.numbers.includes(resultNum)) {
-                        payout = bet.amount * 6;
-                        won = true;
-                    }
-                    break;
-                case "red":
-                    if (color === "red") {
-                        payout = bet.amount * 2;
-                        won = true;
-                    }
-                    break;
-                case "black":
-                    if (color === "black") {
-                        payout = bet.amount * 2;
-                        won = true;
-                    }
-                    break;
-                case "odd":
-                    if (resultNum !== 0 && resultNum % 2 === 1) {
-                        payout = bet.amount * 2;
-                        won = true;
-                    }
-                    break;
-                case "even":
-                    if (resultNum !== 0 && resultNum % 2 === 0) {
-                        payout = bet.amount * 2;
-                        won = true;
-                    }
-                    break;
-                case "low":
-                    if (resultNum >= 1 && resultNum <= 18) {
-                        payout = bet.amount * 2;
-                        won = true;
-                    }
-                    break;
-                case "high":
-                    if (resultNum >= 19 && resultNum <= 36) {
-                        payout = bet.amount * 2;
-                        won = true;
-                    }
-                    break;
-                case "dozen1":
-                    if (resultNum >= 1 && resultNum <= 12) {
-                        payout = bet.amount * 3;
-                        won = true;
-                    }
-                    break;
-                case "dozen2":
-                    if (resultNum >= 13 && resultNum <= 24) {
-                        payout = bet.amount * 3;
-                        won = true;
-                    }
-                    break;
-                case "dozen3":
-                    if (resultNum >= 25 && resultNum <= 36) {
-                        payout = bet.amount * 3;
-                        won = true;
-                    }
-                    break;
-                case "column1":
-                    if (resultNum !== 0 && resultNum % 3 === 1) {
-                        payout = bet.amount * 3;
-                        won = true;
-                    }
-                    break;
-                case "column2":
-                    if (resultNum !== 0 && resultNum % 3 === 2) {
-                        payout = bet.amount * 3;
-                        won = true;
-                    }
-                    break;
-                case "column3":
-                    if (resultNum !== 0 && resultNum % 3 === 0) {
-                        payout = bet.amount * 3;
-                        won = true;
-                    }
-                    break;
-            }
-
-            if (won) {
-                winningBets.push(`${bet.type}-${JSON.stringify(bet.value)}`);
-            }
-            total += payout;
-        }
-
-        return { total, winningBets };
-    };
-
-    // ========== CONTINUOUS BALL ANIMATION (RAF-based) ==========
-    const startBallAnimation = useCallback((targetIndex: number) => {
-        const segmentAngle = 360 / WHEEL_NUMBERS.length;
-
-        // The wheel is static. Segment 0 (number 0) is at the top.
-        // Ball track rotation of 0 = ball at top = aligned with segment 0
-        // To land on segment at targetIndex, ball needs to rotate to that segment's center
-        const targetPosition = targetIndex * segmentAngle + segmentAngle / 2;
-
-        // Start from where we left off
-        const startAngle = lastBallAngleRef.current;
-
-        // Normalize start angle to 0-360 range
-        const normalizedStart = ((startAngle % 360) + 360) % 360;
-
-        // We want to spin counter-clockwise (which is negative rotation in CSS)
-        // But for calculation, let's think in positive angles going clockwise
-        // The ball needs to travel: 8 full rotations + distance to target
-        const fullRotations = 8 * 360;
-
-        // Calculate how far we need to go from normalized start to target
-        let distanceToTarget = targetPosition - normalizedStart;
-        if (distanceToTarget < 0) {
-            distanceToTarget += 360; // Wrap around
-        }
-
-        // Total travel (positive = clockwise in our mental model)
-        const totalTravel = fullRotations + distanceToTarget;
-
-        // Final angle (we go positive direction from start)
-        const finalAngle = startAngle + totalTravel;
-
-        const startTime = performance.now();
-        const duration = 9000;
-
-        // Single smooth easing curve - cubic bezier approximation
-        // Fast start, very gradual slowdown, no speed jumps
-        const smoothEase = (t: number): number => {
-            // Custom curve: fast initial, smooth deceleration
-            // Approximates cubic-bezier(0.25, 0.1, 0.25, 1.0) but with more initial speed
-            const p = 1 - t;
-            return 1 - (p * p * p * p); // Quartic ease out
+    const outside = useMemo(() => {
+        const evens = range(1, 36).filter((n) => n % 2 === 0);
+        const odds = range(1, 36).filter((n) => n % 2 === 1);
+        const columns = {
+            c1: { key: "c1", label: "2:1", numbers: range(1, 36).filter((n) => n % 3 === 1), mult: 3 },
+            c2: { key: "c2", label: "2:1", numbers: range(1, 36).filter((n) => n % 3 === 2), mult: 3 },
+            c3: { key: "c3", label: "2:1", numbers: range(1, 36).filter((n) => n % 3 === 0), mult: 3 },
         };
+        return {
+            columns,
+            dozens: [
+                { key: "d1", label: "1st 12", numbers: range(1, 12), mult: 3 },
+                { key: "d2", label: "2nd 12", numbers: range(13, 24), mult: 3 },
+                { key: "d3", label: "3rd 12", numbers: range(25, 36), mult: 3 },
+            ],
+            evenMoney: [
+                { key: "low", label: "1–18", numbers: range(1, 18), mult: 2, cls: "" },
+                { key: "even", label: "EVEN", numbers: evens, mult: 2, cls: "" },
+                { key: "red", label: "RED", numbers: [...RED], mult: 2, cls: "rl-red" },
+                { key: "black", label: "BLACK", numbers: range(1, 36).filter((n) => !RED.has(n)), mult: 2, cls: "rl-black" },
+                { key: "odd", label: "ODD", numbers: odds, mult: 2, cls: "" },
+                { key: "high", label: "19–36", numbers: range(19, 36), mult: 2, cls: "" },
+            ],
+        };
+    }, []);
 
-        const animate = (time: number) => {
-            const elapsed = time - startTime;
-            const t = Math.min(elapsed / duration, 1);
+    const totalBet = bets.reduce((s, b) => s + b.amount, 0);
+    const notify = (m: string) => { setToast(m); setTimeout(() => setToast(""), 2600); };
 
-            // Apply smooth easing
-            const eased = smoothEase(t);
-            const currentAngle = startAngle + (finalAngle - startAngle) * eased;
-            setBallAngle(currentAngle);
+    const chipClick = () => {
+        try {
+            if (typeof window === "undefined") return;
+            const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+            audioCtx.current = audioCtx.current || new AC();
+            const c = audioCtx.current;
+            const o = c.createOscillator();
+            const g = c.createGain();
+            o.type = "square";
+            o.frequency.value = 320;
+            g.gain.value = 0.03;
+            o.connect(g);
+            g.connect(c.destination);
+            const t = c.currentTime;
+            g.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+            o.start(t);
+            o.stop(t + 0.05);
+        } catch { /* ignore */ }
+    };
 
-            // Phase styling (for visual effects only, doesn't affect speed)
-            if (t < 0.375) {
-                setBallPhase("fast");
-                setBallScale(1 + Math.sin(elapsed * 0.012) * 0.01);
-                setBallOffset({ x: 0, y: 0 });
-            } else if (t < 0.625) {
-                setBallPhase("slowing");
-                setBallScale(1);
-                setBallOffset({ x: 0, y: 0 });
-            } else if (t < 0.875) {
-                setBallPhase("pockets");
-                // Very subtle offset, reduced randomness
-                const jitter = Math.sin(elapsed * 0.05) * 0.5;
-                setBallOffset({ x: jitter, y: 0.5 });
-                setBallScale(0.98);
-            } else if (t < 0.97) {
-                setBallPhase("drama");
-                setBallOffset({ x: 0, y: 0.3 });
-                setBallScale(0.97);
-            } else {
-                setBallPhase("settled");
-                setBallOffset({ x: 0, y: 0 });
-                setBallScale(0.97);
-            }
-
-            if (t >= 1) {
-                // Final position - store for next round
-                setBallAngle(finalAngle);
-                lastBallAngleRef.current = finalAngle;
-                setBallPhase("settled");
-                setBallScale(0.97);
-                setBallOffset({ x: 0, y: 0 });
-
-                if (ballAnimationRef.current) {
-                    cancelAnimationFrame(ballAnimationRef.current);
+    const place = useCallback(
+        (b: Omit<Bet, "amount">) => {
+            if (spinning || showResult) return;
+            chipClick();
+            setHistory((h) => [...h, bets]);
+            setBets((prev) => {
+                const i = prev.findIndex((x) => x.key === b.key);
+                if (i >= 0) {
+                    const next = [...prev];
+                    next[i] = { ...next[i], amount: next[i].amount + chip };
+                    return next;
                 }
-                return;
-            }
+                return [...prev, { ...b, amount: chip }];
+            });
+        },
+        [spinning, showResult, bets, chip],
+    );
+    const removeKey = (key: string) => {
+        if (spinning || showResult) return;
+        setHistory((h) => [...h, bets]);
+        setBets((prev) => {
+            const i = prev.findIndex((x) => x.key === key);
+            if (i < 0) return prev;
+            const next = [...prev];
+            if (next[i].amount <= chip) next.splice(i, 1);
+            else next[i] = { ...next[i], amount: next[i].amount - chip };
+            return next;
+        });
+    };
+    const undo = () => { if (spinning || !history.length) return; setBets(history[history.length - 1]); setHistory((h) => h.slice(0, -1)); };
+    const clear = () => { if (spinning || !bets.length) return; setHistory((h) => [...h, bets]); setBets([]); };
+    const double = () => { if (spinning || !bets.length) return; if (totalBet * 2 > wallet) return notify("Not enough balance to double"); setHistory((h) => [...h, bets]); setBets((prev) => prev.map((b) => ({ ...b, amount: b.amount * 2 }))); };
+    const rebet = () => { if (spinning || !lastRound.length) return; const t = lastRound.reduce((s, b) => s + b.amount, 0); if (t > wallet) return notify("Not enough balance to rebet"); setBets(lastRound); };
+    const betOn = (key: string) => bets.find((b) => b.key === key);
 
-            ballAnimationRef.current = requestAnimationFrame(animate);
+    /* ---------- spin physics ----------
+       The wheel settles at a RANDOM orientation and the ball comes to rest in
+       the winning pocket wherever that happens to be on screen (like a real
+       roulette wheel — no fixed top pointer). The result is still a fair uniform
+       draw; only its on-screen position is random. */
+    const runSpin = (resultIndex: number) => {
+        const wheelEl = wheelRef.current!;
+        const ballEl = ballRef.current!;
+        const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        const duration = reduce ? 1500 : 10000;
+
+        const wheelStart = wheelAngle.current;
+        // 4 turns + a random final orientation → winning pocket can rest anywhere
+        const wheelEnd = wheelStart + 360 * 4 + Math.random() * 360;
+        const wheelEndMod = ((wheelEnd % 360) + 360) % 360;
+        // screen angle (0 = top, clockwise) where the winning pocket comes to rest
+        const pocketScreenAngle = (((resultIndex * SEG + SEG / 2 + wheelEndMod) % 360) + 360) % 360;
+
+        // ball counter-rotates ~6 turns and lands exactly in that pocket
+        const ballStart = ballAngle.current;
+        const base = ballStart - 360 * 6;
+        const ballEnd = base - ((((base - pocketScreenAngle) % 360) + 360) % 360);
+
+        const rOuter = 45, rPocket = 37.5;
+        const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
+        const t0 = performance.now();
+
+        const frame = (now: number) => {
+            const t = Math.min((now - t0) / duration, 1);
+            const e = easeOut(t);
+            wheelEl.style.transform = `rotate(${wheelStart + (wheelEnd - wheelStart) * e}deg)`;
+            const ba = ballStart + (ballEnd - ballStart) * e;
+            // ball rides the outer rim, then spirals into the pocket over the last 45%
+            const drop = t < 0.55 ? 0 : Math.min(1, (t - 0.55) / 0.45);
+            const bounce = drop > 0.9 ? Math.sin((drop - 0.9) * 28) * (1 - drop) * 2.4 : 0;
+            const r = rOuter - (rOuter - rPocket) * drop + bounce;
+            const rad = (ba * Math.PI) / 180;
+            ballEl.style.left = `${50 + r * Math.sin(rad)}%`;
+            ballEl.style.top = `${50 - r * Math.cos(rad)}%`;
+            if (t < 1) raf.current = requestAnimationFrame(frame);
+            else { wheelAngle.current = wheelEnd; ballAngle.current = ballEnd; settle(resultIndex); }
         };
+        raf.current = requestAnimationFrame(frame);
+    };
 
-        ballAnimationRef.current = requestAnimationFrame(animate);
-    }, []);
+    const settle = (resultIndex: number) => {
+        const num = WHEEL[resultIndex];
+        if (spinSound.current) spinSound.current.pause();
+        setResult(num);
+        setWinningIndex(resultIndex);
+        setShowResult(true);
+        setSpinning(false);
+        setRecent((r) => [num, ...r].slice(0, 14));
+        let won = 0;
+        for (const b of bets) if (b.numbers.includes(num)) won += b.amount * b.mult;
+        setWinnings(won);
+        if (won > 0) {
+            recordWin(won, totalBet, "ROULETTE");
+            winSound.current?.play().catch(() => {});
+            notify(`🎉 ${num} ${colorOf(num).toUpperCase()} · You won ₹${won.toFixed(2)}!`);
+        } else notify(`${num} ${colorOf(num).toUpperCase()} · No win this time`);
+    };
 
     const spin = async () => {
-        if (spinning || bets.length === 0) {
-            if (bets.length === 0) showNotification("Place at least one bet!");
-            return;
-        }
-
-        if (totalBet > wallet) {
-            showNotification("Insufficient balance!");
-            return;
-        }
-
-        const success = await recordBet(totalBet, "ROULETTE");
-        if (!success) {
-            showNotification("Failed to place bets");
-            return;
-        }
-
-        hasAddedWinnings.current = false;
+        if (spinning) return;
+        if (!bets.length) return notify("Place at least one bet");
+        if (totalBet > wallet) return notify("Insufficient balance");
+        const ok = await recordBet(totalBet, "ROULETTE");
+        if (!ok) return notify("Couldn't place bets — are you signed in?");
+        setLastRound(bets);
+        setHistory([]);
+        setShowResult(false);
+        setResult(null);
+        setWinningIndex(null);
+        setWinnings(0);
         setSpinning(true);
-        setShowResult(false);
-        setResult(null);
-        setWinnings(0);
-        setWinningSegmentIndex(null);
-        setBallScale(1);
-        setBallOffset({ x: 0, y: 0 });
-        setBallPhase("fast");
+        if (spinSound.current) { spinSound.current.currentTime = 0; spinSound.current.play().catch(() => {}); }
+        runSpin(Math.floor(Math.random() * WHEEL.length));
+    };
+    const newRound = () => { setShowResult(false); setResult(null); setWinningIndex(null); setWinnings(0); setBets([]); };
+    const highlighted = (n: number) => hover?.includes(n) ?? false;
 
-        // Play roulette sound
-        if (rouletteSound.current) {
-            rouletteSound.current.currentTime = 0;
-            rouletteSound.current.play().catch(() => { });
-        }
-
-        // Calculate result
-        const resultIndex = Math.floor(Math.random() * WHEEL_NUMBERS.length);
-        const resultNum = WHEEL_NUMBERS[resultIndex];
-
-        // Start continuous ball animation
-        startBallAnimation(resultIndex);
-
-        // Reveal result at 9s (matches sound duration)
-        setTimeout(() => {
-            // Stop roulette sound
-            if (rouletteSound.current) {
-                rouletteSound.current.pause();
-            }
-
-            setResult(resultNum);
-            setWinningSegmentIndex(resultIndex);
-            setShowResult(true);
-            setSpinning(false);
-
-            const { total: won } = calculateWinnings(resultNum);
-            setWinnings(won);
-
-            if (!hasAddedWinnings.current && won > 0) {
-                hasAddedWinnings.current = true;
-                recordWin(won, totalBet, "ROULETTE");
-                if (winSound.current) {
-                    winSound.current.currentTime = 0;
-                    winSound.current.play().catch(() => { });
-                }
-                showNotification(`🎉 You won ₹${won.toFixed(2)}!`);
-            } else if (won === 0) {
-                showNotification(`Result: ${resultNum}. Better luck next time!`);
-            }
-        }, 9000);
+    /* ---------- felt renderer (shared by both orientations) ---------- */
+    const renderFelt = (orient: Orient, spots: Omit<Bet, "amount">[]) => {
+        const cols = orient === "h" ? 12 : 3;
+        const rows = orient === "h" ? 3 : 12;
+        const cellNum = orient === "h" ? (r: number, c: number) => c * 3 + (3 - r) : (r: number, c: number) => r * 3 + c + 1;
+        const colOrder = orient === "h" ? [outside.columns.c3, outside.columns.c2, outside.columns.c1] : [outside.columns.c1, outside.columns.c2, outside.columns.c3];
+        return (
+            <div className={`rl-felt rl-felt--${orient}`}>
+                <div className="rl-felt-main">
+                    <button className={`rl-zero ${betOn("z0") ? "bet" : ""} ${highlighted(0) ? "hl" : ""}`} onClick={() => place({ key: "z0", label: "Straight", numbers: [0], mult: 36 })} onContextMenu={(e) => { e.preventDefault(); removeKey("z0"); }} onMouseEnter={() => setHover([0])} onMouseLeave={() => setHover(null)}>
+                        0
+                        {betOn("z0") && <Chip amount={betOn("z0")!.amount} />}
+                    </button>
+                    <div className="rl-grid-wrap">
+                        <div className="rl-numbers">
+                            {Array.from({ length: rows }).flatMap((_, r) =>
+                                Array.from({ length: cols }).map((_, c) => {
+                                    const n = cellNum(r, c);
+                                    const key = `n${n}`;
+                                    return (
+                                        <button key={n} className={`rl-num ${colorOf(n)} ${betOn(key) ? "bet" : ""} ${highlighted(n) ? "hl" : ""}`} onClick={() => place({ key, label: "Straight", numbers: [n], mult: 36 })} onContextMenu={(e) => { e.preventDefault(); removeKey(key); }} onMouseEnter={() => setHover([n])} onMouseLeave={() => setHover(null)}>
+                                            {n}
+                                            {betOn(key) && <Chip amount={betOn(key)!.amount} />}
+                                        </button>
+                                    );
+                                }),
+                            )}
+                        </div>
+                        <div className="rl-spots">
+                            {spots.map((s) => {
+                                const b = betOn(s.key);
+                                return (
+                                    <button key={`${orient}-${s.key}`} className={`rl-spot ${b ? "bet" : ""}`} style={{ left: s.pos!.left, top: s.pos!.top }} title={`${s.label} (${s.numbers.join(", ")})`} onClick={() => place(s)} onContextMenu={(e) => { e.preventDefault(); removeKey(s.key); }} onMouseEnter={() => setHover(s.numbers)} onMouseLeave={() => setHover(null)}>
+                                        {b && <Chip amount={b.amount} small />}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                    <div className="rl-cols">
+                        {colOrder.map((c) => (
+                            <button key={c.key} className={`rl-col ${betOn(c.key) ? "bet" : ""}`} onClick={() => place(c)} onContextMenu={(e) => { e.preventDefault(); removeKey(c.key); }} onMouseEnter={() => setHover(c.numbers)} onMouseLeave={() => setHover(null)}>
+                                {c.label}
+                                {betOn(c.key) && <Chip amount={betOn(c.key)!.amount} small />}
+                            </button>
+                        ))}
+                    </div>
+                    <div className="rl-dozens">
+                        {outside.dozens.map((d) => (
+                            <button key={d.key} className={`rl-dozen ${betOn(d.key) ? "bet" : ""}`} onClick={() => place(d)} onContextMenu={(e) => { e.preventDefault(); removeKey(d.key); }} onMouseEnter={() => setHover(d.numbers)} onMouseLeave={() => setHover(null)}>
+                                {d.label}
+                                {betOn(d.key) && <Chip amount={betOn(d.key)!.amount} small />}
+                            </button>
+                        ))}
+                    </div>
+                    <div className="rl-outside">
+                        {outside.evenMoney.map((o) => (
+                            <button key={o.key} className={`rl-ev ${o.cls} ${betOn(o.key) ? "bet" : ""}`} onClick={() => place(o)} onContextMenu={(e) => { e.preventDefault(); removeKey(o.key); }} onMouseEnter={() => setHover(o.numbers)} onMouseLeave={() => setHover(null)}>
+                                {o.cls === "rl-red" ? <span className="rl-diamond" /> : o.cls === "rl-black" ? <span className="rl-diamond dark" /> : o.label}
+                                {betOn(o.key) && <Chip amount={betOn(o.key)!.amount} small />}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        );
     };
 
-    const playAgain = () => {
-        setShowResult(false);
-        setResult(null);
-        setWinnings(0);
-        setWinningSegmentIndex(null);
-        setBallPhase("idle");
-        // Ball stays at last position (lastBallAngleRef.current)
-        // No reset of ballAngle - it continues from where it stopped
-        setBallScale(1);
-        setBallOffset({ x: 0, y: 0 });
-    };
-
+    /* ───────────────────────── render ───────────────────────── */
     return (
         <>
             <Navbar />
-
-            <div className="app-wrapper-roulette">
+            <div className="rl-page">
+                {testMode && <div className="rl-testbadge">TEST MODE · NO BACKEND · FREE ₹5000 · SPIN FREELY</div>}
                 <AnimatePresence>
-                    {notification && (
-                        <motion.div
-                            className="toast-notification"
-                            initial={{ opacity: 0, y: -20, x: "-50%" }}
-                            animate={{ opacity: 1, y: 0, x: "-50%" }}
-                            exit={{ opacity: 0, y: -20, x: "-50%" }}
-                        >
-                            {notification}
+                    {toast && (
+                        <motion.div className="rl-toast" initial={{ opacity: 0, y: -16, x: "-50%" }} animate={{ opacity: 1, y: 0, x: "-50%" }} exit={{ opacity: 0, y: -16, x: "-50%" }}>
+                            {toast}
                         </motion.div>
                     )}
                 </AnimatePresence>
 
-                <div className="roulette-main-layout">
-                    {/* Wheel Section */}
-                    <div className="roulette-wheel-section">
-                        <div className="wheel-container">
-                            <div className="wheel-outer">
-                                {/* Wheel Shadow */}
-                                <div className="wheel-shadow"></div>
+                <div className="rl-head">
+                    <div className="rl-eyebrow"><span className="rl-dot" /> EUROPEAN ROULETTE · SINGLE ZERO</div>
+                    <h1 className="rl-title">ROULETTE</h1>
+                </div>
 
-                                {/* Static Wheel (no idle rotation) */}
-                                <svg
-                                    className="roulette-wheel"
-                                    viewBox="0 0 400 400"
-                                >
-                                    {/* Outer gold ring */}
-                                    <circle cx="200" cy="200" r="195" fill="none" stroke="url(#goldRingGradient)" strokeWidth="6" />
+                <div className="rl-stat-row">
+                    <div className="rl-stat"><span>Balance</span><b>₹{wallet.toFixed(2)}</b></div>
+                    <div className="rl-stat"><span>Total Bet</span><b>₹{totalBet}</b></div>
+                    <div className="rl-stat"><span>Last Win</span><b className={winnings > 0 ? "win" : ""}>₹{winnings.toFixed(2)}</b></div>
+                </div>
 
-                                    {/* Define gradients */}
-                                    <defs>
-                                        <linearGradient id="goldRingGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                                            <stop offset="0%" stopColor="#ffd700" />
-                                            <stop offset="50%" stopColor="#b8860b" />
-                                            <stop offset="100%" stopColor="#ffd700" />
-                                        </linearGradient>
-                                    </defs>
+                {recent.length > 0 && (
+                    <div className="rl-recent">
+                        {recent.map((n, i) => <span key={i} className={`rl-recent__n ${colorOf(n)}`}>{n}</span>)}
+                    </div>
+                )}
 
-                                    {/* Wheel segments with 3D pockets and metal dividers */}
-                                    {WHEEL_NUMBERS.map((num, i) => {
-                                        const angle = (i * 360) / WHEEL_NUMBERS.length;
-                                        const segmentAngle = 360 / WHEEL_NUMBERS.length;
-                                        const color = getNumberColor(num);
-                                        const midAngle = angle + segmentAngle / 2;
-                                        const textRadius = 155;
-                                        // Round to avoid SSR hydration mismatch
-                                        const textX = Math.round((200 + textRadius * Math.cos(((midAngle - 90) * Math.PI) / 180)) * 100) / 100;
-                                        const textY = Math.round((200 + textRadius * Math.sin(((midAngle - 90) * Math.PI) / 180)) * 100) / 100;
-                                        const roundedMidAngle = Math.round(midAngle * 100) / 100;
-                                        const isWinning = winningSegmentIndex === i && showResult;
-
-                                        const segmentColor = color === "red" ? "#dc2626" : color === "black" ? "#1a1a1a" : "#16a34a";
-                                        const segmentDark = color === "red" ? "#991b1b" : color === "black" ? "#0a0a0a" : "#15803d";
-
-                                        return (
-                                            <g key={num}>
-                                                {/* Main pocket */}
-                                                <path
-                                                    d={describeArc(200, 200, 175, angle, angle + segmentAngle)}
-                                                    fill={segmentColor}
-                                                    stroke="#ffd700"
-                                                    strokeWidth="1.5"
-                                                    className={isWinning ? "winning-segment" : ""}
-                                                />
-                                                {/* Inner depth shadow */}
-                                                <path
-                                                    d={describeArc(200, 200, 165, angle + 0.5, angle + segmentAngle - 0.5)}
-                                                    fill={segmentDark}
-                                                    opacity="0.6"
-                                                />
-                                                {/* Metal divider (raised ridge) */}
-                                                <path
-                                                    d={describeDivider(200, 200, 178, angle)}
-                                                    stroke="rgba(0,0,0,0.35)"
-                                                    strokeWidth="1.5"
-                                                    fill="none"
-                                                />
-                                                {/* Gold highlight on divider */}
-                                                <path
-                                                    d={describeDivider(200, 200, 176, angle)}
-                                                    stroke="rgba(255,215,0,0.4)"
-                                                    strokeWidth="0.5"
-                                                    fill="none"
-                                                />
-                                                {/* Number */}
-                                                <text
-                                                    x={textX}
-                                                    y={textY}
-                                                    fill="white"
-                                                    fontSize="11"
-                                                    fontWeight="bold"
-                                                    textAnchor="middle"
-                                                    dominantBaseline="middle"
-                                                    transform={`rotate(${roundedMidAngle}, ${textX}, ${textY})`}
-                                                    style={{ textShadow: "0 1px 2px rgba(0,0,0,0.8)" }}
-                                                >
-                                                    {num}
-                                                </text>
-                                            </g>
-                                        );
-                                    })}
-
-                                    {/* Inner decorative rings */}
-                                    <circle cx="200" cy="200" r="120" fill="#0f253d" stroke="#ffd700" strokeWidth="2" />
-                                    <circle cx="200" cy="200" r="100" fill="#1a3a5c" stroke="rgba(255,215,0,0.3)" strokeWidth="1" />
-                                    <circle cx="200" cy="200" r="60" fill="#0f253d" stroke="#ffd700" strokeWidth="2" />
-                                    <circle cx="200" cy="200" r="40" fill="#1a3a5c" />
-
-                                    {/* Center logo */}
-                                    <text x="200" y="195" fill="#ffd700" fontSize="10" textAnchor="middle" opacity="0.6">ALL OR</text>
-                                    <text x="200" y="210" fill="#ffd700" fontSize="10" textAnchor="middle" opacity="0.6">NOTHING</text>
-                                </svg>
-
-                                {/* Ball Track and Ball */}
-                                <div
-                                    className={`ball-track ${ballPhase}`}
-                                    style={{
-                                        transform: `rotate(${ballAngle}deg)`,
-                                    }}
-                                >
-                                    <div
-                                        className={`roulette-ball ${ballPhase}`}
-                                        style={{
-                                            transform: `translateX(-50%) scale(${ballScale}) translate(${ballOffset.x}px, ${ballOffset.y}px)`,
-                                        }}
-                                    >
-                                        <div className="ball-shine"></div>
-                                        <div className="ball-shadow"></div>
-                                    </div>
-                                </div>
-                            </div>
+                <div className="rl-stage">
+                    {/* WHEEL */}
+                    <div className="rl-wheelwrap">
+                        <div className="rl-wheel">
+                            <svg viewBox="0 0 400 400" className="rl-wheel-svg" ref={wheelRef}>
+                                <defs>
+                                    <radialGradient id="rlHub" cx="50%" cy="45%" r="60%">
+                                        <stop offset="0%" stopColor="#1d3a59" />
+                                        <stop offset="100%" stopColor="#0c1e30" />
+                                    </radialGradient>
+                                    <linearGradient id="rlGold" x1="0" y1="0" x2="1" y2="1">
+                                        <stop offset="0%" stopColor="#ffe79a" />
+                                        <stop offset="50%" stopColor="#c8901f" />
+                                        <stop offset="100%" stopColor="#ffd877" />
+                                    </linearGradient>
+                                </defs>
+                                <circle cx="200" cy="200" r="198" fill="#0a0a0a" stroke="url(#rlGold)" strokeWidth="5" />
+                                {WHEEL.map((num, i) => {
+                                    const a = i * SEG;
+                                    const mid = a + SEG / 2;
+                                    const fill = num === 0 ? "#16a34a" : RED.has(num) ? "#c8102e" : "#141414";
+                                    const tr = 168;
+                                    const tx = Math.round((200 + tr * Math.cos(((mid - 90) * Math.PI) / 180)) * 100) / 100;
+                                    const ty = Math.round((200 + tr * Math.sin(((mid - 90) * Math.PI) / 180)) * 100) / 100;
+                                    const win = winningIndex === i && showResult;
+                                    return (
+                                        <g key={num}>
+                                            <path d={arc(200, 200, 190, a, a + SEG)} fill={fill} stroke="#d4af37" strokeWidth="0.6" className={win ? "rl-win-seg" : ""} />
+                                            <text x={tx} y={ty} fill="#fff" fontSize="13" fontWeight="700" textAnchor="middle" dominantBaseline="middle" transform={`rotate(${Math.round(mid * 100) / 100}, ${tx}, ${ty})`} style={{ textShadow: "0 1px 2px #000" }}>{num}</text>
+                                        </g>
+                                    );
+                                })}
+                                <circle cx="200" cy="200" r="120" fill="url(#rlHub)" stroke="url(#rlGold)" strokeWidth="3" />
+                                <circle cx="200" cy="200" r="64" fill="#0c1e30" stroke="url(#rlGold)" strokeWidth="2" />
+                                {[0, 60, 120, 180, 240, 300].map((d) => {
+                                    const sx = Math.round((200 + 118 * Math.cos((d * Math.PI) / 180)) * 100) / 100;
+                                    const sy = Math.round((200 + 118 * Math.sin((d * Math.PI) / 180)) * 100) / 100;
+                                    return <line key={d} x1="200" y1="200" x2={sx} y2={sy} stroke="url(#rlGold)" strokeWidth="3" opacity="0.5" />;
+                                })}
+                                <circle cx="200" cy="200" r="20" fill="url(#rlGold)" />
+                            </svg>
+                            <div className="rl-ball" ref={ballRef} />
                         </div>
-
-                        {/* Result Display */}
                         <AnimatePresence>
                             {showResult && result !== null && (
-                                <motion.div
-                                    className="result-display"
-                                    initial={{ scale: 0, opacity: 0 }}
-                                    animate={{ scale: 1, opacity: 1 }}
-                                    exit={{ scale: 0, opacity: 0 }}
-                                >
-                                    <div className={`result-number ${getNumberColor(result)} ${winnings > 0 ? 'winner' : ''}`}>
-                                        {result}
-                                    </div>
-                                    <div className="result-info">
-                                        {winnings > 0 ? (
-                                            <span className="win-amount">+₹{winnings.toFixed(2)}</span>
-                                        ) : (
-                                            <span className="lose-text">No win</span>
-                                        )}
-                                    </div>
+                                <motion.div className={`rl-result ${colorOf(result)}`} initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.6, opacity: 0 }}>
+                                    <span className="rl-result__n">{result}</span>
+                                    <span className="rl-result__t">{winnings > 0 ? `+₹${winnings.toFixed(2)}` : "No win"}</span>
                                 </motion.div>
                             )}
                         </AnimatePresence>
                     </div>
 
-                    {/* Betting Table Section */}
-                    <div className={`roulette-table-section ${result === 0 ? 'zero-result' : ''}`} ref={tableRef}>
-                        <div className="table-header">
-                            <h2>
-                                <Target size={24} />
-                                Place Your Bets
-                            </h2>
-                            <div className="bet-info">
-                                <div className="chip-selector" onClick={() => setShowChipSelector(!showChipSelector)}>
-                                    <span>Chip: ₹{chipValue}</span>
-                                    <ChevronDown size={16} className={showChipSelector ? 'rotated' : ''} />
+                    {/* TABLE — both orientations rendered, CSS shows the right one */}
+                    <div className="rl-tablewrap">
+                        {renderFelt("h", spotsH)}
+                        {renderFelt("v", spotsV)}
 
-                                    {showChipSelector && (
-                                        <div className="chip-dropdown">
-                                            {CHIP_OPTIONS.map(val => (
-                                                <div
-                                                    key={val}
-                                                    className={`chip-option ${chipValue === val ? 'active' : ''}`}
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setChipValue(val);
-                                                        setShowChipSelector(false);
-                                                    }}
-                                                >
-                                                    ₹{val}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                                <span className="total-bet">Total: ₹{totalBet}</span>
+                        <div className="rl-controls">
+                            <div className="rl-chips">
+                                {CHIPS.map((v) => (
+                                    <button key={v} className={`rl-chipbtn ${chipClass(v)} ${chip === v ? "active" : ""}`} onClick={() => setChip(v)}>{v}</button>
+                                ))}
+                            </div>
+                            <div className="rl-actions">
+                                <button className="rl-act" onClick={undo} disabled={spinning || !history.length} title="Undo"><Undo2 size={18} /></button>
+                                <button className="rl-act" onClick={double} disabled={spinning || !bets.length} title="Double">2×</button>
+                                <button className="rl-act" onClick={rebet} disabled={spinning || !lastRound.length} title="Rebet"><Copy size={18} /></button>
+                                <button className="rl-act" onClick={clear} disabled={spinning || !bets.length} title="Clear"><RotateCcw size={18} /></button>
                             </div>
                         </div>
-
-                        <div className="betting-table">
-                            {/* Zero */}
-                            <div
-                                className={`bet-cell zero ${getBetAmount("straight", 0) > 0 ? "has-bet" : ""}`}
-                                onClick={() => addBet("straight", 0, [0])}
-                                onContextMenu={(e) => { e.preventDefault(); removeBet("straight", 0); }}
-                                onTouchStart={() => handleTouchStart("straight", 0, [0])}
-                                onTouchEnd={handleTouchEnd}
-                            >
-                                <span>0</span>
-                                {getBetAmount("straight", 0) > 0 && (
-                                    <div className="chip">{getBetAmount("straight", 0)}</div>
-                                )}
-                            </div>
-
-                            {/* Number Grid */}
-                            <div className="numbers-grid">
-                                {[...Array(12)].map((_, col) => (
-                                    <div key={col} className="number-column">
-                                        {[3, 2, 1].map((row) => {
-                                            const num = col * 3 + row;
-                                            const color = getNumberColor(num);
-                                            const straightBet = getBetAmount("straight", num);
-                                            const highlighted = isNumberHighlighted(num);
-
-                                            return (
-                                                <div
-                                                    key={num}
-                                                    className={`bet-cell number ${color} ${straightBet > 0 ? "has-bet" : ""} ${highlighted ? "hovered" : ""}`}
-                                                    onClick={() => addBet("straight", num, [num])}
-                                                    onContextMenu={(e) => { e.preventDefault(); removeBet("straight", num); }}
-                                                    onTouchStart={() => handleTouchStart("straight", num, [num])}
-                                                    onTouchEnd={handleTouchEnd}
-                                                >
-                                                    <span>{num}</span>
-                                                    {straightBet > 0 && (
-                                                        <div className="chip">{straightBet}</div>
-                                                    )}
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                ))}
-                            </div>
-
-                            {/* Column Bets */}
-                            <div className="column-bets">
-                                {["column3", "column2", "column1"].map((col) => (
-                                    <div
-                                        key={col}
-                                        className={`bet-cell column ${getBetAmount(col, col) > 0 ? "has-bet" : ""}`}
-                                        onClick={() => addBet(col, col, [])}
-                                        onContextMenu={(e) => { e.preventDefault(); removeBet(col, col); }}
-                                        onMouseEnter={() => setHoveredBet(col)}
-                                        onMouseLeave={() => setHoveredBet(null)}
-                                    >
-                                        <span>2:1</span>
-                                        {getBetAmount(col, col) > 0 && (
-                                            <div className="chip">{getBetAmount(col, col)}</div>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-
-                            {/* Dozen Bets */}
-                            <div className="dozen-bets">
-                                {[
-                                    { type: "dozen1", label: "1-12" },
-                                    { type: "dozen2", label: "13-24" },
-                                    { type: "dozen3", label: "25-36" }
-                                ].map(({ type, label }) => (
-                                    <div
-                                        key={type}
-                                        className={`bet-cell dozen ${getBetAmount(type, type) > 0 ? "has-bet" : ""}`}
-                                        onClick={() => addBet(type, type, [])}
-                                        onContextMenu={(e) => { e.preventDefault(); removeBet(type, type); }}
-                                        onMouseEnter={() => setHoveredBet(type)}
-                                        onMouseLeave={() => setHoveredBet(null)}
-                                    >
-                                        <span>{label}</span>
-                                        {getBetAmount(type, type) > 0 && (
-                                            <div className="chip">{getBetAmount(type, type)}</div>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-
-                            {/* Outside Bets */}
-                            <div className="outside-bets">
-                                {[
-                                    { type: "low", label: "1-18", className: "" },
-                                    { type: "even", label: "EVEN", className: "" },
-                                    { type: "red", label: "RED", className: "red-bet" },
-                                    { type: "black", label: "BLACK", className: "black-bet" },
-                                    { type: "odd", label: "ODD", className: "" },
-                                    { type: "high", label: "19-36", className: "" }
-                                ].map(({ type, label, className }) => (
-                                    <div
-                                        key={type}
-                                        className={`bet-cell outside ${className} ${getBetAmount(type, type) > 0 ? "has-bet" : ""}`}
-                                        onClick={() => addBet(type, type, [])}
-                                        onContextMenu={(e) => { e.preventDefault(); removeBet(type, type); }}
-                                        onMouseEnter={() => setHoveredBet(type)}
-                                        onMouseLeave={() => setHoveredBet(null)}
-                                    >
-                                        <span>{label}</span>
-                                        {getBetAmount(type, type) > 0 && (
-                                            <div className="chip">{getBetAmount(type, type)}</div>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Action Buttons */}
-                        <div className="action-buttons">
-                            <button
-                                className="clear-btn"
-                                onClick={clearBets}
-                                disabled={spinning || bets.length === 0}
-                            >
-                                <RotateCcw size={18} />
-                                Clear
-                            </button>
-                            <button
-                                className="spin-btn"
-                                onClick={showResult ? playAgain : spin}
-                                disabled={spinning}
-                            >
-                                <Coins size={20} />
-                                {showResult ? "New Round" : spinning ? "Spinning..." : "Spin"}
-                            </button>
-                        </div>
-
-                        <p className="betting-tip">
-                            Click to add chip • Right-click to remove • Hover outside bets to see coverage
-                        </p>
                     </div>
                 </div>
 
-                {/* Mobile Sticky Footer */}
-                <div className="mobile-sticky-footer">
-                    <span className="mobile-total">Total: ₹{totalBet}</span>
-                    <button
-                        className="mobile-spin-btn"
-                        onClick={showResult ? playAgain : spin}
-                        disabled={spinning || (!showResult && bets.length === 0)}
-                    >
-                        {showResult ? "New Round" : spinning ? "Spinning..." : "SPIN"}
-                    </button>
+                <div className="rl-footer">
+                    <div className="rl-footer__info"><span>Total ₹{totalBet}</span></div>
+                    {showResult ? (
+                        <button className="rl-spin" onClick={newRound}>NEW ROUND</button>
+                    ) : (
+                        <button className="rl-spin" onClick={spin} disabled={spinning || !bets.length}>{spinning ? "NO MORE BETS" : "SPIN"}</button>
+                    )}
                 </div>
+
+                <p className="rl-tip">Tap a chip value, then tap the table to bet • Right-click a spot to remove • Inside lines = splits, corners, streets &amp; six-lines</p>
             </div>
             <Footer />
         </>
     );
 }
 
-// Helper function to describe SVG arc
-function describeArc(cx: number, cy: number, radius: number, startAngle: number, endAngle: number): string {
-    const start = polarToCartesian(cx, cy, radius, endAngle);
-    const end = polarToCartesian(cx, cy, radius, startAngle);
-    const largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1";
-    return `M ${cx} ${cy} L ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArcFlag} 0 ${end.x} ${end.y} Z`;
+function Chip({ amount, small }: { amount: number; small?: boolean }) {
+    return (
+        <span className={`rl-chip ${chipClass(amount >= 500 ? 500 : amount)} ${small ? "sm" : ""}`}>
+            {amount >= 1000 ? `${(amount / 1000).toFixed(amount % 1000 ? 1 : 0)}k` : amount}
+        </span>
+    );
 }
 
-// Helper function to describe pocket divider line
-function describeDivider(cx: number, cy: number, radius: number, angle: number): string {
-    const outer = polarToCartesian(cx, cy, radius, angle);
-    const inner = polarToCartesian(cx, cy, 125, angle); // To inner ring
-    return `M ${outer.x} ${outer.y} L ${inner.x} ${inner.y}`;
+function arc(cx: number, cy: number, r: number, a0: number, a1: number): string {
+    const p0 = polar(cx, cy, r, a1);
+    const p1 = polar(cx, cy, r, a0);
+    const large = a1 - a0 <= 180 ? "0" : "1";
+    return `M ${cx} ${cy} L ${p0.x} ${p0.y} A ${r} ${r} 0 ${large} 0 ${p1.x} ${p1.y} Z`;
 }
-
-// Round to 2 decimal places for SSR consistency
-function polarToCartesian(cx: number, cy: number, radius: number, angleInDegrees: number): { x: number; y: number } {
-    const angleInRadians = ((angleInDegrees - 90) * Math.PI) / 180;
-    return {
-        x: Math.round((cx + radius * Math.cos(angleInRadians)) * 100) / 100,
-        y: Math.round((cy + radius * Math.sin(angleInRadians)) * 100) / 100
-    };
+function polar(cx: number, cy: number, r: number, deg: number) {
+    const a = ((deg - 90) * Math.PI) / 180;
+    return { x: Math.round((cx + r * Math.cos(a)) * 100) / 100, y: Math.round((cy + r * Math.sin(a)) * 100) / 100 };
 }
