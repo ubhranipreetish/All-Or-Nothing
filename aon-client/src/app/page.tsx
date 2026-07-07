@@ -16,9 +16,10 @@ import Footer from "../components/Footer";
 import { useAuth } from "../contexts/AuthContext";
 import { useWallet } from "../contexts/WalletContext";
 import ComebackStory from "../components/landing/ComebackStory";
-import ScrollStoryVideo from "../components/landing/ScrollStoryVideo";
 import TiltCard from "../components/landing/TiltCard";
 import CountUp from "../components/landing/CountUp";
+import HeroVisual from "../components/landing/fx/HeroVisual";
+import BurstStory from "../components/landing/fx/BurstStory";
 
 /* ------------------------------------------------------------------ data */
 
@@ -166,11 +167,15 @@ export default function Home() {
       <Navbar />
 
       {/* ============================ HERO ============================ */}
-      <section className="fe-hero" ref={heroRef} id="top">
+      <section className="fe-hero fe-hero--center" ref={heroRef} id="top">
         <div className="fe-hero__bg" aria-hidden>
           <div className="fe-hero__halo" />
-          <div className="fe-hero__grid" />
         </div>
+
+        {/* full-bleed constellation sky behind the centered headline */}
+        <motion.div className="fe-hero__fx" style={{ opacity: heroFade }} aria-hidden>
+          <HeroVisual />
+        </motion.div>
 
         <motion.div className="fe-hero__inner" style={{ y: heroTitleY, opacity: heroFade }}>
           <h1 className="fe-hero__title">
@@ -200,16 +205,6 @@ export default function Home() {
           </div>
         </motion.div>
 
-        {/* right side — 3D spinning disc (temporarily disabled — perf)
-        <motion.div className="fe-hero__disc" aria-hidden style={{ opacity: heroFade }}>
-          <div className="fe-hero__disc-glow" />
-          <motion.div className="fe-hero__disc-stage" style={{ rotateX: discRX, rotateY: discRY }}>
-            <div className="fe-hero__disc-edge" />
-            <div className="fe-hero__disc-spin" />
-            <div className="fe-hero__disc-sheen" />
-          </motion.div>
-        </motion.div>
-        */}
       </section>
 
       {/* marquee ticker */}
@@ -224,8 +219,8 @@ export default function Home() {
         </div>
       </div>
 
-      {/* ============ SCROLL STORY — scroll-scrubbed golden-coin video ============ */}
-      <ScrollStoryVideo />
+      {/* ============ SCROLL STORY — scroll-scrubbed coin supernova ============ */}
+      <BurstStory />
 
       {/* =========================== GAMES =========================== */}
       <section className="fe-games" id="games">

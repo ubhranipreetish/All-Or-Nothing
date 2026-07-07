@@ -60,7 +60,7 @@ Thumbs.db
 # =========================
 *.pem
 
-
+.claude
 hero-section
 Audit.md
 Poker.md

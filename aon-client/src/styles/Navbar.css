@@ -311,7 +311,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(11, 28, 45, 0.9);
+  background-color: rgba(4, 3, 8, 0.84);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -331,22 +331,26 @@
 }
 
 .modal-content {
-  background: linear-gradient(160deg, #15101d 0%, #0b0910 100%);
+  background: linear-gradient(180deg, #100c18 0%, #0b0910 100%);
   padding: 2.2rem;
-  border-radius: 18px;
+  border-radius: 4px;
   min-width: 360px;
   max-width: 90%;
-  border: 1px solid var(--line, #261e33);
-  box-shadow: 0 30px 80px -30px rgba(0, 0, 0, 0.85), inset 0 1px 0 rgba(255, 216, 119, 0.06);
+  border: 1px solid rgba(233, 185, 73, 0.16);
+  box-shadow: 0 30px 80px -30px rgba(0, 0, 0, 0.85);
   position: relative;
-  overflow: hidden;
 }
-.modal-content::before {
+/* dossier corner ticks */
+.modal-content::before,
+.modal-content::after {
   content: "";
   position: absolute;
-  top: 0; left: 0; right: 0; height: 2px;
-  background: linear-gradient(90deg, transparent, var(--gold, #e9b949), transparent);
+  width: 16px;
+  height: 16px;
+  pointer-events: none;
 }
+.modal-content::before { top: -1px; left: -1px; border-top: 2px solid var(--gold, #e9b949); border-left: 2px solid var(--gold, #e9b949); }
+.modal-content::after { bottom: -1px; right: -1px; border-bottom: 2px solid var(--gold, #e9b949); border-right: 2px solid var(--gold, #e9b949); }
 
 .modal-3d {
   animation: modalSlideIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
@@ -399,7 +403,8 @@
   padding: 15px;
   background: rgba(7, 6, 10, 0.6);
   border: 1px solid var(--line, #261e33);
-  border-radius: 10px;
+  border-radius: 3px;
+  font-family: var(--font-mono, monospace);
   color: var(--bone, #f2ecdd);
   font-size: 1.05rem;
   box-sizing: border-box;
@@ -419,12 +424,13 @@
   flex: 1;
   padding: 14px;
   border: none;
-  border-radius: 10px;
-  font-size: 0.95rem;
+  border-radius: 3px;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.78rem;
   font-weight: 700;
   cursor: pointer;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.14em;
   transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, color 0.18s ease;
 }
 .modal-cancel {
@@ -509,7 +515,7 @@
 
   /* Promo banner sits flush under the shorter mobile navbar. */
   .promo-banner {
-    top: 64px;
+    top: 63px;
   }
 
   .modal-content {
@@ -573,6 +579,8 @@
   top: calc(100% + 8px);
   left: 0;
   min-width: 188px;
+  /* keep the whole dropdown inside the hover geometry */
+  pointer-events: auto;
   background: linear-gradient(180deg, #1a1422, #0d0a12);
   border: 1px solid var(--line, #261e33);
   border-radius: 12px;
@@ -584,6 +592,16 @@
   animation: navGamesIn 0.16s ease-out;
 }
 @keyframes navGamesIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+/* invisible bridge over the 8px gap between the button and the menu, so the
+   pointer never technically leaves .nav-games while travelling down */
+.nav-games__menu::before {
+  content: "";
+  position: absolute;
+  top: -12px;
+  left: 0;
+  right: 0;
+  height: 12px;
+}
 .nav-games__item {
   text-align: left;
   background: transparent;
@@ -607,10 +625,10 @@
 
 /* ==================== PROMO BANNER ==================== */
 .promo-banner {
-  /* absolute (not fixed) so it sits at the very top under the navbar and
-     scrolls away with the page instead of staying pinned mid-scroll */
-  position: absolute;
-  top: 72px;
+  /* fixed flush under the navbar — pages reserve space via body.has-promo,
+     so content starts below the banner instead of underneath it */
+  position: fixed;
+  top: 71px;
   left: 0;
   right: 0;
   display: flex;
@@ -636,8 +654,13 @@
 }
 
 .promo-guest {
-  background: linear-gradient(135deg, #15101d 0%, #1c1410 100%);
-  border-bottom: 1px solid rgba(233, 185, 73, 0.28);
+  /* premium noir glass — same void as the navbar, with a gold edge sheen */
+  background:
+    linear-gradient(90deg, rgba(233, 185, 73, 0.09) 0%, rgba(233, 185, 73, 0) 24%, rgba(233, 185, 73, 0) 76%, rgba(233, 185, 73, 0.09) 100%),
+    rgba(7, 6, 10, 0.85);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border-bottom: 1px solid rgba(233, 185, 73, 0.22);
   color: var(--bone-dim);
 }
 
@@ -646,8 +669,12 @@
 }
 
 .promo-claim {
-  background: linear-gradient(135deg, #131a14 0%, #0c130d 100%);
-  border-bottom: 1px solid rgba(43, 212, 160, 0.35);
+  background:
+    linear-gradient(90deg, rgba(43, 212, 160, 0.08) 0%, rgba(43, 212, 160, 0) 24%, rgba(43, 212, 160, 0) 76%, rgba(43, 212, 160, 0.08) 100%),
+    rgba(7, 6, 10, 0.85);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border-bottom: 1px solid rgba(43, 212, 160, 0.3);
   color: var(--bone-dim);
 }
 
@@ -884,7 +911,26 @@
 }
 /* ==================== LOAN MODAL — redesigned ==================== */
 .loan2 { display: flex; flex-direction: column; }
-.loan2__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.loan2__head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.loan2__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.58rem;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--bone-faint, #6e6678);
+  margin-bottom: 0.45rem;
+}
+.loan2__eyebrow::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--gold, #e9b949);
+  box-shadow: 0 0 8px rgba(233, 185, 73, 0.8);
+}
 .loan2__head h3 {
   font-family: var(--font-display, sans-serif);
   font-size: 1.5rem; margin: 0;
@@ -898,32 +944,41 @@
   border: 1px solid var(--line, #261e33);
   padding: 4px 10px; border-radius: 999px; white-space: nowrap;
 }
-.loan2__sub { color: var(--bone-dim, #a79fb2); font-size: 0.88rem; line-height: 1.5; margin: 0.5rem 0 1.3rem; }
+.loan2__sub {
+  font-family: var(--font-serif, serif);
+  font-style: italic;
+  color: var(--bone-faint, #6e6678);
+  font-size: 0.95rem;
+  line-height: 1.55;
+  margin: 0.6rem 0 1.3rem;
+}
+.loan2__sub b { color: var(--bone-dim, #a79fb2); font-weight: 400; }
 .loan2__label { font-family: var(--font-mono, monospace); font-size: 0.64rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--bone-dim, #a79fb2); margin-bottom: 0.5rem; }
 .loan2__field {
   display: flex; align-items: center; gap: 8px;
   background: var(--ink, #181221);
   border: 1px solid var(--line, #261e33);
-  border-radius: 12px; padding: 0 14px;
+  border-radius: 3px; padding: 0 14px;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 .loan2__field:focus-within { border-color: var(--gold, #e9b949); box-shadow: 0 0 0 3px rgba(233, 185, 73, 0.14); }
 .loan2__cur { color: var(--bone-dim, #a79fb2); font-size: 1.15rem; font-weight: 700; }
-.loan2__field input { flex: 1; background: transparent; border: none; outline: none; color: var(--bone, #f2ecdd); font-size: 1.35rem; font-weight: 700; padding: 13px 0; min-width: 0; }
+.loan2__field input { flex: 1; background: transparent; border: none; outline: none; color: var(--bone, #f2ecdd); font-family: var(--font-mono, monospace); font-size: 1.35rem; font-weight: 700; padding: 13px 0; min-width: 0; }
 .loan2__chips { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 0.7rem 0 1.2rem; }
 .loan2__chip {
   background: var(--ink, #181221);
   border: 1px solid var(--line, #261e33);
-  border-radius: 10px; color: var(--bone-dim, #a79fb2);
+  border-radius: 3px; color: var(--bone-dim, #a79fb2);
   padding: 9px 0; font-size: 0.76rem;
   font-family: var(--font-mono, monospace); cursor: pointer; transition: all 0.18s;
 }
 .loan2__chip:hover { border-color: var(--gold, #e9b949); color: var(--gold-bright, #ffd877); }
+.loan2__preview > div:last-child b { color: var(--ember, #ff4438); }
 .loan2__preview { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 1.1rem; }
 .loan2__preview > div {
   background: rgba(233, 185, 73, 0.06);
   border: 1px solid rgba(233, 185, 73, 0.18);
-  border-radius: 12px; padding: 12px 14px;
+  border-radius: 3px; padding: 12px 14px;
   display: flex; flex-direction: column; gap: 4px;
 }
 .loan2__preview span { font-family: var(--font-mono, monospace); font-size: 0.6rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--bone-faint, #6e6678); }

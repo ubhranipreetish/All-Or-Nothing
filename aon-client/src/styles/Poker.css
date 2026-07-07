@@ -1,11 +1,15 @@
 /* ====================================================================
-   POKER — All or Nothing. Noir-luxe felt, gold accents.
+   POKER — Fortune's Edge. Noir-luxe midnight table: premium black,
+   obsidian felt with a gold rim + violet sheen, squared gold-ticked
+   panels, Anton display headings, mono labels, serif italic asides.
+   Accent: VIOLET for play-state highlights, GOLD for money.
    ==================================================================== */
 
 .pk-page {
     min-height: 100svh;
     background:
-        radial-gradient(120% 80% at 50% -10%, #140f1c 0%, transparent 60%),
+        radial-gradient(90% 46% at 50% -4%, rgba(139, 92, 246, 0.06) 0%, transparent 60%),
+        radial-gradient(120% 80% at 50% -10%, #120c18 0%, transparent 60%),
         var(--void, #07060a);
     color: var(--bone, #f2ecdd);
     display: flex;
@@ -43,14 +47,20 @@
 .pk-eyebrow {
     display: inline-flex;
     align-items: center;
-    gap: 0.6rem;
+    gap: 0.7rem;
     font-family: var(--font-mono, monospace);
     font-size: 0.68rem;
     letter-spacing: 0.3em;
     text-transform: uppercase;
-    color: var(--gold, #e9b949);
+    color: var(--bone-faint, #6e6678);
 }
-.pk-eyebrow__dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ember, #ff4438); box-shadow: 0 0 10px var(--ember, #ff4438); }
+.pk-eyebrow__dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--violet, #8b5cf6);
+    box-shadow: 0 0 10px rgba(139, 92, 246, 0.8);
+}
 .pk-lobby2__title {
     font-family: var(--font-display, sans-serif);
     text-transform: uppercase;
@@ -62,12 +72,13 @@
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
+    text-shadow: 0 0 60px rgba(233, 185, 73, 0.18);
 }
 .pk-lobby2__tag {
     font-family: var(--font-serif, Georgia, serif);
     font-style: italic;
     font-size: clamp(1.2rem, 2.4vw, 1.8rem);
-    color: var(--bone, #f2ecdd);
+    color: var(--gold, #e9b949);
     margin-bottom: 1rem;
 }
 .pk-lobby2__desc {
@@ -82,16 +93,38 @@
 .pk-feats__s.red { color: var(--ember, #ff4438); }
 
 .pk-lobby2__panel { display: flex; justify-content: center; }
+
+/* squared, gold-ticked dossier panel — the house's standing card */
 .pk-panel-card {
+    position: relative;
     width: 100%;
     max-width: 420px;
-    background: linear-gradient(160deg, rgba(255, 216, 119, 0.05), rgba(7, 6, 10, 0.35));
-    border: 1px solid var(--line, #261e33);
-    border-radius: 18px;
+    background: linear-gradient(180deg, rgba(242, 236, 221, 0.02) 0%, transparent 60%);
+    border: 1px solid rgba(233, 185, 73, 0.14);
+    border-radius: 2px;
     padding: 2.2rem 2rem;
     box-shadow: 0 40px 90px -50px rgba(0, 0, 0, 0.9);
 }
-.pk-panel-card__h { font-family: var(--font-display, sans-serif); text-transform: uppercase; font-size: 1.6rem; color: var(--bone, #f2ecdd); }
+.pk-panel-card::before,
+.pk-panel-card::after {
+    content: "";
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    pointer-events: none;
+}
+.pk-panel-card::before { top: -1px; left: -1px; border-top: 2px solid var(--gold, #e9b949); border-left: 2px solid var(--gold, #e9b949); }
+.pk-panel-card::after { bottom: -1px; right: -1px; border-bottom: 2px solid var(--gold, #e9b949); border-right: 2px solid var(--gold, #e9b949); }
+.pk-panel-card__h {
+    font-family: var(--font-display, sans-serif);
+    text-transform: uppercase;
+    font-size: 1.6rem;
+    letter-spacing: 0.02em;
+    background: linear-gradient(110deg, var(--gold-bright, #ffd877) 0%, var(--gold, #e9b949) 60%, var(--gold-deep, #a9791f) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
 .pk-panel-card__p { color: var(--bone-dim, #a79fb2); line-height: 1.6; margin: 0.6rem 0 1rem; }
 
 @media (max-width: 900px) {
@@ -119,9 +152,9 @@
 .pk-gate {
     margin: 1.4rem 0;
     padding: 1rem 1.2rem;
-    border: 1px solid rgba(233, 185, 73, 0.4);
-    border-radius: 12px;
-    background: rgba(233, 185, 73, 0.08);
+    border: 1px solid rgba(233, 185, 73, 0.35);
+    border-radius: 2px;
+    background: rgba(233, 185, 73, 0.07);
     color: var(--bone, #f2ecdd);
     text-align: center;
 }
@@ -135,14 +168,22 @@
     flex: 1;
     min-width: 70px;
     padding: 10px;
-    border-radius: 8px;
+    border-radius: 2px;
     border: 1px solid var(--line, #261e33);
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(242, 236, 221, 0.03);
     color: var(--bone-dim, #a79fb2);
+    font-family: var(--font-mono, monospace);
     font-weight: 700;
+    letter-spacing: 0.04em;
     cursor: pointer;
+    transition: border-color 0.18s, color 0.18s, background 0.18s;
 }
-.pk-chipbtn-amt.on { border-color: var(--gold, #e9b949); color: var(--gold-bright, #ffd877); background: rgba(233, 185, 73, 0.14); }
+/* chip denominations carry the house colors: gold / ember / violet */
+.pk-buyin-quick .pk-chipbtn-amt:nth-child(1) { border-bottom: 2px solid rgba(233, 185, 73, 0.55); }
+.pk-buyin-quick .pk-chipbtn-amt:nth-child(2) { border-bottom: 2px solid rgba(255, 68, 56, 0.55); }
+.pk-buyin-quick .pk-chipbtn-amt:nth-child(3) { border-bottom: 2px solid rgba(139, 92, 246, 0.6); }
+.pk-buyin-quick .pk-chipbtn-amt:nth-child(4) { border-bottom: 2px solid rgba(255, 216, 119, 0.7); }
+.pk-chipbtn-amt.on { border-color: var(--gold, #e9b949); color: var(--gold-bright, #ffd877); background: rgba(233, 185, 73, 0.12); }
 .pk-chipbtn-amt:disabled { opacity: 0.35; cursor: not-allowed; }
 
 /* shareable room code banner in the live room */
@@ -155,49 +196,46 @@
     display: inline-flex;
     align-items: center;
     gap: 10px;
-    background: rgba(7, 6, 10, 0.85);
-    border: 1px solid var(--gold, #e9b949);
+    background: rgba(7, 6, 10, 0.88);
+    border: 1px solid rgba(233, 185, 73, 0.4);
     color: var(--bone-dim, #a79fb2);
     font-family: var(--font-mono, monospace);
     font-size: 0.66rem;
     letter-spacing: 0.18em;
     padding: 7px 8px 7px 16px;
-    border-radius: 30px;
+    border-radius: 2px;
 }
 .pk-roomcode strong { color: var(--gold-bright, #ffd877); font-size: 1rem; letter-spacing: 0.3em; }
 .pk-roomcode button {
     border: none;
-    border-radius: 16px;
+    border-radius: 2px;
     padding: 5px 12px;
     background: linear-gradient(135deg, var(--gold-bright, #ffd877), var(--gold, #e9b949));
     color: #1a1206;
+    font-family: var(--font-mono, monospace);
     font-weight: 700;
+    text-transform: uppercase;
     cursor: pointer;
     letter-spacing: 0.06em;
 }
 
 /* ------------------------------------------------------------- lobby */
-.pk-lobby {
-    width: 100%;
-    max-width: 460px;
-    background: linear-gradient(160deg, rgba(255, 216, 119, 0.05), rgba(7, 6, 10, 0.4));
-    border: 1px solid var(--line, #261e33);
-    border-radius: 18px;
-    padding: 2.4rem 2rem;
-    box-shadow: 0 40px 90px -50px rgba(0, 0, 0, 0.9);
-}
 .pk-lobby__title {
     font-family: var(--font-display, "Arial Narrow", sans-serif);
     text-transform: uppercase;
     font-size: 2.6rem;
     letter-spacing: 0.02em;
-    color: var(--gold, #e9b949);
+    background: linear-gradient(110deg, var(--gold-bright, #ffd877) 0%, var(--gold, #e9b949) 60%, var(--gold-deep, #a9791f) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
 }
 .pk-lobby__title span {
     font-family: var(--font-serif, Georgia, serif);
     font-style: italic;
     text-transform: none;
     font-size: 1.1rem;
+    -webkit-text-fill-color: var(--bone-dim, #a79fb2);
     color: var(--bone-dim, #a79fb2);
 }
 .pk-lobby__sub {
@@ -214,8 +252,8 @@
 }
 .pk-field span {
     font-family: var(--font-mono, monospace);
-    font-size: 0.7rem;
-    letter-spacing: 0.2em;
+    font-size: 0.66rem;
+    letter-spacing: 0.22em;
     text-transform: uppercase;
     color: var(--bone-faint, #6e6678);
 }
@@ -223,11 +261,12 @@
 .pk-join input {
     background: rgba(7, 6, 10, 0.6);
     border: 1px solid var(--line, #261e33);
-    border-radius: 8px;
+    border-radius: 2px;
     padding: 12px 14px;
     color: var(--bone, #f2ecdd);
     font-size: 1rem;
     outline: none;
+    transition: border-color 0.18s;
 }
 .pk-field input:focus,
 .pk-join input:focus {
@@ -236,24 +275,29 @@
 .pk-cta {
     width: 100%;
     padding: 15px;
-    border: none;
-    border-radius: 8px;
+    border: 1px solid transparent;
+    border-radius: 2px;
     background: linear-gradient(135deg, var(--gold-bright, #ffd877), var(--gold, #e9b949));
     color: #1a1206;
+    font-family: var(--font-mono, monospace);
     font-weight: 700;
-    font-size: 1rem;
+    font-size: 0.9rem;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.12em;
     cursor: pointer;
-    transition: transform 0.2s;
+    box-shadow: 0 8px 30px -8px rgba(233, 185, 73, 0.5);
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s;
 }
 .pk-cta:hover {
     transform: translateY(-2px);
+    box-shadow: 0 16px 44px -10px rgba(233, 185, 73, 0.7);
 }
 .pk-or {
     text-align: center;
+    font-family: var(--font-serif, Georgia, serif);
+    font-style: italic;
     color: var(--bone-faint, #6e6678);
-    font-size: 0.8rem;
+    font-size: 0.85rem;
     margin: 1.2rem 0;
 }
 .pk-join {
@@ -265,15 +309,25 @@
     text-transform: uppercase;
     letter-spacing: 0.3em;
     text-align: center;
+    font-family: var(--font-mono, monospace);
 }
 .pk-join button {
     padding: 0 20px;
-    border: 1px solid var(--gold, #e9b949);
+    border: 1px solid rgba(233, 185, 73, 0.6);
     background: transparent;
     color: var(--gold, #e9b949);
-    border-radius: 8px;
+    border-radius: 2px;
+    font-family: var(--font-mono, monospace);
     font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
     cursor: pointer;
+    transition: color 0.18s, border-color 0.18s, background 0.18s;
+}
+.pk-join button:hover:not(:disabled) {
+    color: var(--gold-bright, #ffd877);
+    border-color: var(--gold-bright, #ffd877);
+    background: rgba(233, 185, 73, 0.08);
 }
 .pk-join button:disabled {
     opacity: 0.4;
@@ -281,10 +335,13 @@
 }
 .pk-lobby__hint {
     margin-top: 1.6rem;
-    font-size: 0.8rem;
+    font-family: var(--font-serif, Georgia, serif);
+    font-style: italic;
+    font-size: 0.85rem;
     color: var(--bone-faint, #6e6678);
     line-height: 1.5;
 }
+.pk-lobby__hint a { color: var(--gold, #e9b949); }
 
 /* ------------------------------------------------------------- room */
 .pk-loading,
@@ -301,7 +358,7 @@
     background: var(--ember, #ff4438);
     color: #fff;
     padding: 10px 18px;
-    border-radius: 8px;
+    border-radius: 2px;
     z-index: 50;
 }
 
@@ -309,15 +366,15 @@
     flex-shrink: 0;
     align-self: center;
     margin-bottom: 14px;
-    background: rgba(233, 185, 73, 0.14);
-    border: 1px solid rgba(233, 185, 73, 0.45);
+    background: rgba(233, 185, 73, 0.08);
+    border: 1px solid rgba(233, 185, 73, 0.35);
     color: var(--gold-bright, #ffd877);
     font-family: var(--font-mono, monospace);
     font-size: 0.66rem;
-    letter-spacing: 0.18em;
+    letter-spacing: 0.24em;
     text-transform: uppercase;
     padding: 7px 16px;
-    border-radius: 20px;
+    border-radius: 2px;
     text-align: center;
 }
 
@@ -343,11 +400,14 @@
     text-transform: uppercase;
     font-size: 1.3rem;
     letter-spacing: 0.06em;
-    color: var(--gold, #e9b949);
+    background: linear-gradient(110deg, var(--gold-bright, #ffd877) 0%, var(--gold, #e9b949) 60%, var(--gold-deep, #a9791f) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
 }
 .pk-blinds {
     font-family: var(--font-mono, monospace);
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     letter-spacing: 0.2em;
     text-transform: uppercase;
     color: var(--bone-faint, #6e6678);
@@ -356,16 +416,21 @@
     background: transparent;
     border: 1px solid var(--line, #261e33);
     color: var(--bone-dim, #a79fb2);
-    padding: 8px 16px;
-    border-radius: 6px;
+    font-family: var(--font-mono, monospace);
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 9px 16px;
+    border-radius: 2px;
     cursor: pointer;
+    transition: border-color 0.18s, color 0.18s;
 }
 .pk-leave:hover {
     border-color: var(--ember, #ff4438);
     color: var(--ember, #ff4438);
 }
 
-/* felt */
+/* the midnight table — obsidian felt, thin gold rim, faint violet sheen */
 .pk-felt {
     position: relative;
     width: 100%;
@@ -373,9 +438,23 @@
     max-height: 64vh;
     border-radius: 50% / 38%;
     background:
-        radial-gradient(120% 120% at 50% 30%, #18553f 0%, #0f3b2c 55%, #0a2a20 100%);
-    border: 10px solid #1c1208;
-    box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.6), 0 40px 90px -40px rgba(0, 0, 0, 0.9);
+        radial-gradient(90% 70% at 50% 0%, rgba(139, 92, 246, 0.10) 0%, transparent 55%),
+        radial-gradient(120% 120% at 50% 30%, #131019 0%, #0b0910 60%, #080610 100%);
+    border: 1px solid rgba(233, 185, 73, 0.3);
+    box-shadow:
+        inset 0 0 90px rgba(0, 0, 0, 0.65),
+        inset 0 0 60px -20px rgba(139, 92, 246, 0.12),
+        0 40px 90px -40px rgba(0, 0, 0, 0.9),
+        0 0 70px -30px rgba(233, 185, 73, 0.25);
+}
+/* inner hairline — the rail's second gold thread */
+.pk-felt::before {
+    content: "";
+    position: absolute;
+    inset: 9px;
+    border-radius: inherit;
+    border: 1px solid rgba(233, 185, 73, 0.12);
+    pointer-events: none;
 }
 
 .pk-center {
@@ -393,7 +472,7 @@
     font-size: 0.72rem;
     letter-spacing: 0.32em;
     text-transform: uppercase;
-    color: rgba(255, 216, 119, 0.7);
+    color: var(--bone-faint, #6e6678);
 }
 .pk-community {
     display: flex;
@@ -404,25 +483,26 @@
     font-size: 1.3rem;
     color: var(--gold-bright, #ffd877);
     letter-spacing: 0.04em;
+    text-shadow: 0 0 24px rgba(233, 185, 73, 0.35);
 }
 .pk-winner {
     max-width: 60%;
     font-family: var(--font-serif, Georgia, serif);
     font-style: italic;
-    color: #fff;
-    background: rgba(233, 185, 73, 0.15);
+    color: var(--bone, #f2ecdd);
+    background: rgba(233, 185, 73, 0.1);
     border: 1px solid rgba(233, 185, 73, 0.4);
     padding: 6px 14px;
-    border-radius: 20px;
+    border-radius: 2px;
     font-size: 0.95rem;
 }
 
-/* cards */
+/* cards — white faces for readability; noir chrome everywhere else */
 .pk-card {
     width: 44px;
     height: 62px;
-    border-radius: 6px;
-    background: #f6f3ea;
+    border-radius: 4px;
+    background: linear-gradient(165deg, #fbf9f2 0%, #efeadb 100%);
     color: #15110a;
     display: flex;
     flex-direction: column;
@@ -430,7 +510,7 @@
     justify-content: center;
     font-weight: 800;
     line-height: 1;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.45);
     user-select: none;
 }
 .pk-card__r {
@@ -442,14 +522,18 @@
 .pk-card--red {
     color: #d4243a;
 }
+/* card backs: void with gold pattern hints — the house's livery */
 .pk-card--back {
     background:
-        repeating-linear-gradient(45deg, #7a5212 0 6px, #5c3d0e 6px 12px);
-    border: 2px solid var(--gold, #e9b949);
+        repeating-linear-gradient(45deg, rgba(233, 185, 73, 0.22) 0 1px, transparent 1px 6px),
+        repeating-linear-gradient(-45deg, rgba(233, 185, 73, 0.22) 0 1px, transparent 1px 6px),
+        radial-gradient(120% 120% at 50% 20%, #17111f 0%, #0b0910 100%);
+    border: 1px solid rgba(233, 185, 73, 0.55);
+    box-shadow: inset 0 0 0 2px rgba(7, 6, 10, 0.9), 0 4px 10px rgba(0, 0, 0, 0.45);
 }
 .pk-card--empty {
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px dashed rgba(255, 255, 255, 0.12);
+    background: rgba(242, 236, 221, 0.03);
+    border: 1px dashed rgba(233, 185, 73, 0.18);
     box-shadow: none;
 }
 
@@ -498,11 +582,12 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    background: rgba(7, 6, 10, 0.85);
+    background: rgba(7, 6, 10, 0.88);
     border: 1px solid var(--line, #261e33);
-    border-radius: 10px;
+    border-radius: 2px;
     padding: 6px 14px;
     min-width: 110px;
+    transition: border-color 0.2s, box-shadow 0.2s;
 }
 .pk-seat__name {
     font-size: 0.85rem;
@@ -517,12 +602,14 @@
     font-size: 0.8rem;
     color: var(--gold-bright, #ffd877);
 }
+/* active player: violet glow — the spotlight, not the money */
 .pk-seat--turn .pk-seat__plate {
-    border-color: var(--gold-bright, #ffd877);
-    box-shadow: 0 0 0 2px rgba(255, 216, 119, 0.5), 0 0 22px rgba(255, 216, 119, 0.4);
+    border-color: var(--violet, #8b5cf6);
+    box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.55), 0 0 22px rgba(139, 92, 246, 0.45);
 }
 .pk-seat--you .pk-seat__plate {
     background: rgba(20, 15, 28, 0.95);
+    border-color: rgba(233, 185, 73, 0.3);
 }
 .pk-seat--folded {
     opacity: 0.4;
@@ -530,15 +617,16 @@
 .pk-seat__bet {
     font-family: var(--font-mono, monospace);
     font-size: 0.78rem;
-    color: var(--bone, #f2ecdd);
-    background: rgba(233, 185, 73, 0.18);
+    color: var(--gold-bright, #ffd877);
+    background: rgba(233, 185, 73, 0.12);
     border: 1px solid rgba(233, 185, 73, 0.4);
     padding: 2px 8px;
-    border-radius: 12px;
+    border-radius: 2px;
 }
 .pk-seat__action {
-    font-size: 0.66rem;
-    letter-spacing: 0.16em;
+    font-family: var(--font-mono, monospace);
+    font-size: 0.62rem;
+    letter-spacing: 0.18em;
     text-transform: uppercase;
     color: var(--bone-dim, #a79fb2);
 }
@@ -549,8 +637,8 @@
     width: 22px;
     height: 22px;
     border-radius: 50%;
-    background: #fff;
-    color: #15110a;
+    background: linear-gradient(135deg, var(--gold-bright, #ffd877), var(--gold, #e9b949));
+    color: #1a1206;
     font-size: 0.7rem;
     font-weight: 800;
     display: grid;
@@ -575,31 +663,52 @@
 }
 .pk-btn {
     padding: 13px 26px;
-    border-radius: 8px;
+    border-radius: 2px;
     border: 1px solid var(--line, #261e33);
-    background: rgba(255, 255, 255, 0.06);
+    background: rgba(242, 236, 221, 0.04);
     color: var(--bone, #f2ecdd);
+    font-family: var(--font-mono, monospace);
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.1em;
     cursor: pointer;
-    font-size: 0.85rem;
+    font-size: 0.82rem;
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s, border-color 0.2s, color 0.2s;
 }
 .pk-btn:hover {
     border-color: var(--gold, #e9b949);
+    transform: translateY(-2px);
+}
+/* fold: the ghost that flirts with ember */
+.pk-btn--fold {
+    background: transparent;
+    color: var(--bone-dim, #a79fb2);
 }
 .pk-btn--fold:hover {
     border-color: var(--ember, #ff4438);
     color: var(--ember, #ff4438);
+    box-shadow: 0 10px 30px -14px rgba(255, 68, 56, 0.5);
 }
+/* call & raise: molten gold, dark text — the money moves */
 .pk-btn--call {
-    background: rgba(43, 212, 160, 0.16);
-    border-color: rgba(43, 212, 160, 0.5);
+    background: linear-gradient(135deg, var(--gold-bright, #ffd877), var(--gold, #e9b949));
+    color: #1a1206;
+    border-color: transparent;
+    box-shadow: 0 8px 30px -8px rgba(233, 185, 73, 0.45);
+}
+.pk-btn--call:hover {
+    border-color: transparent;
+    box-shadow: 0 14px 40px -10px rgba(233, 185, 73, 0.65);
 }
 .pk-btn--raise {
     background: linear-gradient(135deg, var(--gold-bright, #ffd877), var(--gold, #e9b949));
     color: #1a1206;
-    border: none;
+    border: 1px solid transparent;
+    box-shadow: 0 8px 30px -8px rgba(233, 185, 73, 0.5);
+}
+.pk-btn--raise:hover {
+    border-color: transparent;
+    box-shadow: 0 14px 40px -10px rgba(233, 185, 73, 0.7);
 }
 .pk-raise {
     display: flex;
@@ -614,19 +723,20 @@
 }
 .pk-chip {
     padding: 6px 12px;
-    border-radius: 20px;
+    border-radius: 2px;
     border: 1px solid var(--line, #261e33);
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(242, 236, 221, 0.03);
     color: var(--bone-dim, #a79fb2);
     font-size: 0.72rem;
     font-family: var(--font-mono, monospace);
     letter-spacing: 0.04em;
     cursor: pointer;
+    transition: border-color 0.18s, color 0.18s, background 0.18s;
 }
 .pk-chip--on {
     border-color: var(--gold, #e9b949);
     color: var(--gold-bright, #ffd877);
-    background: rgba(233, 185, 73, 0.14);
+    background: rgba(233, 185, 73, 0.12);
 }
 .pk-raise__row {
     display: flex;
@@ -641,14 +751,15 @@
     width: 84px;
     background: rgba(7, 6, 10, 0.6);
     border: 1px solid var(--line, #261e33);
-    border-radius: 6px;
+    border-radius: 2px;
     color: var(--bone, #f2ecdd);
+    font-family: var(--font-mono, monospace);
     padding: 9px 8px;
     font-size: 0.9rem;
     text-align: center;
 }
 
-/* pre-action toggles (armed while it's not your turn) */
+/* pre-action toggles (armed while it's not your turn) — violet highlight */
 .pk-preactions {
     display: flex;
     align-items: center;
@@ -658,24 +769,29 @@
 }
 .pk-pre__label {
     font-family: var(--font-mono, monospace);
-    font-size: 0.72rem;
-    letter-spacing: 0.16em;
+    font-size: 0.68rem;
+    letter-spacing: 0.22em;
     text-transform: uppercase;
     color: var(--bone-faint, #6e6678);
 }
 .pk-pre {
     padding: 10px 18px;
-    border-radius: 8px;
+    border-radius: 2px;
     border: 1px solid var(--line, #261e33);
     background: transparent;
     color: var(--bone-dim, #a79fb2);
-    font-size: 0.8rem;
+    font-family: var(--font-mono, monospace);
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
     cursor: pointer;
+    transition: border-color 0.18s, color 0.18s, background 0.18s;
 }
 .pk-pre--on {
-    border-color: var(--gold, #e9b949);
-    color: #1a1206;
-    background: linear-gradient(135deg, var(--gold-bright, #ffd877), var(--gold, #e9b949));
+    border-color: var(--violet, #8b5cf6);
+    color: var(--violet-bright, #a78bfa);
+    background: rgba(139, 92, 246, 0.14);
+    box-shadow: 0 0 18px -6px rgba(139, 92, 246, 0.5);
     font-weight: 700;
 }
 
@@ -688,30 +804,37 @@
 .pk-icon {
     background: transparent;
     border: 1px solid var(--line, #261e33);
-    border-radius: 6px;
+    border-radius: 2px;
     padding: 6px 9px;
     cursor: pointer;
     font-size: 0.9rem;
+    transition: border-color 0.18s;
 }
+.pk-icon:hover { border-color: var(--gold, #e9b949); }
 .pk-mini {
     background: transparent;
     border: 1px solid var(--line, #261e33);
     color: var(--bone-dim, #a79fb2);
-    padding: 7px 12px;
-    border-radius: 6px;
+    font-family: var(--font-mono, monospace);
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 8px 12px;
+    border-radius: 2px;
     cursor: pointer;
-    font-size: 0.78rem;
+    transition: border-color 0.18s, color 0.18s;
 }
+.pk-mini:hover { border-color: var(--gold, #e9b949); color: var(--gold-bright, #ffd877); }
 .pk-mini--on { border-color: var(--jade, #2bd4a0); color: var(--jade, #2bd4a0); }
 .pk-mini--gold { border-color: var(--gold, #e9b949); color: var(--gold-bright, #ffd877); }
 
-/* avatar with turn-countdown ring */
+/* avatar with turn-countdown ring (ring itself is a violet conic set in TSX) */
 .pk-avatar {
     width: 52px;
     height: 52px;
     border-radius: 50%;
     padding: 3px;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(242, 236, 221, 0.1);
     position: relative;
     z-index: 2;
 }
@@ -727,7 +850,8 @@
     color: var(--bone, #f2ecdd);
 }
 .pk-seat--turn .pk-avatar__inner {
-    color: var(--gold-bright, #ffd877);
+    color: var(--violet-bright, #a78bfa);
+    text-shadow: 0 0 12px rgba(139, 92, 246, 0.6);
 }
 .pk-badge {
     position: absolute;
@@ -740,11 +864,12 @@
     place-items: center;
     z-index: 3;
 }
-.pk-badge--d { top: -4px; right: -4px; background: #fff; color: #15110a; }
+.pk-badge--d { top: -4px; right: -4px; background: linear-gradient(135deg, var(--gold-bright, #ffd877), var(--gold, #e9b949)); color: #1a1206; }
 .pk-badge--sb { bottom: -4px; right: -4px; background: var(--bone-dim, #a79fb2); color: #15110a; }
-.pk-badge--bb { bottom: -4px; right: -4px; background: var(--gold, #e9b949); color: #15110a; }
+.pk-badge--bb { bottom: -4px; right: -4px; background: var(--gold, #e9b949); color: #1a1206; }
 
 .pk-seat--away { opacity: 0.55; }
+/* winner: gold — always gold for money */
 .pk-seat--winner .pk-seat__plate {
     border-color: var(--gold-bright, #ffd877);
     box-shadow: 0 0 0 2px rgba(255, 216, 119, 0.6), 0 0 28px rgba(255, 216, 119, 0.55);
@@ -770,8 +895,8 @@
         aspect-ratio: 3 / 4;
         max-height: 54vh;
         border-radius: 46% / 30%;
-        border-width: 7px;
     }
+    .pk-felt::before { inset: 6px; }
     /* side seats hard to the edges + middle band kept clear for the community */
     .pp-0 { left: 50%; top: 88%; }
     .pp-1 { left: 14%; top: 72%; }
@@ -825,11 +950,13 @@
     border: 1px solid var(--line, #261e33);
     color: var(--bone-dim, #a79fb2);
     padding: 5px 11px;
-    border-radius: 6px;
+    border-radius: 2px;
     cursor: pointer;
-    font-size: 0.72rem;
+    font-size: 0.7rem;
     font-family: var(--font-mono, monospace);
-    letter-spacing: 0.04em;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    transition: border-color 0.18s, color 0.18s;
 }
 .pk-share__btn:hover { border-color: var(--gold, #e9b949); color: var(--gold-bright, #ffd877); }
 
@@ -856,7 +983,8 @@
     display: inline-block;
     font-family: var(--font-mono, monospace);
     font-size: 0.66rem;
-    letter-spacing: 0.22em;
+    letter-spacing: 0.26em;
+    text-transform: uppercase;
     color: var(--gold, #e9b949);
     margin-bottom: 8px;
 }
@@ -865,30 +993,44 @@
 /* ----- waiting room (pre-game lobby) ----- */
 .pk-lobby { width: 100%; display: flex; justify-content: center; padding: 10px 0 24px; }
 .pk-lobby__card {
+    position: relative;
     width: 100%;
     max-width: 760px;
-    background: linear-gradient(180deg, rgba(26, 20, 34, 0.92), rgba(13, 10, 18, 0.94));
-    border: 1px solid var(--line, #261e33);
-    border-radius: 16px;
+    background: linear-gradient(180deg, rgba(242, 236, 221, 0.02) 0%, transparent 60%), rgba(11, 9, 16, 0.85);
+    border: 1px solid rgba(233, 185, 73, 0.14);
+    border-radius: 2px;
     padding: 1.8rem 1.6rem;
     box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
 }
+.pk-lobby__card::before,
+.pk-lobby__card::after {
+    content: "";
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    pointer-events: none;
+}
+.pk-lobby__card::before { top: -1px; left: -1px; border-top: 2px solid var(--gold, #e9b949); border-left: 2px solid var(--gold, #e9b949); }
+.pk-lobby__card::after { bottom: -1px; right: -1px; border-bottom: 2px solid var(--gold, #e9b949); border-right: 2px solid var(--gold, #e9b949); }
 .pk-lobby__head { text-align: center; margin-bottom: 1.4rem; }
-.pk-lobby__eyebrow { font-family: var(--font-mono, monospace); font-size: 0.66rem; letter-spacing: 0.24em; color: var(--bone-faint, #6e6678); }
+.pk-lobby__eyebrow { font-family: var(--font-mono, monospace); font-size: 0.66rem; letter-spacing: 0.28em; color: var(--bone-faint, #6e6678); }
 .pk-lobby__code {
     font-family: var(--font-display, sans-serif);
     text-transform: uppercase;
     font-size: 1.7rem;
     letter-spacing: 0.18em;
-    color: var(--gold-bright, #ffd877);
+    background: linear-gradient(110deg, var(--gold-bright, #ffd877) 0%, var(--gold, #e9b949) 60%, var(--gold-deep, #a9791f) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
     margin: 4px 0 12px;
 }
 .pk-lobby__share { display: inline-flex; gap: 8px; }
 .pk-lobby__cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1.4rem; }
 .pk-lobby__h3 {
     font-family: var(--font-mono, monospace);
-    font-size: 0.72rem;
-    letter-spacing: 0.16em;
+    font-size: 0.68rem;
+    letter-spacing: 0.22em;
     text-transform: uppercase;
     color: var(--bone-faint, #6e6678);
     margin: 0 0 0.7rem;
@@ -898,9 +1040,9 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    background: rgba(255, 255, 255, 0.04);
+    background: rgba(242, 236, 221, 0.03);
     border: 1px solid var(--line, #261e33);
-    border-radius: 10px;
+    border-radius: 2px;
     padding: 8px 10px;
 }
 .pk-lobby__av {
@@ -911,35 +1053,50 @@
     background: linear-gradient(160deg, #241a30, #15101d);
     border: 1px solid rgba(233, 185, 73, 0.4);
     color: var(--gold-bright, #ffd877);
+    font-family: var(--font-display, sans-serif);
     font-weight: 700;
     font-size: 0.85rem;
 }
-.pk-lobby__av--wait { border-color: rgba(167, 159, 178, 0.4); color: var(--bone-dim, #a79fb2); }
+.pk-lobby__av--wait { border-color: rgba(139, 92, 246, 0.45); color: var(--violet-bright, #a78bfa); }
 .pk-lobby__name { flex: 1; color: var(--bone, #f2ecdd); font-size: 0.9rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pk-lobby__host { color: var(--gold, #e9b949); font-style: normal; font-size: 0.75rem; }
 .pk-lobby__buyin { color: var(--bone-faint, #6e6678); font-style: normal; font-size: 0.78rem; }
 .pk-lobby__chips { color: var(--bone-dim, #a79fb2); font-family: var(--font-mono, monospace); font-size: 0.8rem; }
-.pk-lobby__empty { color: var(--bone-faint, #6e6678); font-size: 0.85rem; line-height: 1.5; }
+.pk-lobby__empty {
+    font-family: var(--font-serif, Georgia, serif);
+    font-style: italic;
+    color: var(--bone-faint, #6e6678);
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
 .pk-lobby__acts { display: inline-flex; gap: 6px; }
 .pk-admit, .pk-deny {
-    border: none;
-    border-radius: 6px;
+    border: 1px solid transparent;
+    border-radius: 2px;
     padding: 6px 12px;
     cursor: pointer;
+    font-family: var(--font-mono, monospace);
     font-weight: 700;
-    font-size: 0.74rem;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    transition: border-color 0.18s, color 0.18s, box-shadow 0.18s;
 }
-.pk-admit { background: var(--jade, #2bd4a0); color: #07120d; }
-.pk-deny { background: transparent; border: 1px solid var(--line, #261e33); color: var(--bone-dim, #a79fb2); }
+.pk-admit {
+    background: linear-gradient(135deg, var(--gold-bright, #ffd877), var(--gold, #e9b949));
+    color: #1a1206;
+    box-shadow: 0 6px 20px -8px rgba(233, 185, 73, 0.5);
+}
+.pk-deny { background: transparent; border-color: var(--line, #261e33); color: var(--bone-dim, #a79fb2); }
 .pk-deny:hover { border-color: var(--ember, #ff4438); color: var(--ember, #ff4438); }
 .pk-lobby__start { margin-top: 1.5rem; }
-.pk-lobby__start:disabled { opacity: 0.5; cursor: not-allowed; }
+.pk-lobby__start:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
 .pk-lobby__waitstart {
     margin-top: 1.5rem;
     text-align: center;
     font-family: var(--font-mono, monospace);
-    font-size: 0.82rem;
-    letter-spacing: 0.08em;
+    font-size: 0.78rem;
+    letter-spacing: 0.1em;
     color: var(--bone-dim, #a79fb2);
 }
 
@@ -955,9 +1112,10 @@
     width: min(320px, calc(100vw - 24px));
 }
 .pk-dock__item {
-    background: linear-gradient(180deg, rgba(26, 20, 34, 0.97), rgba(13, 10, 18, 0.97));
-    border: 1px solid rgba(233, 185, 73, 0.4);
-    border-radius: 12px;
+    position: relative;
+    background: linear-gradient(180deg, rgba(242, 236, 221, 0.03) 0%, transparent 60%), rgba(11, 9, 16, 0.97);
+    border: 1px solid rgba(233, 185, 73, 0.35);
+    border-radius: 2px;
     padding: 12px 14px;
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
     display: flex;
@@ -965,14 +1123,23 @@
     gap: 10px;
     animation: pk-dock-in 0.25s ease-out;
 }
+.pk-dock__item::before {
+    content: "";
+    position: absolute;
+    top: -1px; left: -1px;
+    width: 12px; height: 12px;
+    border-top: 2px solid var(--gold, #e9b949);
+    border-left: 2px solid var(--gold, #e9b949);
+    pointer-events: none;
+}
 @keyframes pk-dock-in { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: translateX(0); } }
 .pk-dock__txt { color: var(--bone, #f2ecdd); font-size: 0.86rem; }
 .pk-dock__txt strong { color: var(--gold-bright, #ffd877); }
 .pk-dock__acts { display: flex; gap: 8px; }
 .pk-dock__acts .pk-admit, .pk-dock__acts .pk-deny { flex: 1; padding: 8px; }
 
-/* spectator banner */
-.pk-spectate { color: var(--gold-bright, #ffd877); }
+/* spectator banner — violet spotlight: watching, not staking */
+.pk-spectate { color: var(--violet-bright, #a78bfa); }
 
 @media (max-width: 720px) {
     .pk-lobby__cols { grid-template-columns: 1fr; gap: 1rem; }

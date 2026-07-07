@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useWallet } from "../contexts/WalletContext";
 import { useAuth } from "../contexts/AuthContext";
@@ -27,6 +27,21 @@ export default function Navbar() {
         { name: "Poker", href: "/poker" },
     ];
     const goto = (href: string) => { setShowGames(false); router.push(href); };
+
+    // Hover-open with a grace period: momentary leaves (crossing the gap
+    // between button and menu, cursor jitter) no longer slam the menu shut.
+    const gamesCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const openGames = () => {
+        if (gamesCloseTimer.current) clearTimeout(gamesCloseTimer.current);
+        setShowGames(true);
+    };
+    const scheduleCloseGames = () => {
+        if (gamesCloseTimer.current) clearTimeout(gamesCloseTimer.current);
+        gamesCloseTimer.current = setTimeout(() => setShowGames(false), 200);
+    };
+    useEffect(() => () => {
+        if (gamesCloseTimer.current) clearTimeout(gamesCloseTimer.current);
+    }, []);
     const [loanState, setLoanState] = useState<"input" | "processing" | "success">("input");
     const [loanedAmount, setLoanedAmount] = useState(0);
 
@@ -35,6 +50,14 @@ export default function Navbar() {
         window.addEventListener("scroll", handleScroll);
         return () => window.removeEventListener("scroll", handleScroll);
     }, []);
+
+    // Reserve layout space under the fixed navbar while a promo banner shows,
+    // so page content starts below the banner instead of underneath it.
+    const promoVisible = !user || !hasClaimed100Bonus;
+    useEffect(() => {
+        document.body.classList.toggle("has-promo", promoVisible);
+        return () => document.body.classList.remove("has-promo");
+    }, [promoVisible]);
 
     const handleTakeLoan = async () => {
         const amount = parseFloat(loanAmount) || 0;
@@ -79,7 +102,7 @@ export default function Navbar() {
                         <div className="logo" onClick={() => router.push("/")}>
                             <img src="/images/aon-logo.png" alt="All Or Nothing" />
                         </div>
-                        <div className="nav-games" onMouseLeave={() => setShowGames(false)}>
+                        <div className="nav-games" onMouseEnter={openGames} onMouseLeave={scheduleCloseGames}>
                             <button className="nav-games__btn" onClick={() => setShowGames((s) => !s)} aria-haspopup="true" aria-expanded={showGames}>
                                 Games <span className="nav-games__caret">▾</span>
                             </button>
@@ -163,10 +186,13 @@ export default function Navbar() {
                                 {loanState === "input" && (
                                     <div className="loan2">
                                         <div className="loan2__head">
-                                            <h3>Take a loan</h3>
+                                            <div>
+                                                <span className="loan2__eyebrow">The house lends</span>
+                                                <h3>Borrow from the House</h3>
+                                            </div>
                                             <span className="loan2__cap">{activeLoansCount}/2 active</span>
                                         </div>
-                                        <p className="loan2__sub">Credits land in your wallet instantly — repaid with 10% daily compound interest.</p>
+                                        <p className="loan2__sub">Credits land in your wallet instantly. <b>The house always collects</b> — 10% compound interest, every day.</p>
 
                                         <label className="loan2__label">Amount</label>
                                         <div className="loan2__field">

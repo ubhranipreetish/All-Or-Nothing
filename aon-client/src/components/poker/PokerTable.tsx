@@ -376,7 +376,7 @@ function Seat({
         );
 
     const ringStyle = seat.isTurn
-        ? { background: `conic-gradient(var(--gold-bright,#ffd877) ${frac * 360}deg, rgba(255,255,255,0.12) 0deg)` }
+        ? { background: `conic-gradient(var(--violet-bright,#a78bfa) ${frac * 360}deg, rgba(242,236,221,0.12) 0deg)` }
         : undefined;
 
     return (

@@ -4,8 +4,9 @@
     {
       "name": "aon-client",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "aon-client", "run", "dev:safe"],
-      "port": 3000
+      "runtimeArgs": ["--prefix", "aon-client", "run", "start"],
+      "port": 3000,
+      "autoPort": true
     }
   ]
 }

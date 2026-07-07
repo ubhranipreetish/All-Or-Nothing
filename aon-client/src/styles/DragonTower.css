@@ -1,5 +1,203 @@
-/* ==================== DRAGON TOWER — tower (noir-luxe) ==================== */
+/* ====================================================================
+   DRAGON TOWER — "THE FURNACE CLIMB" (Fortune's Edge noir-luxe)
+   Premium black stage, squared gold-ticked panels, mono labels,
+   serif italic flavor. Accent: EMBER — the higher you climb, the
+   closer you get to the dragon's heat. Safe/advance states in gold.
+   All shared .game-* rules from Game.css are overridden here, scoped
+   under .dt-stage / .dt-game so other games are untouched.
+   ==================================================================== */
 
+/* ------------------------------ stage ------------------------------ */
+/* Premium black. No navy/brown gradients — just the void plus a faint
+   ember glow rising from the bottom: the dragon's furnace below. */
+.game-stage.dt-stage {
+  background: var(--void);
+  padding-top: clamp(110px, 12vh, 120px);
+}
+.game-stage.dt-stage::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 48vh;
+  background: radial-gradient(
+    72% 95% at 50% 100%,
+    rgba(255, 68, 56, 0.07) 0%,
+    rgba(194, 31, 26, 0.035) 42%,
+    transparent 74%
+  );
+  pointer-events: none;
+}
+/* fixed promo banner (body.has-promo set by Navbar) sits under the navbar */
+body.has-promo .game-stage.dt-stage {
+  padding-top: calc(clamp(110px, 12vh, 120px) + 50px);
+}
+
+/* ------------------------------ header ------------------------------ */
+.dt-game .game-eyebrow {
+  letter-spacing: 0.28em;
+  font-size: 0.66rem;
+}
+.dt-game .game-title {
+  background: linear-gradient(110deg, var(--gold-bright) 0%, var(--gold) 45%, var(--gold-deep) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 0 60px rgba(233, 185, 73, 0.18);
+}
+.dt-game .game-title em { color: transparent; } /* inherits the gold gradient fill */
+.dt-game .game-sub {
+  color: var(--bone-faint);
+}
+
+/* ------------------------------ panels ------------------------------ */
+/* Squared, hairline gold border, gold corner ticks (top-left / bottom-right). */
+.dt-game .game-panel,
+.dt-game .game-board {
+  position: relative;
+  border-radius: 4px;
+  border: 1px solid rgba(233, 185, 73, 0.14);
+  background: linear-gradient(180deg, rgba(242, 236, 221, 0.02), transparent 60%);
+  box-shadow: none;
+}
+.dt-game .game-panel::before,
+.dt-game .game-board::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  width: 16px;
+  height: 16px;
+  border-top: 2px solid var(--gold);
+  border-left: 2px solid var(--gold);
+  pointer-events: none;
+}
+.dt-game .game-panel::after,
+.dt-game .game-board::after {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  right: -1px;
+  width: 16px;
+  height: 16px;
+  border-bottom: 2px solid var(--gold);
+  border-right: 2px solid var(--gold);
+  pointer-events: none;
+}
+/* the board holds the tower — give it a whisper of furnace heat at its base */
+.dt-game .game-board {
+  background:
+    radial-gradient(80% 45% at 50% 100%, rgba(255, 68, 56, 0.05) 0%, transparent 70%),
+    linear-gradient(180deg, rgba(242, 236, 221, 0.02), transparent 60%);
+}
+
+/* ------------------------------ fields ------------------------------ */
+.dt-game .game-label {
+  font-size: 0.62rem;
+  letter-spacing: 0.26em;
+  color: var(--bone-faint);
+}
+.dt-game .game-input,
+.dt-game .game-select {
+  background: rgba(242, 236, 221, 0.04);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 0.98rem;
+  color: var(--bone);
+}
+.dt-game .game-input:focus,
+.dt-game .game-select:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(233, 185, 73, 0.12);
+}
+.dt-game .game-adjust button {
+  background: rgba(242, 236, 221, 0.04);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  color: var(--bone-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.dt-game .game-adjust button:hover:not(:disabled) {
+  border-color: rgba(233, 185, 73, 0.5);
+  color: var(--gold-bright);
+}
+
+/* ------------------------------ buttons ------------------------------ */
+/* Primary + cash out (the safe move) in molten gold; ghost for reset. */
+.dt-game .game-primary,
+.dt-game .game-cashout {
+  border-radius: 3px;
+  background: linear-gradient(135deg, var(--gold-bright), var(--gold));
+  color: #1a1206;
+  letter-spacing: 0.16em;
+}
+.dt-game .game-primary:hover:not(:disabled),
+.dt-game .game-cashout:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 36px -10px rgba(233, 185, 73, 0.6);
+}
+.dt-game .game-clear {
+  border-radius: 3px;
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--bone-dim);
+  letter-spacing: 0.16em;
+}
+.dt-game .game-clear:hover {
+  border-color: rgba(255, 68, 56, 0.55);
+  color: var(--ember);
+}
+
+/* ------------------------------ live stats ------------------------------ */
+.dt-game .game-stat {
+  border-radius: 3px;
+  border: 1px solid rgba(233, 185, 73, 0.14);
+  background: linear-gradient(180deg, rgba(242, 236, 221, 0.03), transparent 70%);
+}
+.dt-game .game-stat__label {
+  letter-spacing: 0.26em;
+  color: var(--bone-faint);
+}
+/* the multiplier is the climb into ember heat */
+.dt-game .game-stat--mult {
+  border-color: rgba(255, 68, 56, 0.28);
+  background:
+    radial-gradient(90% 70% at 50% 115%, rgba(255, 68, 56, 0.09) 0%, transparent 70%),
+    linear-gradient(180deg, rgba(242, 236, 221, 0.03), transparent 70%);
+}
+.dt-game .game-stat--mult .game-stat__value {
+  background: linear-gradient(110deg, var(--gold-bright) 0%, var(--gold) 45%, var(--gold-deep) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+/* potential earnings = the safe money — gold, not jade */
+.dt-game .game-stat--pay {
+  border-color: rgba(233, 185, 73, 0.3);
+}
+.dt-game .game-stat--pay .game-stat__value { color: var(--gold-bright); }
+.dt-game .game-hint {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 0.88rem;
+  color: var(--bone-faint);
+}
+
+/* toast, scoped to this stage */
+.dt-stage .game-toast {
+  border-radius: 3px;
+  background: var(--void-2);
+  border: 1px solid rgba(233, 185, 73, 0.45);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  letter-spacing: 0.06em;
+}
+
+/* ==================== the tower ==================== */
 .dt-tower {
   display: flex;
   flex-direction: column-reverse; /* row 0 sits at the bottom — you climb up */
@@ -29,31 +227,44 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 10px;
-  background: linear-gradient(150deg, var(--ink) 0%, var(--obsidian) 100%);
+  border-radius: 3px;
+  background: linear-gradient(180deg, rgba(242, 236, 221, 0.035) 0%, rgba(242, 236, 221, 0.01) 100%);
   border: 1px solid var(--line);
   color: var(--bone-dim);
   cursor: default;
   transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 
+/* ascending into ember heat: the upper floors of the tower run hotter.
+   (column-reverse — nth-child counts from the bottom floor upward.) */
+.dt-tower .dt-row:nth-child(n+4) .dt-tile:not(.is-safe):not(.is-dragon):not(.is-available) {
+  border-color: rgba(255, 68, 56, 0.12);
+  box-shadow: inset 0 -8px 18px -14px rgba(255, 68, 56, 0.3);
+}
+.dt-tower .dt-row:nth-child(n+8) .dt-tile:not(.is-safe):not(.is-dragon):not(.is-available) {
+  border-color: rgba(255, 68, 56, 0.22);
+  box-shadow: inset 0 -10px 20px -12px rgba(255, 68, 56, 0.45);
+}
+
 .dt-row.is-active .dt-tile.is-available {
   cursor: pointer;
   border-color: rgba(233, 185, 73, 0.4);
-  background: linear-gradient(150deg, #1e1727 0%, #14101c 100%);
+  background: linear-gradient(180deg, rgba(233, 185, 73, 0.09) 0%, rgba(233, 185, 73, 0.02) 100%);
 }
 .dt-tile.is-available:hover {
   border-color: var(--gold);
   box-shadow: 0 0 0 1px rgba(233, 185, 73, 0.3), 0 10px 24px -12px rgba(233, 185, 73, 0.6);
 }
 
+/* safe stone claimed — gold, the house pays for nerve */
 .dt-tile.is-safe {
-  background: radial-gradient(circle at 50% 40%, rgba(43, 212, 160, 0.28) 0%, var(--ink) 78%);
-  border-color: rgba(43, 212, 160, 0.55);
-  color: var(--jade);
+  background: radial-gradient(circle at 50% 40%, rgba(233, 185, 73, 0.24) 0%, rgba(233, 185, 73, 0.03) 78%);
+  border-color: rgba(233, 185, 73, 0.6);
+  color: var(--gold-bright);
 }
+/* the dragon — ember, fire, the end of the climb */
 .dt-tile.is-dragon {
-  background: radial-gradient(circle at 50% 40%, rgba(255, 68, 56, 0.32) 0%, var(--ink) 78%);
+  background: radial-gradient(circle at 50% 40%, rgba(255, 68, 56, 0.32) 0%, rgba(194, 31, 26, 0.06) 78%);
   border-color: rgba(255, 68, 56, 0.6);
   color: var(--ember);
   box-shadow: 0 0 24px -6px rgba(255, 68, 56, 0.5);
@@ -67,7 +278,7 @@
   50% { transform: scale(1.16); }
   100% { transform: scale(1); }
 }
-.dt-arrow { color: var(--jade); }
+.dt-arrow { color: var(--gold); }
 
 /* ==================== RESPONSIVE (scoped to .dt-game) ====================
    Goal: on phones/tablets the bet & cash-out controls must be reachable
@@ -100,7 +311,10 @@
 
 /* phones: scale the tower to fit the viewport height-wise */
 @media (max-width: 600px) {
-  .dt-game .game-board { padding: clamp(0.7rem, 3vw, 1rem); border-radius: 16px; }
+  .game-stage.dt-stage { padding-top: 96px; }
+  body.has-promo .game-stage.dt-stage { padding-top: 146px; }
+
+  .dt-game .game-board { padding: clamp(0.7rem, 3vw, 1rem); border-radius: 4px; }
 
   .dt-game .dt-tower {
     /* cap by viewport so all 10 floors stay visible without long scrolling */
@@ -111,7 +325,7 @@
 
   /* shorter tiles -> the full tower is much closer to one screenful,
      while staying tall enough to tap reliably */
-  .dt-game .dt-tile { height: clamp(26px, 3.8vh, 40px); border-radius: 8px; }
+  .dt-game .dt-tile { height: clamp(26px, 3.8vh, 40px); border-radius: 2px; }
 
   /* keep the bet/cash-out buttons a full 44px tap target */
   .dt-game .game-primary,

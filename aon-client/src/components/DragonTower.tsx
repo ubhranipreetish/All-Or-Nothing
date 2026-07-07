@@ -175,7 +175,7 @@ export default function DragonTower() {
         <>
             <Navbar />
 
-            <main className="game-stage">
+            <main className="game-stage dt-stage">
                 <AnimatePresence>
                     {notification && (
                         <motion.div

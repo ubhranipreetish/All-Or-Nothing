@@ -57,16 +57,18 @@ const FortuneWheel = () => {
     };
     const difficulties: Record<DifficultyLevel, number> = { low: 4, medium: 3, hard: 2 };
 
+    // Segment palette — harmonized to the Fortune's Edge tokens
+    // (void / jade / violet / gold / ember) instead of saturated rainbow.
     const multiplierColors: Record<string, string> = {
-        "0.00x": "#2A2533",
+        "0.00x": "#241C30",
         "1.20x": "#2BD4A0",
         "1.50x": "#8B5CF6",
-        "2.00x": "#F59E0B",
-        "3.00x": "#2BD4A0",
+        "2.00x": "#E9B949",
+        "3.00x": "#FFD877",
         "9.50x": "#FF4438",
         "19.50x": "#A78BFA",
-        "29.50x": "#EC4899",
-        "39.50x": "#22D3EE",
+        "29.50x": "#FFD877",
+        "39.50x": "#E9B949",
     };
 
     const no_of_segments = [10, 20, 30, 40];
@@ -239,7 +241,7 @@ const FortuneWheel = () => {
         <>
             <Navbar />
 
-            <main className="game-stage">
+            <main className="game-stage fw-stage">
                 <AnimatePresence>
                     {notification && (
                         <motion.div
@@ -332,7 +334,7 @@ const FortuneWheel = () => {
                                 <div className="game-field">
                                     <label className="game-label">Risk</label>
                                     <select
-                                        className="game-select"
+                                        className="game-select fw-risk"
                                         value={difficulty}
                                         onChange={(e) => setDifficulty(e.target.value as DifficultyLevel)}
                                         disabled={started}

@@ -1,4 +1,116 @@
-/* ==================== FORTUNE WHEEL — wheel (noir-luxe) ==================== */
+/* ====================================================================
+   FORTUNE WHEEL — "electric fate" (fw)
+   Noir-luxe reskin: premium void black, squared gold-ticked panels,
+   Anton gold-gradient headline, mono controls. Accent: VIOLET.
+   All rules scoped under .fw-stage / .fw-* so the shared Game.css
+   (imported globally) is never touched — only overridden here.
+   ==================================================================== */
+
+/* ------------------------------ stage ------------------------------ */
+/* Pure void black — kill the shared plum wash. A single faint violet
+   radial veil sits behind the wheel (left track on desktop). */
+.fw-stage.game-stage {
+  background:
+    radial-gradient(52% 44% at 37% 42%, rgba(139, 92, 246, 0.06) 0%, transparent 70%),
+    var(--void);
+}
+
+/* promo banner (fixed under the navbar) — reserve space for it */
+body.has-promo .fw-stage.game-stage {
+  padding-top: calc(clamp(84px, 10vh, 110px) + 50px);
+}
+
+/* ------------------------------ header ------------------------------ */
+.fw-stage .game-title {
+  background: linear-gradient(110deg, var(--gold-bright) 0%, var(--gold) 45%, var(--gold-deep) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 0 60px rgba(233, 185, 73, 0.16);
+}
+.fw-stage .game-title em { color: var(--gold); }
+
+/* wheel's accent is violet — the live dot signals electric fate */
+.fw-stage .game-eyebrow .dot {
+  background: var(--violet-bright);
+  box-shadow: 0 0 10px var(--violet);
+}
+
+/* ------------------------- panels (squared) ------------------------- */
+/* Squared dossier panels: hairline gold border, faint bone gradient,
+   gold corner ticks (top-left / bottom-right) — no rounded glass. */
+.fw-stage .game-board,
+.fw-stage .game-panel {
+  position: relative;
+  border-radius: 3px;
+  border: 1px solid rgba(233, 185, 73, 0.14);
+  background: linear-gradient(180deg, rgba(242, 236, 221, 0.02) 0%, transparent 60%);
+  box-shadow: none;
+}
+.fw-stage .game-board::before,
+.fw-stage .game-panel::before,
+.fw-stage .game-board::after,
+.fw-stage .game-panel::after {
+  content: "";
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  pointer-events: none;
+  z-index: 1;
+}
+.fw-stage .game-board::before,
+.fw-stage .game-panel::before {
+  top: -1px;
+  left: -1px;
+  border-top: 2px solid var(--gold);
+  border-left: 2px solid var(--gold);
+}
+.fw-stage .game-board::after,
+.fw-stage .game-panel::after {
+  bottom: -1px;
+  right: -1px;
+  border-bottom: 2px solid var(--gold);
+  border-right: 2px solid var(--gold);
+}
+
+/* ------------------------------ controls ------------------------------ */
+.fw-stage .game-label {
+  color: var(--bone-faint);
+  letter-spacing: 0.26em;
+}
+.fw-stage .game-input,
+.fw-stage .game-select {
+  background: rgba(242, 236, 221, 0.04);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+}
+.fw-stage .game-adjust button {
+  background: rgba(242, 236, 221, 0.04);
+  border-radius: 3px;
+}
+.fw-stage .game-primary { border-radius: 3px; }
+.fw-stage .game-toast { border-radius: 3px; }
+
+/* risk selector — the fate dial gets the violet accent */
+.fw-stage .fw-risk {
+  color: var(--violet-bright);
+  border-color: rgba(139, 92, 246, 0.4);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23A78BFA' stroke-width='1.7' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+.fw-stage .fw-risk:focus {
+  border-color: var(--violet);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.18);
+}
+.fw-stage .fw-risk option {
+  background: var(--ink);
+  color: var(--bone);
+}
+.fw-stage .fw-risk option:checked { color: var(--violet-bright); }
+
+/* ==================== wheel ==================== */
 
 .fw-wrap {
   position: relative;
@@ -14,7 +126,7 @@
   display: block;
   transform-origin: 50% 50%;
   transition: transform 4.2s cubic-bezier(0.16, 1, 0.3, 1);
-  filter: drop-shadow(0 0 50px rgba(233, 185, 73, 0.18));
+  filter: drop-shadow(0 0 46px rgba(139, 92, 246, 0.22));
 }
 .wheel-svg.no-transition { transition: none !important; }
 .wheel-svg path {
@@ -77,7 +189,7 @@
 .wheel-svg path.segment-loss { opacity: 0.45; }
 .wheel-svg path.segment-loser { opacity: 0.35; }
 
-/* payout legend */
+/* payout legend — squared mono chips, functional colour kept on the base rule */
 .fw-legend {
   display: flex;
   flex-wrap: wrap;
@@ -89,12 +201,13 @@
   font-family: var(--font-mono);
   font-size: 0.78rem;
   font-weight: 600;
+  letter-spacing: 0.06em;
   padding: 7px 14px;
   border: 1px solid var(--line);
   border-bottom: 3px solid var(--gold);
-  border-radius: 8px;
+  border-radius: 2px;
   color: var(--bone);
-  background: var(--ink);
+  background: rgba(242, 236, 221, 0.04);
 }
 
 /* ==================== RESPONSIVE LAYOUT ==================== */
@@ -103,6 +216,12 @@
    at <=900px (board first, panel second). Shrink the wheel so the bet
    controls sit close to the fold instead of far below it. */
 @media (max-width: 900px) {
+  /* stacked: wheel sits top-centre, so recentre the violet veil */
+  .fw-stage.game-stage {
+    background:
+      radial-gradient(70% 36% at 50% 26%, rgba(139, 92, 246, 0.06) 0%, transparent 70%),
+      var(--void);
+  }
   .fw-board.game-board {
     min-height: 0;            /* drop the 340px floor that wasted vertical space */
     padding: clamp(0.8rem, 3vw, 1.4rem);
@@ -121,6 +240,7 @@
 }
 
 @media (max-width: 600px) {
+  body.has-promo .fw-stage.game-stage { padding-top: 136px; }
   .fw-board.game-board { padding: 0.6rem; }
   .fw-wrap {
     width: min(82vw, 52vh, 360px);

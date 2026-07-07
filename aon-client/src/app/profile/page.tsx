@@ -127,7 +127,7 @@ export default function ProfilePage() {
 
     if (authLoading || loading) {
         return (
-            <><Navbar /><div className="pf2"><div className="loading-state"><div className="loading-spinner" /><p>Loading profile…</p></div></div><Footer /></>
+            <><Navbar /><div className="pfx"><div className="loading-state"><div className="loading-spinner" /><p>Opening your dossier…</p></div></div><Footer /></>
         );
     }
     if (!user) return null;
@@ -142,147 +142,166 @@ export default function ProfilePage() {
     return (
         <>
             <Navbar />
-            <div className="pf2">
-                <main className="pf2__wrap">
-                    {/* identity */}
-                    <section className="pf2__hero">
-                        <div className="pf2__heroL">
-                            <img src={profile?.user.avatar || user.avatar} alt={profile?.user.name || user.name} className="pf2__avatar" />
-                            <div className="pf2__idtext">
-                                <h1 className="pf2__name">{profile?.user.name || user.name}</h1>
-                                <p className="pf2__email">{profile?.user.email || user.email}</p>
-                                <p className="pf2__meta">
-                                    {since && <>Member since {since}</>}
-                                    {rank && <> · <span className="pf2__rankchip">Rank #{rank}</span></>}
-                                </p>
+            <div className="pfx">
+                <main className="pfx__wrap">
+                    {/* ---- identity plate ---- */}
+                    <section className="pfx-id">
+                        <div className="pfx-id__top">
+                            <span className="pfx-eyebrow"><i className="pfx-eyebrow__dot" />House dossier</span>
+                            <button className="pfx-logout" onClick={logout}><LogOut size={13} /> Log out</button>
+                        </div>
+                        <h1 className="pfx-id__name">{profile?.user.name || user.name}</h1>
+                        <div className="pfx-id__row">
+                            <img src={profile?.user.avatar || user.avatar} alt={profile?.user.name || user.name} className="pfx-id__avatar" />
+                            <div className="pfx-id__facts">
+                                <span className="pfx-id__email">{profile?.user.email || user.email}</span>
+                                <em className="pfx-id__tag">{since ? <>at the table since <b>{since}</b></> : <>new to the table</>}</em>
                             </div>
-                        </div>
-                        <button className="pf2__logout" onClick={logout}><LogOut size={15} /> Log out</button>
-                    </section>
-
-                    {/* key stats */}
-                    <section className="pf2__stats">
-                        <div className="pf2__stat">
-                            <span>Balance</span>
-                            <b>₹{wallet.toFixed(2)}</b>
-                            <i>available to play</i>
-                        </div>
-                        <div className="pf2__stat">
-                            <span>Net worth</span>
-                            <b className={netWorth < 0 ? "neg" : ""}>₹{netWorth.toFixed(2)}</b>
-                            <i>balance − loans</i>
-                        </div>
-                        <div className="pf2__stat">
-                            <span>Total earnings</span>
-                            <b className={totalEarnings < 0 ? "neg" : "pos"}>{totalEarnings >= 0 ? "+" : "−"}₹{Math.abs(totalEarnings).toFixed(2)}</b>
-                            <i>lifetime profit / loss</i>
-                        </div>
-                        <div className="pf2__stat">
-                            <span>Biggest win</span>
-                            <b className="gold">{profile?.biggestWin ? `₹${profile.biggestWin.amount.toFixed(2)}` : "—"}</b>
-                            <i>{profile?.biggestWin ? formatGame(profile.biggestWin.gameType) : "no wins yet"}</i>
-                        </div>
-                    </section>
-
-                    {/* leaderboard + loans */}
-                    <div className="pf2__cols">
-                        <section className="pf2__card">
-                            <header className="pf2__cardhead">
-                                <h2>Leaderboard</h2>
-                                <Link className="pf2__link" href="/leaderboard">View all →</Link>
-                            </header>
-                            <div className="leaderboard-list">
-                                {leaderboard.slice(0, 5).map((entry) => (
-                                    <div key={entry.userId} className={`leaderboard-item ${entry.userId === user.id ? "is-you" : ""} ${entry.rank <= 3 ? `is-top is-top-${entry.rank}` : ""}`}>
-                                        <span className={`rank rank-${entry.rank}`}>{entry.rank <= 3 ? medals[entry.rank - 1] : entry.rank}</span>
-                                        <img src={entry.avatar} alt={entry.username} className="lb-avatar" />
-                                        <span className="lb-name">{entry.username}{entry.userId === user.id && <span className="you-badge">You</span>}</span>
-                                        <span className={`lb-earnings ${entry.netWorth < 0 ? "negative" : ""}`}>{entry.netWorth >= 0 ? "+" : ""}₹{entry.netWorth.toFixed(0)}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </section>
-
-                        <section className="pf2__card">
-                            <header className="pf2__cardhead">
-                                <h2>Active loans</h2>
-                                <span className="pf2__pill">{activeLoans.length}/2</span>
-                            </header>
-                            {activeLoans.length === 0 ? (
-                                <p className="pf2__empty">No active loans. Borrow anytime from the wallet up top — repaid with 10% daily interest.</p>
-                            ) : (
-                                <div className="loans-list">
-                                    {activeLoans.map((loan) => {
-                                        const repayAmount = loan.repaymentAmount ?? loan.amount;
-                                        const interest = repayAmount - loan.amount;
-                                        return (
-                                            <div key={loan._id} className="loan-item">
-                                                <div className="loan-info">
-                                                    <span className="loan-principal">Principal: ₹{loan.amount.toFixed(2)}</span>
-                                                    <span className="loan-repay-amount">
-                                                        Repay: ₹{repayAmount.toFixed(2)}
-                                                        {interest > 0 && <span className="interest-badge">+₹{interest.toFixed(2)} ({loan.interestDays ?? 1}d)</span>}
-                                                    </span>
-                                                    <span className="loan-date">Taken: {new Date(loan.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}</span>
-                                                </div>
-                                                <button className="repay-btn" onClick={() => openRepayModal(loan)} disabled={repayingLoanId === loan._id || wallet < repayAmount} title={wallet < repayAmount ? `Need ₹${repayAmount.toFixed(2)}` : "Repay this loan"}>
-                                                    {repayingLoanId === loan._id ? "…" : `Repay ₹${repayAmount.toFixed(0)}`}
-                                                </button>
-                                            </div>
-                                        );
-                                    })}
+                            {rank && (
+                                <div className="pfx-seal">
+                                    <span>Rank</span>
+                                    <b>#{rank}</b>
                                 </div>
                             )}
-                        </section>
-                    </div>
+                        </div>
+                    </section>
 
-                    {/* activity */}
-                    <section className="pf2__card" ref={transactionSectionRef}>
-                        <header className="pf2__cardhead">
-                            <h2>{showAllTransactions ? "Transaction history" : "Recent activity"}</h2>
-                            {showAllTransactions && (
-                                <div className="filter-group">
-                                    {["ALL", "BET", "WIN", "DEPOSIT"].map((filter) => (
-                                        <button key={filter} className={`filter-btn ${activeFilter === filter ? "active" : ""}`} onClick={() => handleFilterChange(filter)}>{filter}</button>
+                    {/* ---- the numbers ---- */}
+                    <section className="pfx-strip">
+                        <div className="pfx-strip__cell">
+                            <span className="pfx-strip__label">Balance</span>
+                            <span className="pfx-strip__num">₹{wallet.toFixed(2)}</span>
+                            <span className="pfx-strip__note">ready to stake</span>
+                        </div>
+                        <div className="pfx-strip__cell">
+                            <span className="pfx-strip__label">Net worth</span>
+                            <span className={`pfx-strip__num ${netWorth < 0 ? "is-ember" : ""}`}>₹{netWorth.toFixed(2)}</span>
+                            <span className="pfx-strip__note">balance − debts</span>
+                        </div>
+                        <div className="pfx-strip__cell">
+                            <span className="pfx-strip__label">Lifetime P&L</span>
+                            <span className={`pfx-strip__num ${totalEarnings < 0 ? "is-ember" : "is-gold"}`}>{totalEarnings >= 0 ? "+" : "−"}₹{Math.abs(totalEarnings).toFixed(2)}</span>
+                            <span className="pfx-strip__note">every bet, settled</span>
+                        </div>
+                        <div className="pfx-strip__cell">
+                            <span className="pfx-strip__label">Biggest win</span>
+                            <span className="pfx-strip__num is-gold">{profile?.biggestWin ? `₹${profile.biggestWin.amount.toFixed(2)}` : "—"}</span>
+                            <span className="pfx-strip__note">{profile?.biggestWin ? `on ${formatGame(profile.biggestWin.gameType)}` : "still hunting"}</span>
+                        </div>
+                    </section>
+
+                    <div className="pfx-grid">
+                        {/* ---- the ledger ---- */}
+                        <section className="pfx-panel pfx-ledger" ref={transactionSectionRef}>
+                            <header className="pfx-panel__head">
+                                <div>
+                                    <h2 className="pfx-panel__title">The Ledger</h2>
+                                    <span className="pfx-panel__sub">every rupee, accounted for</span>
+                                </div>
+                                {showAllTransactions && (
+                                    <div className="pfx-tabs">
+                                        {["ALL", "BET", "WIN", "DEPOSIT"].map((filter) => (
+                                            <button key={filter} className={activeFilter === filter ? "is-on" : ""} onClick={() => handleFilterChange(filter)}>{filter}</button>
+                                        ))}
+                                    </div>
+                                )}
+                            </header>
+
+                            {transactionsLoading && displayedTransactions.length === 0 ? (
+                                <div className="loading-state"><div className="loading-spinner" /><p>Loading…</p></div>
+                            ) : displayedTransactions.length === 0 ? (
+                                <p className="pfx-empty">The ledger is blank. Place your first bet and let it start talking.</p>
+                            ) : (
+                                <>
+                                    <div className="pfx-ledger__scroll" style={{ opacity: transactionsLoading ? 0.4 : 1, transition: "opacity 0.3s ease", pointerEvents: transactionsLoading ? "none" : "auto" }}>
+                                        <table>
+                                            <thead><tr><th>Date</th><th>Game</th><th>Entry</th><th>Amount</th><th>Balance</th></tr></thead>
+                                            <tbody>
+                                                {displayedTransactions.map((tx) => (
+                                                    <tr key={tx._id}>
+                                                        <td>{formatDate(tx.createdAt)}</td>
+                                                        <td>{getTransactionNote(tx) || formatGame(tx.gameType)}</td>
+                                                        <td><span className={`pfx-stamp pfx-stamp--${tx.type.toLowerCase()}`}>{tx.type}</span></td>
+                                                        <td className={tx.amount >= 0 ? "pfx-amt--in" : "pfx-amt--out"}>{formatAmount(tx.amount)}</td>
+                                                        <td>₹{tx.balanceAfter.toFixed(2)}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    {!showAllTransactions && transactions.length >= 5 && (
+                                        <button className="pfx-more" onClick={handleSeeAll}><span>Open the full ledger</span><ChevronDown size={15} /></button>
+                                    )}
+                                    {showAllTransactions && pagination && pagination.totalPages > 1 && (
+                                        <div className="pfx-pages">
+                                            <button onClick={() => handlePageChange(currentPage - 1)} disabled={!pagination.hasPrev} aria-label="Previous page"><ChevronLeft size={17} /></button>
+                                            <span>Page {pagination.page} / {pagination.totalPages}</span>
+                                            <button onClick={() => handlePageChange(currentPage + 1)} disabled={!pagination.hasNext} aria-label="Next page"><ChevronRight size={17} /></button>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </section>
+
+                        <div className="pfx-rail">
+                            {/* ---- debts to the house ---- */}
+                            <section className="pfx-panel">
+                                <header className="pfx-panel__head">
+                                    <div>
+                                        <h2 className="pfx-panel__title">Debts to the House</h2>
+                                        <span className="pfx-panel__sub">10% daily interest, always collected</span>
+                                    </div>
+                                    <span className="pfx-count">{activeLoans.length}/2</span>
+                                </header>
+                                {activeLoans.length === 0 ? (
+                                    <p className="pfx-empty">The house holds nothing over you. Borrow from the wallet up top — if you dare.</p>
+                                ) : (
+                                    <div>
+                                        {activeLoans.map((loan) => {
+                                            const repayAmount = loan.repaymentAmount ?? loan.amount;
+                                            const interest = repayAmount - loan.amount;
+                                            return (
+                                                <div key={loan._id} className="pfx-loan">
+                                                    <div className="pfx-loan__info">
+                                                        <span className="pfx-loan__main">₹{loan.amount.toFixed(2)} owed — settle for <b>₹{repayAmount.toFixed(2)}</b></span>
+                                                        <span className="pfx-loan__meta">
+                                                            taken {new Date(loan.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}
+                                                            {interest > 0 && <> · +₹{interest.toFixed(2)} interest ({loan.interestDays ?? 1}d)</>}
+                                                        </span>
+                                                    </div>
+                                                    <button className="pfx-repay" onClick={() => openRepayModal(loan)} disabled={repayingLoanId === loan._id || wallet < repayAmount} title={wallet < repayAmount ? `Need ₹${repayAmount.toFixed(2)}` : "Repay this loan"}>
+                                                        {repayingLoanId === loan._id ? "…" : `Settle ₹${repayAmount.toFixed(0)}`}
+                                                    </button>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </section>
+
+                            {/* ---- the table ---- */}
+                            <section className="pfx-panel">
+                                <header className="pfx-panel__head">
+                                    <div>
+                                        <h2 className="pfx-panel__title">The Table</h2>
+                                        <span className="pfx-panel__sub">where you stand tonight</span>
+                                    </div>
+                                    <Link className="pfx-panel__aside" href="/leaderboard">full standings →</Link>
+                                </header>
+                                <div className="leaderboard-list">
+                                    {leaderboard.slice(0, 5).map((entry) => (
+                                        <div key={entry.userId} className={`leaderboard-item ${entry.userId === user.id ? "is-you" : ""} ${entry.rank <= 3 ? `is-top is-top-${entry.rank}` : ""}`}>
+                                            <span className={`rank rank-${entry.rank}`}>{entry.rank <= 3 ? medals[entry.rank - 1] : entry.rank}</span>
+                                            <img src={entry.avatar} alt={entry.username} className="lb-avatar" />
+                                            <span className="lb-name">{entry.username}{entry.userId === user.id && <span className="you-badge">You</span>}</span>
+                                            <span className={`lb-earnings ${entry.netWorth < 0 ? "negative" : ""}`}>{entry.netWorth >= 0 ? "+" : ""}₹{entry.netWorth.toFixed(0)}</span>
+                                        </div>
                                     ))}
                                 </div>
-                            )}
-                        </header>
-
-                        {transactionsLoading && displayedTransactions.length === 0 ? (
-                            <div className="loading-state"><div className="loading-spinner" /><p>Loading…</p></div>
-                        ) : displayedTransactions.length === 0 ? (
-                            <p className="pf2__empty">No transactions yet — place your first bet to get started.</p>
-                        ) : (
-                            <>
-                                <table className="transaction-table" style={{ opacity: transactionsLoading ? 0.4 : 1, transition: "opacity 0.3s ease", pointerEvents: transactionsLoading ? "none" : "auto" }}>
-                                    <thead><tr><th>Date</th><th>Game</th><th>Type</th><th>Amount</th><th>Balance</th></tr></thead>
-                                    <tbody>
-                                        {displayedTransactions.map((tx) => (
-                                            <tr key={tx._id}>
-                                                <td data-label="Date">{formatDate(tx.createdAt)}</td>
-                                                <td data-label="Game">{getTransactionNote(tx) || formatGame(tx.gameType)}</td>
-                                                <td data-label="Type"><span className={`type-badge ${tx.type.toLowerCase()}`}>{tx.type}</span></td>
-                                                <td data-label="Amount" className={tx.amount >= 0 ? "amount-positive" : "amount-negative"}>{formatAmount(tx.amount)}</td>
-                                                <td data-label="Balance">₹{tx.balanceAfter.toFixed(2)}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-
-                                {!showAllTransactions && transactions.length >= 5 && (
-                                    <button className="see-all-btn" onClick={handleSeeAll}><span>See all transactions</span><ChevronDown size={18} /></button>
-                                )}
-                                {showAllTransactions && pagination && pagination.totalPages > 1 && (
-                                    <div className="pagination">
-                                        <button className="pagination-btn" onClick={() => handlePageChange(currentPage - 1)} disabled={!pagination.hasPrev}><ChevronLeft size={20} /></button>
-                                        <span className="pagination-info">Page {pagination.page} of {pagination.totalPages}</span>
-                                        <button className="pagination-btn" onClick={() => handlePageChange(currentPage + 1)} disabled={!pagination.hasNext}><ChevronRight size={20} /></button>
-                                    </div>
-                                )}
-                            </>
-                        )}
-                    </section>
+                            </section>
+                        </div>
+                    </div>
                 </main>
             </div>
 

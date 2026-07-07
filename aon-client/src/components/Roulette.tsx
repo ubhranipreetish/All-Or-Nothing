@@ -385,8 +385,8 @@ export default function Roulette({ testMode = false }: { testMode?: boolean }) {
                             <svg viewBox="0 0 400 400" className="rl-wheel-svg" ref={wheelRef}>
                                 <defs>
                                     <radialGradient id="rlHub" cx="50%" cy="45%" r="60%">
-                                        <stop offset="0%" stopColor="#1d3a59" />
-                                        <stop offset="100%" stopColor="#0c1e30" />
+                                        <stop offset="0%" stopColor="#241b31" />
+                                        <stop offset="100%" stopColor="#0b0910" />
                                     </radialGradient>
                                     <linearGradient id="rlGold" x1="0" y1="0" x2="1" y2="1">
                                         <stop offset="0%" stopColor="#ffe79a" />
@@ -394,11 +394,11 @@ export default function Roulette({ testMode = false }: { testMode?: boolean }) {
                                         <stop offset="100%" stopColor="#ffd877" />
                                     </linearGradient>
                                 </defs>
-                                <circle cx="200" cy="200" r="198" fill="#0a0a0a" stroke="url(#rlGold)" strokeWidth="5" />
+                                <circle cx="200" cy="200" r="198" fill="#07060a" stroke="url(#rlGold)" strokeWidth="5" />
                                 {WHEEL.map((num, i) => {
                                     const a = i * SEG;
                                     const mid = a + SEG / 2;
-                                    const fill = num === 0 ? "#16a34a" : RED.has(num) ? "#c8102e" : "#141414";
+                                    const fill = num === 0 ? "#0e8560" : RED.has(num) ? "#d2372c" : "#120e1a";
                                     const tr = 168;
                                     const tx = Math.round((200 + tr * Math.cos(((mid - 90) * Math.PI) / 180)) * 100) / 100;
                                     const ty = Math.round((200 + tr * Math.sin(((mid - 90) * Math.PI) / 180)) * 100) / 100;
@@ -411,7 +411,7 @@ export default function Roulette({ testMode = false }: { testMode?: boolean }) {
                                     );
                                 })}
                                 <circle cx="200" cy="200" r="120" fill="url(#rlHub)" stroke="url(#rlGold)" strokeWidth="3" />
-                                <circle cx="200" cy="200" r="64" fill="#0c1e30" stroke="url(#rlGold)" strokeWidth="2" />
+                                <circle cx="200" cy="200" r="64" fill="#0b0910" stroke="url(#rlGold)" strokeWidth="2" />
                                 {[0, 60, 120, 180, 240, 300].map((d) => {
                                     const sx = Math.round((200 + 118 * Math.cos((d * Math.PI) / 180)) * 100) / 100;
                                     const sy = Math.round((200 + 118 * Math.sin((d * Math.PI) / 180)) * 100) / 100;
