@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useWallet } from "../contexts/WalletContext";
 import { useAuth } from "../contexts/AuthContext";
 import { GoogleLogin } from "@react-oauth/google";
-import { Wallet, Plus, Menu, X, Gamepad2, Trophy, Shield, Gift, AlertTriangle, Ban } from "lucide-react";
+import { Wallet, Plus, Gift, AlertTriangle, Ban, CheckCircle2 } from "lucide-react";
 import "../styles/Navbar.css";
 
 export default function Navbar() {
@@ -16,65 +16,39 @@ export default function Navbar() {
     const [loanAmount, setLoanAmount] = useState("");
     const [error, setError] = useState("");
     const [scrolled, setScrolled] = useState(false);
-    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [claiming, setClaiming] = useState(false);
+    const [showGames, setShowGames] = useState(false);
+
+    const GAMES = [
+        { name: "Mines", href: "/mines" },
+        { name: "Dragon Tower", href: "/dragon-tower" },
+        { name: "Fortune Wheel", href: "/wheel" },
+        { name: "Roulette", href: "/roulette" },
+        { name: "Poker", href: "/poker" },
+    ];
+    const goto = (href: string) => { setShowGames(false); router.push(href); };
     const [loanState, setLoanState] = useState<"input" | "processing" | "success">("input");
     const [loanedAmount, setLoanedAmount] = useState(0);
 
     useEffect(() => {
-        const handleScroll = () => {
-            setScrolled(window.scrollY > 20);
-        };
+        const handleScroll = () => setScrolled(window.scrollY > 20);
         window.addEventListener("scroll", handleScroll);
         return () => window.removeEventListener("scroll", handleScroll);
     }, []);
 
-    useEffect(() => {
-        const hash = window.location.hash;
-        if (hash) {
-            setTimeout(() => {
-                const targetId = hash.replace('#', '');
-                const element = document.getElementById(targetId);
-                if (element) {
-                    const offset = 80;
-                    const elementPosition = element.getBoundingClientRect().top;
-                    const offsetPosition = elementPosition + window.pageYOffset - offset;
-                    window.scrollTo({
-                        top: offsetPosition,
-                        behavior: "smooth"
-                    });
-                }
-            }, 100);
-        }
-    }, []);
-
     const handleTakeLoan = async () => {
         const amount = parseFloat(loanAmount) || 0;
-        if (amount <= 0) {
-            setError("Please enter a valid amount greater than 0");
-            return;
-        }
-        if (amount > 10000000) {
-            setError("Maximum loan amount is ₹1,00,00,000");
-            return;
-        }
-
-        // Show processing state
+        if (amount <= 0) { setError("Please enter a valid amount greater than 0"); return; }
+        if (amount > 10000000) { setError("Maximum loan amount is ₹1,00,00,000"); return; }
         setLoanState("processing");
         setLoanedAmount(amount);
-
-        // Wait 0.5 second for visual feedback
-        await new Promise(resolve => setTimeout(resolve, 500));
-
+        await new Promise((resolve) => setTimeout(resolve, 500));
         const success = await takeLoan(amount);
         if (success) {
             setLoanState("success");
             setLoanAmount("");
             setError("");
-            // Auto close after 1 second
-            setTimeout(() => {
-                handleCloseModal();
-            }, 1000);
+            setTimeout(() => handleCloseModal(), 1000);
         } else {
             setLoanState("input");
             setError("Failed to take loan. Please try again.");
@@ -93,173 +67,88 @@ export default function Navbar() {
         setClaiming(true);
         const success = await claimWelcomeBonus();
         setClaiming(false);
-        if (!success) {
-            alert("Failed to claim bonus. Please try again.");
-        }
-    };
-
-    const handleSmoothScroll = (e: React.MouseEvent<HTMLAnchorElement>, targetId: string) => {
-        e.preventDefault();
-        const isHomePage = window.location.pathname === "/" || window.location.pathname === "";
-
-        if (isHomePage) {
-            const element = document.getElementById(targetId);
-            if (element) {
-                const offset = 80;
-                const elementPosition = element.getBoundingClientRect().top;
-                const offsetPosition = elementPosition + window.pageYOffset - offset;
-                window.scrollTo({
-                    top: offsetPosition,
-                    behavior: "smooth"
-                });
-            }
-        } else {
-            router.push(`/#${targetId}`);
-        }
-        setMobileMenuOpen(false);
+        if (!success) alert("Failed to claim bonus. Please try again.");
     };
 
     return (
         <>
             <nav className={`navbar ${scrolled ? "navbar-scrolled" : ""}`}>
                 <div className="navbar-container">
-                    <div className="logo" onClick={() => router.push("/")}>
-                        <img src="/images/aon-logo.png" alt="All Or Nothing" />
-                    </div>
-
-                    <div className="nav-links">
-                        <a href="#games" className="nav-link" onClick={(e) => handleSmoothScroll(e, "games")}>
-                            <Gamepad2 size={18} />
-                            <span>Games</span>
-                        </a>
-                        <a href="#fairness" className="nav-link" onClick={(e) => handleSmoothScroll(e, "fairness")}>
-                            <Shield size={18} />
-                            <span>Fairness</span>
-                        </a>
-                        <a href="/profile" className="nav-link" onClick={(e) => { e.preventDefault(); router.push("/profile"); }}>
-                            <Trophy size={18} />
-                            <span>Leaderboard</span>
-                        </a>
-                    </div>
-
-                    <div className="nav-right">
-                        {user && (
-                            <div className="wallet-section">
-                                <Wallet size={18} className="wallet-icon-svg" />
-                                <span className="wallet">₹{wallet.toFixed(2)}</span>
-                                <button className="add-money-btn" onClick={() => setShowLoanModal(true)}>
-                                    <Plus size={20} />
-                                </button>
-                            </div>
-                        )}
-
-                        <button className="play-now-btn" onClick={() => {
-                            const element = document.getElementById("games");
-                            if (element) {
-                                element.scrollIntoView({ behavior: "smooth", block: "start" });
-                            }
-                        }}>
-                            Play Now
-                        </button>
-
-                        <div className="auth-container" style={{ marginLeft: '1rem' }}>
-                            {!user ? (
-                                <GoogleLogin
-                                    onSuccess={(credentialResponse) => {
-                                        if (credentialResponse.credential) {
-                                            login(credentialResponse.credential).catch((err) => {
-                                                console.error('Login failed:', err);
-                                                alert('Sign in failed. Please try again.');
-                                            });
-                                        }
-                                    }}
-                                    onError={() => {
-                                        console.error('Google Login Failed');
-                                        alert('Google sign in failed. Please try again.');
-                                    }}
-                                    theme="filled_black"
-                                    shape="pill"
-                                />
-                            ) : (
-                                <div
-                                    className="user-profile"
-                                    style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}
-                                    onClick={() => router.push('/profile')}
-                                    title="View Profile"
-                                >
-                                    <img
-                                        src={user.avatar}
-                                        alt={user.name}
-                                        style={{
-                                            width: 40,
-                                            height: 40,
-                                            borderRadius: '50%',
-                                            border: '2px solid #ffd700',
-                                            transition: 'transform 0.2s ease, box-shadow 0.2s ease'
-                                        }}
-                                        onMouseEnter={(e) => {
-                                            e.currentTarget.style.transform = 'scale(1.05)';
-                                            e.currentTarget.style.boxShadow = '0 0 15px rgba(255, 215, 0, 0.5)';
-                                        }}
-                                        onMouseLeave={(e) => {
-                                            e.currentTarget.style.transform = 'scale(1)';
-                                            e.currentTarget.style.boxShadow = 'none';
-                                        }}
-                                    />
+                    {/* left — logo + games menu */}
+                    <div className="nav-left">
+                        <div className="logo" onClick={() => router.push("/")}>
+                            <img src="/images/aon-logo.png" alt="All Or Nothing" />
+                        </div>
+                        <div className="nav-games" onMouseLeave={() => setShowGames(false)}>
+                            <button className="nav-games__btn" onClick={() => setShowGames((s) => !s)} aria-haspopup="true" aria-expanded={showGames}>
+                                Games <span className="nav-games__caret">▾</span>
+                            </button>
+                            {showGames && (
+                                <div className="nav-games__menu">
+                                    {GAMES.map((g) => (
+                                        <button key={g.href} className="nav-games__item" onClick={() => goto(g.href)}>{g.name}</button>
+                                    ))}
+                                    <div className="nav-games__sep" />
+                                    <button className="nav-games__item" onClick={() => goto("/leaderboard")}>Leaderboard</button>
+                                    <button className="nav-games__item" onClick={() => goto("/profile")}>My Profile</button>
                                 </div>
                             )}
                         </div>
                     </div>
 
-                    <button
-                        className="mobile-menu-toggle"
-                        onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                    >
-                        {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-                    </button>
-                </div>
-
-                {mobileMenuOpen && (
-                    <div className="mobile-menu">
-                        <a href="#games" className="mobile-nav-link" onClick={(e) => handleSmoothScroll(e, "games")}>
-                            <Gamepad2 size={20} />
-                            <span>Games</span>
-                        </a>
-                        <a href="#fairness" className="mobile-nav-link" onClick={(e) => handleSmoothScroll(e, "fairness")}>
-                            <Shield size={20} />
-                            <span>Fairness</span>
-                        </a>
-                        <a href="/profile" className="mobile-nav-link" onClick={(e) => { e.preventDefault(); setMobileMenuOpen(false); router.push("/profile"); }}>
-                            <Trophy size={20} />
-                            <span>Leaderboard</span>
-                        </a>
+                    {/* center — wallet + take-loan */}
+                    <div className="nav-center">
                         {user && (
-                            <div className="mobile-wallet">
-                                <span>Wallet: ₹{wallet.toFixed(2)}</span>
-                                <button onClick={() => { setShowLoanModal(true); setMobileMenuOpen(false); }}>Take Loan</button>
+                            <div className="wallet-pill">
+                                <Wallet size={17} className="wallet-pill__icon" />
+                                <span className="wallet-pill__amt">₹{wallet.toFixed(2)}</span>
+                                <button className="wallet-pill__add" onClick={() => setShowLoanModal(true)} title="Take a loan (10% daily interest)" aria-label="Take a loan">
+                                    <Plus size={18} />
+                                </button>
                             </div>
                         )}
                     </div>
-                )}
+
+                    {/* right — profile or sign-in */}
+                    <div className="nav-right">
+                        {!user ? (
+                            <GoogleLogin
+                                onSuccess={(credentialResponse) => {
+                                    if (credentialResponse.credential) {
+                                        login(credentialResponse.credential).catch((err) => {
+                                            console.error("Login failed:", err);
+                                            alert("Sign in failed. Please try again.");
+                                        });
+                                    }
+                                }}
+                                onError={() => {
+                                    console.error("Google Login Failed");
+                                    alert("Google sign in failed. Please try again.");
+                                }}
+                                theme="filled_black"
+                                shape="pill"
+                            />
+                        ) : (
+                            <button className="nav-profile" onClick={() => router.push("/profile")} title="View profile" aria-label="View profile">
+                                <img src={user.avatar} alt={user.name} />
+                            </button>
+                        )}
+                    </div>
+                </div>
             </nav>
 
-            {/* Promo Banner */}
+            {/* Promo banners */}
             {!user && (
                 <div className="promo-banner promo-guest">
                     <Gift size={20} />
                     <span>Register with us & get <strong>FREE ₹100</strong> in your wallet (new users only)</span>
                 </div>
             )}
-
             {user && !hasClaimed100Bonus && (
                 <div className="promo-banner promo-claim">
                     <Gift size={20} />
                     <span>Welcome Bonus! Claim your <strong>₹100</strong> free bonus</span>
-                    <button
-                        className="claim-btn"
-                        onClick={handleClaimBonus}
-                        disabled={claiming}
-                    >
+                    <button className="claim-btn" onClick={handleClaimBonus} disabled={claiming}>
                         {claiming ? "Claiming..." : "Claim ₹100"}
                     </button>
                 </div>
@@ -272,59 +161,49 @@ export default function Navbar() {
                         {canTakeLoan ? (
                             <>
                                 {loanState === "input" && (
-                                    <>
-                                        <h3>💰 Take a Loan</h3>
-                                        <p className="loan-subtitle">Get instant funds for your wallet</p>
+                                    <div className="loan2">
+                                        <div className="loan2__head">
+                                            <h3>Take a loan</h3>
+                                            <span className="loan2__cap">{activeLoansCount}/2 active</span>
+                                        </div>
+                                        <p className="loan2__sub">Credits land in your wallet instantly — repaid with 10% daily compound interest.</p>
 
-                                        <div className="loan-input-section">
-                                            <label>Choose Amount:</label>
+                                        <label className="loan2__label">Amount</label>
+                                        <div className="loan2__field">
+                                            <span className="loan2__cur">₹</span>
                                             <input
                                                 type="number"
                                                 value={loanAmount}
-                                                onChange={(e) => {
-                                                    setLoanAmount(e.target.value);
-                                                    setError("");
-                                                }}
-                                                placeholder="Enter loan amount"
+                                                onChange={(e) => { setLoanAmount(e.target.value); setError(""); }}
+                                                placeholder="0"
                                                 min="1"
                                                 max="10000000"
                                                 step="any"
                                                 autoFocus
                                             />
                                         </div>
-
-                                        <div className="loan-status">
-                                            <span className="loan-count">Active Loans: <strong>{activeLoansCount} / 2</strong></span>
+                                        <div className="loan2__chips">
+                                            {[500, 1000, 5000, 10000].map((v) => (
+                                                <button key={v} type="button" className="loan2__chip" onClick={() => { setLoanAmount(String(v)); setError(""); }}>₹{v.toLocaleString("en-IN")}</button>
+                                            ))}
                                         </div>
 
-                                        <div className="loan-warnings">
-                                            <div className="warning-item">
-                                                <AlertTriangle size={16} />
-                                                <span>10% daily compound interest applies</span>
+                                        {(parseFloat(loanAmount) || 0) > 0 && (
+                                            <div className="loan2__preview">
+                                                <div><span>You receive</span><b>₹{(parseFloat(loanAmount) || 0).toLocaleString("en-IN")}</b></div>
+                                                <div><span>Repay in 1 day</span><b>₹{Math.round((parseFloat(loanAmount) || 0) * 1.1).toLocaleString("en-IN")}</b></div>
                                             </div>
-                                            <div className="warning-item">
-                                                <AlertTriangle size={16} />
-                                                <span>Loan deducted from leaderboard instantly</span>
-                                            </div>
-                                        </div>
+                                        )}
+
+                                        <p className="loan2__note"><AlertTriangle size={14} /> Interest compounds daily and lowers your leaderboard net worth until repaid.</p>
 
                                         {error && <p className="modal-error">{error}</p>}
-
                                         <div className="modal-buttons">
-                                            <button className="modal-cancel" onClick={handleCloseModal}>
-                                                Cancel
-                                            </button>
-                                            <button
-                                                className="modal-confirm loan-confirm"
-                                                onClick={handleTakeLoan}
-                                                disabled={loading}
-                                            >
-                                                Confirm Loan
-                                            </button>
+                                            <button className="modal-cancel" onClick={handleCloseModal}>Cancel</button>
+                                            <button className="modal-confirm loan-confirm" onClick={handleTakeLoan} disabled={loading}>Borrow</button>
                                         </div>
-                                    </>
+                                    </div>
                                 )}
-
                                 {loanState === "processing" && (
                                     <div className="loan-processing">
                                         <div className="processing-spinner"></div>
@@ -332,13 +211,12 @@ export default function Navbar() {
                                         <p>Lending ₹{loanedAmount.toFixed(2)}</p>
                                     </div>
                                 )}
-
                                 {loanState === "success" && (
                                     <div className="loan-success">
-                                        <div className="success-icon">✅</div>
-                                        <h3>Money Lended!</h3>
+                                        <div className="success-icon"><CheckCircle2 size={44} /></div>
+                                        <h3>Loan added</h3>
                                         <p className="success-amount">₹{loanedAmount.toFixed(2)} added to wallet</p>
-                                        <p className="success-hint">Repay with 10% daily interest</p>
+                                        <p className="success-hint">Repay anytime from your profile</p>
                                     </div>
                                 )}
                             </>
@@ -346,20 +224,13 @@ export default function Navbar() {
                             <>
                                 <div className="loan-limit-reached">
                                     <Ban size={48} className="limit-icon" />
-                                    <h3>🚫 Loan Limit Reached</h3>
+                                    <h3>Loan Limit Reached</h3>
                                     <p>You already have <strong>2 active loans</strong>.</p>
                                     <p className="limit-hint">Repay an existing loan to take another.</p>
                                 </div>
                                 <div className="modal-buttons">
-                                    <button className="modal-cancel" onClick={handleCloseModal}>
-                                        Close
-                                    </button>
-                                    <button
-                                        className="modal-confirm"
-                                        onClick={() => { handleCloseModal(); router.push('/profile'); }}
-                                    >
-                                        Go to Profile
-                                    </button>
+                                    <button className="modal-cancel" onClick={handleCloseModal}>Close</button>
+                                    <button className="modal-confirm" onClick={() => { handleCloseModal(); router.push("/profile"); }}>Go to Profile</button>
                                 </div>
                             </>
                         )}

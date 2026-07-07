@@ -76,6 +76,36 @@ rest of the app receives its collaborators through constructors.
 - **D**ependency inversion — services depend on abstractions injected by
   `container.ts`; concrete Google/JWT/Mongo classes are chosen only there.
 
+## Realtime multiplayer poker
+
+Poker follows the same layering as the rest of the backend — business rules stay
+out of the transport, and the two halves are wired in the composition root.
+
+```
+domain/poker/            pure rules (no framework, unit-testable)
+  cards.ts                 52-card deck + shuffle
+  handEvaluator.ts         best-of-7 scoring + comparison
+  PokerTable.ts            one table: seating, blinds, betting, side pots, showdown
+        │
+        ▼
+services/PokerService.ts  application service — owns the live tables + the
+  │                        player→table map; exposes use-cases (create / join /
+  │                        leave / act / sit-out / rebuy / timeout / start).
+  │                        Framework-free.
+        ▼
+realtime/poker/PokerGateway.ts   infrastructure edge — the Socket.IO `/poker`
+                           namespace, the turn-clock / inter-hand / reconnect-
+                           grace timers, and a per-viewer presenter that hides
+                           hole cards until showdown. Delegates every mutation to
+                           PokerService and holds no game rules.
+```
+
+`container.ts` constructs `PokerService` and injects it into `PokerGateway`
+(Dependency Inversion); `server.ts` calls `container.pokerGateway.register(io)`,
+mirroring `container.socketNotifier.register()`. The engine is verified
+independently of any transport by `scripts/pokerSmoke.ts` (thousands of
+random-but-legal hands assert termination and exact chip conservation).
+
 ## Commands
 
 ```bash

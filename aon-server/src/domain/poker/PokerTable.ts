@@ -36,6 +36,13 @@ export interface Winner {
     handName: string;
 }
 
+/** A player who has requested to join but is awaiting the host's approval. */
+export interface PendingPlayer {
+    id: string;
+    name: string;
+    buyIn: number;
+}
+
 const MAX_SEATS = 6;
 const SIT_OUT_AFTER_MISSES = 2;
 
@@ -55,6 +62,11 @@ export class PokerTable {
     lastResultAt = 0;
     deadlineTs: number | null = null; // when the current actor times out
 
+    /* ------------------------------------------------------- lobby / host */
+    hostId: string | null = null; // the room owner who admits players & starts play
+    started = false; // host has started the game; no hands deal until this is true
+    pending: PendingPlayer[] = []; // join requests awaiting the host's approval
+
     private deck: Card[] = [];
 
     constructor(
@@ -68,7 +80,7 @@ export class PokerTable {
 
     /* ----------------------------------------------------------- seating */
 
-    seatPlayer(id: string, name: string): number {
+    seatPlayer(id: string, name: string, buyIn = this.startingStack): number {
         const existing = this.seats.findIndex((s) => s?.id === id);
         if (existing !== -1) {
             this.seats[existing]!.disconnected = false;
@@ -78,21 +90,90 @@ export class PokerTable {
         const idx = this.seats.findIndex((s) => s === null);
         if (idx === -1) return -1;
         this.seats[idx] = {
-            id, name, stack: this.startingStack, bet: 0, committed: 0,
+            id, name, stack: Math.max(1, Math.floor(buyIn)), bet: 0, committed: 0,
             folded: false, allIn: false, acted: false, cards: [],
             away: false, disconnected: false, missed: 0, inHand: false,
         };
         return idx;
     }
 
+    /** Current chip stack for a player (for cashing out to their wallet). */
+    stackOf(id: string): number {
+        return this.seats.find((s) => s?.id === id)?.stack ?? 0;
+    }
+
+    /* ------------------------------------------------------- lobby / host */
+
+    setHost(id: string): void {
+        this.hostId = id;
+    }
+    isHost(id: string): boolean {
+        return this.hostId === id;
+    }
+    hostName(): string {
+        const h = this.seats.find((s) => s?.id === this.hostId);
+        return h?.name ?? "the host";
+    }
+
+    /** True if anyone is seated (the host always seats on create). */
+    hasSeats(): boolean {
+        return this.occupied().length > 0;
+    }
+
+    addPending(id: string, name: string, buyIn = this.startingStack): void {
+        if (this.seats.some((s) => s?.id === id)) return; // already seated
+        const idx = this.pending.findIndex((p) => p.id === id);
+        const entry: PendingPlayer = { id, name, buyIn: Math.max(1, Math.floor(buyIn)) };
+        if (idx === -1) this.pending.push(entry);
+        else this.pending[idx] = entry;
+    }
+    removePending(id: string): void {
+        this.pending = this.pending.filter((p) => p.id !== id);
+    }
+    hasPending(id: string): boolean {
+        return this.pending.some((p) => p.id === id);
+    }
+
+    /**
+     * Host admits a pending player → seats them (not away). If a hand is live
+     * they are seated with inHand=false, so they spectate the current hand and
+     * are dealt in from the next one. Returns the seat + buy-in, or null if full.
+     */
+    admit(id: string): { seat: number; name: string; buyIn: number } | null {
+        const p = this.pending.find((x) => x.id === id);
+        if (!p) return null;
+        const seat = this.seatPlayer(p.id, p.name, p.buyIn);
+        if (seat === -1) return null; // table full
+        this.removePending(id);
+        return { seat, name: p.name, buyIn: p.buyIn };
+    }
+
+    /** Host begins play. Requires at least two seated, ready players. */
+    startGame(): boolean {
+        if (this.dealtSeats().length < 2) return false;
+        this.started = true;
+        return true;
+    }
+
     removePlayer(id: string): void {
+        this.removePending(id); // also drop any outstanding join request
         const idx = this.seats.findIndex((s) => s?.id === id);
-        if (idx === -1) return;
+        if (idx === -1) {
+            if (this.hostId === id) this.reassignHost();
+            return;
+        }
         if (this.handActive && this.seats[idx]!.inHand && !this.seats[idx]!.folded) {
             this.seats[idx]!.folded = true;
             if (this.toAct === idx) this.advanceAfterAction(idx);
         }
         this.seats[idx] = null;
+        if (this.hostId === id) this.reassignHost();
+    }
+
+    /** Hand the room to the next remaining seated player (or nobody). */
+    private reassignHost(): void {
+        const next = this.seats.find((s) => s !== null);
+        this.hostId = next ? next.id : null;
     }
 
     setDisconnected(id: string, value: boolean): void {
@@ -142,6 +223,7 @@ export class PokerTable {
     /* ------------------------------------------------------- hand lifecycle */
 
     maybeStartHand(): boolean {
+        if (!this.started) return false; // host hasn't started the game yet
         if (this.handActive) return false;
         if (this.dealtSeats().length < 2) return false;
         this.startHand();

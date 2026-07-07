@@ -101,19 +101,6 @@ export default function Tile({ tile, onClick, disabled, isDimmed, isSpotlight, c
                                     </motion.div>
                                 )}
                             </AnimatePresence>
-
-                            <motion.div
-                                className="gem-shimmer"
-                                animate={{
-                                    left: ['-100%', '200%']
-                                }}
-                                transition={{
-                                    duration: 1.5,
-                                    repeat: Infinity,
-                                    ease: "linear",
-                                    delay: 0.5
-                                }}
-                            />
                         </div>
                     )}
                 </div>

@@ -42,6 +42,12 @@ export interface Winner {
     handName: string;
 }
 
+export interface PendingPlayer {
+    id: string;
+    name: string;
+    buyIn: number;
+}
+
 export interface TableState {
     tableId: string;
     phase: "waiting" | "preflop" | "flop" | "turn" | "river" | "showdown";
@@ -65,6 +71,14 @@ export interface TableState {
     youSeated: boolean;
     youAway: boolean;
     youCanRebuy: boolean;
+    /* lobby / host context — optional so the local (backend-free) engine,
+       which never sets them, still satisfies this type. */
+    started?: boolean;
+    youHost?: boolean;
+    youPending?: boolean;
+    youSpectating?: boolean;
+    hostName?: string;
+    pending?: PendingPlayer[];
     seats: (SeatView | null)[];
     legal: Legal | null;
 }

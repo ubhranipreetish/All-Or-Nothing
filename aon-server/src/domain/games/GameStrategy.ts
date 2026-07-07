@@ -1,4 +1,4 @@
-export type GameType = "ROULETTE" | "MINES" | "DRAGON_TOWER" | "WHEEL";
+export type GameType = "ROULETTE" | "MINES" | "DRAGON_TOWER" | "WHEEL" | "POKER";
 
 /**
  * GameStrategy (Strategy)

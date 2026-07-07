@@ -161,7 +161,7 @@ export function WalletProvider({ children }: WalletProviderProps) {
       return { success: false };
     }
 
-    try {
+    const attemptStart = async () => {
       const res = await fetch(`${API_URL}/game/start`, {
         method: "POST",
         headers: {
@@ -170,8 +170,26 @@ export function WalletProvider({ children }: WalletProviderProps) {
         },
         body: JSON.stringify({ amount, gameType, gameConfig }),
       });
-
       const data = await res.json();
+      return { res, data };
+    };
+
+    try {
+      let { res, data } = await attemptStart();
+
+      // Self-heal: a previous round of this game never settled (e.g. the loss
+      // call was still in flight when the player clicked Place Bet again). The
+      // server returns the stuck session's id — forfeit it and retry once so the
+      // player is never blocked from betting.
+      if (!res.ok && data?.sessionId && /active game session/i.test(data?.message || "")) {
+        await fetch(`${API_URL}/game/lose`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ sessionId: data.sessionId }),
+        });
+        ({ res, data } = await attemptStart());
+      }
+
       if (res.ok) {
         setWallet(data.newBalance);
         return { success: true, sessionId: data.sessionId, newBalance: data.newBalance };

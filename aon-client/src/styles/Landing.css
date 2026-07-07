@@ -283,6 +283,80 @@ body.fe-cursor-on button {
   justify-content: center;
   min-height: 420px;
 }
+
+/* ---- hero 3D spinning disc (desktop only, ≥1025px) ---- */
+.fe-hero__disc { display: none; }
+@media (min-width: 1025px) {
+  .fe-hero__disc {
+    position: relative;
+    display: grid;
+    place-items: center;
+    min-height: 70vh;
+    perspective: 1600px;
+    z-index: 1;
+  }
+}
+.fe-hero__disc-glow {
+  position: absolute;
+  width: 80%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle,
+    rgba(233, 185, 73, 0.34) 0%,
+    rgba(139, 92, 246, 0.16) 42%,
+    rgba(255, 68, 56, 0.06) 60%,
+    transparent 72%);
+  filter: blur(50px);
+  animation: fe-disc-glow 5.5s ease-in-out infinite;
+  z-index: 0;
+}
+.fe-hero__disc-stage {
+  position: relative;
+  width: min(42vw, 560px);
+  aspect-ratio: 1;
+  transform-style: preserve-3d;
+  will-change: transform;
+  z-index: 1;
+}
+.fe-hero__disc-spin {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: url("/images/spinning-disc.jpg") center / 122% no-repeat;
+  -webkit-mask-image: radial-gradient(circle, #000 56%, rgba(0, 0, 0, 0.5) 74%, transparent 92%);
+  mask-image: radial-gradient(circle, #000 56%, rgba(0, 0, 0, 0.5) 74%, transparent 92%);
+  animation: fe-disc-spin 26s linear infinite;
+}
+/* faux metallic edge BEHIND the face (real sibling so the stage's 3D space keeps
+   it behind) → reads as a thick 3D coin, without darkening the gold face */
+.fe-hero__disc-edge {
+  position: absolute;
+  inset: 4%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 42%, #2a1d09 0%, #120c04 60%, #050301 100%);
+  box-shadow: 0 40px 70px -20px rgba(0, 0, 0, 0.85);
+  transform: translateZ(-40px);
+}
+/* fixed specular highlight — doesn't spin, so the metal "catches" a steady light */
+.fe-hero__disc-sheen {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(ellipse 46% 38% at 34% 26%,
+    rgba(255, 255, 255, 0.30) 0%, rgba(255, 236, 180, 0.10) 36%, transparent 62%);
+  mix-blend-mode: screen;
+  -webkit-mask-image: radial-gradient(circle, #000 56%, transparent 88%);
+  mask-image: radial-gradient(circle, #000 56%, transparent 88%);
+}
+@keyframes fe-disc-spin { to { transform: rotate(360deg); } }
+@keyframes fe-disc-glow {
+  0%, 100% { opacity: 0.7; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.06); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fe-hero__disc-spin, .fe-hero__disc-glow { animation: none; }
+}
 .fe-scrollcue {
   position: absolute;
   bottom: 28px;
@@ -848,11 +922,10 @@ body.fe-cursor-on button {
   object-position: center;
   z-index: 0;
   background: transparent;
-  /* The clip has a black watermark baked into its bottom-right corner. A slight
-     zoom (anchored toward top-left) crops most of it off; the corner vignette in
-     the scrim mops up the rest. */
-  transform: scale(1.22);
-  transform-origin: 32% 28%;
+  /* Keep the coin centred. A gentle, centre-anchored zoom hides the clip's let
+     boxing; the dark bottom-right corner of the scrim covers the baked watermark. */
+  transform: scale(1.12);
+  transform-origin: center center;
   /* Hidden until the first real frame is decoded (see ScrollStoryVideo.tsx),
      then faded in — kills the black-frame flash on scroll-in. */
   opacity: 0;

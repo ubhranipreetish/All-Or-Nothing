@@ -24,8 +24,10 @@ import { LeaderboardService } from "./services/LeaderboardService";
 import { BonusService } from "./services/BonusService";
 import { ProfileService } from "./services/ProfileService";
 import { TransactionService } from "./services/TransactionService";
+import { PokerService } from "./services/PokerService";
 
 import { SocketNotifier } from "./realtime/SocketNotifier";
+import { PokerGateway } from "./realtime/poker/PokerGateway";
 
 // --- Infrastructure / adapters ---
 const identityProvider = new GoogleAuthAdapter();
@@ -62,9 +64,11 @@ const loanService = new LoanService(
 const bonusService = new BonusService(userRepository, transactionRepository);
 const profileService = new ProfileService(userRepository, transactionRepository);
 const transactionService = new TransactionService(transactionRepository);
+const pokerService = new PokerService();
 
-// --- Realtime observer (subscribes to the EventBus) ---
-const socketNotifier = new SocketNotifier(leaderboardService);
+// --- Realtime adapters ---
+const socketNotifier = new SocketNotifier(leaderboardService); // Observer on the EventBus
+const pokerGateway = new PokerGateway(pokerService); // Socket.IO transport for poker
 
 export const container = {
     tokenService,
@@ -76,7 +80,9 @@ export const container = {
     bonusService,
     profileService,
     transactionService,
+    pokerService,
     socketNotifier,
+    pokerGateway,
 };
 
 export type Container = typeof container;

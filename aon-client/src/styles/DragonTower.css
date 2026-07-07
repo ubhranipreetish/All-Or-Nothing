@@ -3,9 +3,9 @@
 .dt-tower {
   display: flex;
   flex-direction: column-reverse; /* row 0 sits at the bottom — you climb up */
-  gap: clamp(6px, 1vw, 10px);
+  gap: clamp(7px, 1.1vw, 12px);
   width: 100%;
-  max-width: 440px;
+  max-width: 500px;
   margin: 0 auto;
 }
 
@@ -22,7 +22,10 @@
 .dt-tower .dt-row.is-active { opacity: 1; }
 
 .dt-tile {
-  aspect-ratio: 16 / 9;
+  /* Fixed height (only the WIDTH changes with difficulty — more tiles per floor
+     just makes each narrower). Height is viewport-bounded so all 10 floors fit
+     one screen. */
+  height: clamp(30px, 4.4vh, 50px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -108,7 +111,7 @@
 
   /* shorter tiles -> the full tower is much closer to one screenful,
      while staying tall enough to tap reliably */
-  .dt-game .dt-tile { aspect-ratio: 5 / 2; min-height: 30px; border-radius: 8px; }
+  .dt-game .dt-tile { height: clamp(26px, 3.8vh, 40px); border-radius: 8px; }
 
   /* keep the bet/cash-out buttons a full 44px tap target */
   .dt-game .game-primary,
@@ -119,5 +122,5 @@
 /* very narrow phones (<=380px): tighten further, no horizontal overflow */
 @media (max-width: 380px) {
   .dt-game .game-stat { flex: 1 1 100%; }
-  .dt-game .dt-tile { aspect-ratio: 7 / 3; }
+  .dt-game .dt-tile { height: 26px; }
 }

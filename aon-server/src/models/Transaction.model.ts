@@ -4,7 +4,7 @@ export interface ITransaction {
     userId: Types.ObjectId;
     type: "BET" | "WIN" | "DEPOSIT" | "WITHDRAW";
     gameId?: string;
-    gameType?: "ROULETTE" | "AON" | "DICE" | "MINES" | "DRAGON_TOWER" | "WHEEL";
+    gameType?: "ROULETTE" | "AON" | "DICE" | "MINES" | "DRAGON_TOWER" | "WHEEL" | "POKER";
     amount: number;
     balanceAfter: number;
     meta?: {
@@ -36,7 +36,7 @@ const TransactionSchema = new Schema<ITransaction>(
         },
         gameType: {
             type: String,
-            enum: ["ROULETTE", "AON", "DICE", "MINES", "DRAGON_TOWER", "WHEEL"],
+            enum: ["ROULETTE", "AON", "DICE", "MINES", "DRAGON_TOWER", "WHEEL", "POKER"],
         },
         amount: {
             type: Number,

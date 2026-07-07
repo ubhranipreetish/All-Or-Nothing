@@ -9,6 +9,7 @@ import { useWallet } from "../contexts/WalletContext";
 import { useAuth } from "../contexts/AuthContext";
 import Footer from "./Footer";
 import SignInDialog from "./SignInDialog";
+import HowToPlay from "./HowToPlay";
 // NOTE: guided tutorial intentionally deferred — see ./tutorial/* (to be re-added later).
 
 type DifficultyLevel = "Low" | "Medium" | "High";
@@ -194,7 +195,10 @@ export default function DragonTower() {
                             <span className="game-eyebrow"><span className="dot" /> {difficultyLabels[difficulty]}</span>
                             <h1 className="game-title">DRAGON <em>tower</em></h1>
                         </div>
-                        <p className="game-sub">Pick a safe stone each floor. One dragon ends the climb.</p>
+                        <div className="game-head__right">
+                            <p className="game-sub">Pick a safe stone each floor. One dragon ends the climb.</p>
+                            <HowToPlay game="dragon" />
+                        </div>
                     </header>
 
                     <div className="game-layout">

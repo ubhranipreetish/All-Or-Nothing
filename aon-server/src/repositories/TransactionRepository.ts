@@ -35,7 +35,15 @@ export class MongoTransactionRepository implements TransactionRepository {
     }
 
     findBiggestWin(userId: string) {
-        return Transaction.findOne({ userId, type: "WIN" })
+        // A genuine win is one whose payout exceeded its stake. This excludes
+        // break-even cash-outs / buy-in refunds (e.g. leaving a poker table with
+        // the chips you sat down with) — those are also logged as WIN rows but
+        // are not real winnings and must not headline "Biggest Win".
+        return Transaction.findOne({
+            userId,
+            type: "WIN",
+            $expr: { $gt: ["$amount", { $ifNull: ["$meta.betAmount", 0] }] },
+        })
             .sort({ amount: -1 })
             .select("amount gameType createdAt meta")
             .lean<BiggestWin>()

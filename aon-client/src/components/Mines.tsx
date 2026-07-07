@@ -9,6 +9,7 @@ import { useWallet } from "../contexts/WalletContext";
 import { useAuth } from "../contexts/AuthContext";
 import Footer from "./Footer";
 import SignInDialog from "./SignInDialog";
+import HowToPlay from "./HowToPlay";
 // NOTE: guided tutorial intentionally deferred — see ./tutorial/* (to be re-added later).
 
 const TILE_COUNT = 25;
@@ -55,6 +56,7 @@ export default function Mines() {
     const [notification, setNotification] = useState<string>("");
     const [spotlightIndex, setSpotlightIndex] = useState<number | null>(null);
     const sessionIdRef = useRef<string | null>(null);
+    const roundRef = useRef(0); // bumps each round so a stale reveal animation can bail
     const gridRef = useRef<HTMLDivElement>(null);
 
     const showNotification = (message: string) => {
@@ -144,10 +146,12 @@ export default function Mines() {
             return;
         }
 
-        const initialBoard = generateBoard(mineCount);
+        const mines = Math.max(1, Math.min(24, Math.floor(mineCount) || 3));
+        setMineCount(mines);
+        const initialBoard = generateBoard(mines);
         const { success, sessionId } = await startGameSession(amount, "MINES", {
             board: initialBoard,
-            mineCount,
+            mineCount: mines,
         });
         if (!success) {
             showNotification("Failed to place bet");
@@ -155,6 +159,7 @@ export default function Mines() {
         }
         if (sessionId) sessionIdRef.current = sessionId;
 
+        roundRef.current += 1; // invalidate any still-running reveal from the prior round
         setBoard(initialBoard);
         setStarted(true);
         setGameOver(false);
@@ -168,6 +173,7 @@ export default function Mines() {
     };
 
     const waveReveal = async (lastIndex: number) => {
+        const myRound = roundRef.current;
         const tilesWithDistance = board
             .map((_, i) => ({
                 index: i,
@@ -179,6 +185,7 @@ export default function Mines() {
             .sort((a, b) => a.dist - b.dist);
 
         for (const item of tilesWithDistance) {
+            if (roundRef.current !== myRound) return; // a new round started — stop animating the old board
             setBoard((prev) => {
                 const next = [...prev];
                 next[item.index] = { ...next[item.index], revealed: true };
@@ -211,11 +218,12 @@ export default function Mines() {
             setGameOver(true);
             setMultiplier("0.00");
             setEarnings(0);
+            // Settle the loss immediately (the reveal animation below takes ~1s);
+            // otherwise a fast "New Round → Place Bet" hits a still-active session.
+            const lostSession = sessionIdRef.current;
+            sessionIdRef.current = null;
+            if (lostSession) recordLoss(lostSession);
             await waveReveal(index);
-            if (sessionIdRef.current) {
-                await recordLoss(sessionIdRef.current);
-                sessionIdRef.current = null;
-            }
         } else {
             if (gemSound.current) {
                 gemSound.current.currentTime = 0;
@@ -262,7 +270,7 @@ export default function Mines() {
         if (m >= 2 && m < 5) return "Most players bank around 2–3×.";
         if (m >= 5 && m < 10) return "Risk climbs sharply past 5×.";
         if (m >= 10) return "Legend territory. Don't be greedy.";
-        return "Reveal a gem to start the climb.";
+        return revealedCount > 0 ? "Cash out now, or dig for more." : "Reveal a gem to start the climb.";
     };
 
     const idle = !started && !gameOver && !cashedOut;
@@ -292,7 +300,10 @@ export default function Mines() {
                             <span className="game-eyebrow"><span className="dot" /> Provably fair · {mineCount} mines</span>
                             <h1 className="game-title">MINES</h1>
                         </div>
-                        <p className="game-sub">Flip gems, dodge the bombs, and bank it before the board blows.</p>
+                        <div className="game-head__right">
+                            <p className="game-sub">Flip gems, dodge the bombs, and bank it before the board blows.</p>
+                            <HowToPlay game="mines" />
+                        </div>
                     </header>
 
                     <div className="game-layout mines-layout">
@@ -335,8 +346,10 @@ export default function Mines() {
                                         <input
                                             className="game-input"
                                             type="number"
-                                            value={mineCount}
-                                            onChange={(e) => setMineCount(Math.max(1, Math.min(24, Number(e.target.value))))}
+                                            min={1}
+                                            max={24}
+                                            value={mineCount || ""}
+                                            onChange={(e) => setMineCount(Number(e.target.value))}
                                         />
                                     </div>
 

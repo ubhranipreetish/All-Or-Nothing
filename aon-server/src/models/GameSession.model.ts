@@ -25,7 +25,7 @@ const GameSessionSchema = new Schema<IGameSession>(
         gameType: {
             type: String,
             required: true,
-            enum: ["ROULETTE", "MINES", "DRAGON_TOWER", "WHEEL"],
+            enum: ["ROULETTE", "MINES", "DRAGON_TOWER", "WHEEL", "POKER"],
         },
         betAmount: {
             type: Number,

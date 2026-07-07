@@ -1,9 +1,22 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { TableState, Card, SeatView } from "./types";
 import { sounds, isSoundEnabled, setSoundEnabled } from "./sounds";
+
+/* transient copy/share confirmation toast */
+function useToast() {
+    const [msg, setMsg] = useState<string | null>(null);
+    const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const show = useCallback((m: string) => {
+        setMsg(m);
+        if (timer.current) clearTimeout(timer.current);
+        timer.current = setTimeout(() => setMsg(null), 2000);
+    }, []);
+    useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+    return { msg, show };
+}
 
 const SUIT = { s: "♠", h: "♥", d: "♦", c: "♣" } as const;
 const RANK: Record<number, string> = { 11: "J", 12: "Q", 13: "K", 14: "A" };
@@ -49,6 +62,9 @@ export default function PokerTable({
     onSitOut,
     onSitIn,
     onRebuy,
+    onAdmit,
+    onDeny,
+    onStart,
 }: {
     state: TableState;
     onAct: (type: string, amount?: number) => void;
@@ -56,10 +72,32 @@ export default function PokerTable({
     onSitOut?: () => void;
     onSitIn?: () => void;
     onRebuy?: () => void;
+    onAdmit?: (id: string) => void;
+    onDeny?: (id: string) => void;
+    onStart?: () => void;
 }) {
     const mySeat = state.seats.find((s) => s?.isYou) ?? null;
     const clock = useTurnClock(state);
     const [muted, setMuted] = useState(!isSoundEnabled());
+    const toast = useToast();
+
+    // Lobby/host context — default to "started, not host" so the backend-free
+    // local engine (which omits these) renders the plain table.
+    const started = state.started ?? true;
+    const youHost = state.youHost ?? false;
+    const pending = state.pending ?? [];
+    const seatedCount = state.seats.filter((s) => s && !s.away).length;
+
+    const shareUrl = typeof window !== "undefined" ? `${window.location.origin}/poker?room=${state.tableId}` : "";
+    const copyCode = async () => {
+        try { await navigator.clipboard.writeText(state.tableId); toast.show("Code copied"); } catch { /* clipboard blocked */ }
+    };
+    const shareLink = async () => {
+        if (typeof navigator !== "undefined" && navigator.share) {
+            try { await navigator.share({ title: "Join my poker room", text: `Join my poker table — room ${state.tableId}`, url: shareUrl }); return; } catch { /* cancelled */ }
+        }
+        try { await navigator.clipboard.writeText(shareUrl); toast.show("Link copied"); } catch { /* clipboard blocked */ }
+    };
 
     // sound cues on key transitions
     const prevHand = useRef(state.handId);
@@ -89,23 +127,28 @@ export default function PokerTable({
 
     return (
         <div className="pk">
+            {toast.msg && <div className="pk-toast pk-toast--ok">{toast.msg}</div>}
             <div className="pk-top">
                 <div className="pk-top__meta">
                     <span className="pk-code">TABLE {state.tableId}</span>
                     <span className="pk-blinds">
                         Blinds {state.smallBlind}/{state.bigBlind} · Hand #{state.handId}
                     </span>
+                    <span className="pk-share">
+                        <button className="pk-share__btn" onClick={copyCode} title="Copy room code">Copy code</button>
+                        <button className="pk-share__btn" onClick={shareLink} title="Share invite link">Share link</button>
+                    </span>
                 </div>
                 <div className="pk-top__right">
                     <button className="pk-icon" onClick={toggleMute} title={muted ? "Unmute" : "Mute"}>
                         {muted ? "🔇" : "🔊"}
                     </button>
-                    {state.youSeated && !state.youAway && onSitOut && (
+                    {started && state.youSeated && !state.youAway && onSitOut && (
                         <button className="pk-mini" onClick={onSitOut}>
                             Sit out
                         </button>
                     )}
-                    {state.youSeated && state.youAway && onSitIn && (
+                    {started && state.youSeated && state.youAway && onSitIn && (
                         <button className="pk-mini pk-mini--on" onClick={onSitIn}>
                             I&apos;m back
                         </button>
@@ -121,7 +164,22 @@ export default function PokerTable({
                 </div>
             </div>
 
-            <div className="pk-felt">
+            {!started ? (
+                <LobbyView
+                    state={state}
+                    youHost={youHost}
+                    pending={pending}
+                    seatedCount={seatedCount}
+                    onAdmit={onAdmit}
+                    onDeny={onDeny}
+                    onStart={onStart}
+                    onCopy={copyCode}
+                    onShare={shareLink}
+                />
+            ) : (
+                <>
+                    {youHost && pending.length > 0 && <PendingDock pending={pending} onAdmit={onAdmit} onDeny={onDeny} />}
+                    <div className="pk-felt">
                 <div className="pk-center">
                     <div className="pk-phase">{phaseLabel}</div>
                     <div className="pk-community">
@@ -167,9 +225,134 @@ export default function PokerTable({
                         />
                     );
                 })}
-            </div>
+                    </div>
 
-            <ActionArea state={state} mySeat={mySeat} onAct={onAct} />
+                    {state.youSpectating ? (
+                        <div className="pk-actions pk-actions--idle pk-spectate">
+                            👁 Spectating this hand — you&apos;ll be dealt in next hand.
+                        </div>
+                    ) : (
+                        <ActionArea state={state} mySeat={mySeat} onAct={onAct} />
+                    )}
+                </>
+            )}
+        </div>
+    );
+}
+
+/* ---------------------------------------------------------------- lobby UI */
+
+function LobbyView({
+    state,
+    youHost,
+    pending,
+    seatedCount,
+    onAdmit,
+    onDeny,
+    onStart,
+    onCopy,
+    onShare,
+}: {
+    state: TableState;
+    youHost: boolean;
+    pending: { id: string; name: string; buyIn: number }[];
+    seatedCount: number;
+    onAdmit?: (id: string) => void;
+    onDeny?: (id: string) => void;
+    onStart?: () => void;
+    onCopy: () => void;
+    onShare: () => void;
+}) {
+    const seated = state.seats.map((s, i) => ({ s, i })).filter((x) => x.s);
+    return (
+        <div className="pk-lobby">
+            <div className="pk-lobby__card">
+                <div className="pk-lobby__head">
+                    <span className="pk-lobby__eyebrow">WAITING ROOM</span>
+                    <h2 className="pk-lobby__code">ROOM {state.tableId}</h2>
+                    <div className="pk-lobby__share">
+                        <button className="pk-share__btn" onClick={onCopy}>Copy code</button>
+                        <button className="pk-share__btn" onClick={onShare}>Share link</button>
+                    </div>
+                </div>
+
+                <div className="pk-lobby__cols">
+                    <div className="pk-lobby__col">
+                        <h3 className="pk-lobby__h3">At the table · {seatedCount}/6</h3>
+                        <ul className="pk-lobby__list">
+                            {seated.map(({ s }) => (
+                                <li key={s!.name + s!.stack} className="pk-lobby__row">
+                                    <span className="pk-lobby__av">{s!.name.slice(0, 1).toUpperCase()}</span>
+                                    <span className="pk-lobby__name">
+                                        {s!.name}{s!.isYou ? " (you)" : ""}
+                                        {state.hostName === s!.name ? <em className="pk-lobby__host"> · host</em> : null}
+                                    </span>
+                                    <span className="pk-lobby__chips">₵{s!.stack}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+
+                    <div className="pk-lobby__col">
+                        <h3 className="pk-lobby__h3">Waiting to join · {pending.length}</h3>
+                        {pending.length === 0 ? (
+                            <p className="pk-lobby__empty">No one waiting yet. Share the code to invite friends.</p>
+                        ) : (
+                            <ul className="pk-lobby__list">
+                                {pending.map((p) => (
+                                    <li key={p.id} className="pk-lobby__row">
+                                        <span className="pk-lobby__av pk-lobby__av--wait">{p.name.slice(0, 1).toUpperCase()}</span>
+                                        <span className="pk-lobby__name">{p.name}<em className="pk-lobby__buyin"> · ₵{p.buyIn}</em></span>
+                                        {youHost ? (
+                                            <span className="pk-lobby__acts">
+                                                <button className="pk-admit" onClick={() => onAdmit?.(p.id)}>Admit</button>
+                                                <button className="pk-deny" onClick={() => onDeny?.(p.id)}>Deny</button>
+                                            </span>
+                                        ) : (
+                                            <span className="pk-lobby__chips">waiting…</span>
+                                        )}
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+                </div>
+
+                {youHost ? (
+                    <button className="pk-cta pk-lobby__start" onClick={onStart} disabled={seatedCount < 2}>
+                        {seatedCount < 2 ? "Need at least 2 players" : "Start game"}
+                    </button>
+                ) : (
+                    <p className="pk-lobby__waitstart">
+                        <span className="pk-spinner pk-spinner--sm" /> Waiting for {state.hostName ?? "the host"} to start the game…
+                    </p>
+                )}
+            </div>
+        </div>
+    );
+}
+
+/* Google-Meet-style admit/deny dock for requests that arrive mid-game. */
+function PendingDock({
+    pending,
+    onAdmit,
+    onDeny,
+}: {
+    pending: { id: string; name: string; buyIn: number }[];
+    onAdmit?: (id: string) => void;
+    onDeny?: (id: string) => void;
+}) {
+    return (
+        <div className="pk-dock">
+            {pending.map((p) => (
+                <div key={p.id} className="pk-dock__item">
+                    <span className="pk-dock__txt"><strong>{p.name}</strong> wants to join · ₵{p.buyIn}</span>
+                    <span className="pk-dock__acts">
+                        <button className="pk-admit" onClick={() => onAdmit?.(p.id)}>Admit</button>
+                        <button className="pk-deny" onClick={() => onDeny?.(p.id)}>Deny</button>
+                    </span>
+                </div>
+            ))}
         </div>
     );
 }

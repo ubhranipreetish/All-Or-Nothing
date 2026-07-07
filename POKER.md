@@ -82,8 +82,10 @@ server arms next turn timer
 | `domain/poker/cards.ts` | Card model, 52-card deck, Fisher–Yates shuffle |
 | `domain/poker/handEvaluator.ts` | Best-of-7 hand scoring + comparison (royal flush → high card) |
 | `domain/poker/PokerTable.ts` | Authoritative table state machine: seating, blinds, betting, side pots, showdown |
-| `realtime/poker/PokerHub.ts` | `/poker` namespace, table manager, per-viewer serialization, turn clock, auto-start |
-| `server.ts` | Registers `pokerHub` on the existing Socket.IO server (one added line) |
+| `services/PokerService.ts` | Application service: owns live tables + player→table map; use-cases (create/join/leave/act/sit-out/rebuy/timeout/start). Framework-free. |
+| `realtime/poker/PokerGateway.ts` | Thin Socket.IO `/poker` adapter: timers + per-viewer serialization; delegates all mutations to `PokerService` |
+| `container.ts` | Composition root: constructs `PokerService`, injects it into `PokerGateway` |
+| `server.ts` | `container.pokerGateway.register(io)` (mirrors `socketNotifier.register()`) |
 | `scripts/pokerSmoke.ts` | Engine simulation: `npx ts-node -T scripts/pokerSmoke.ts` (termination + chip-conservation) |
 
 ### Client (`aon-client/src/`)

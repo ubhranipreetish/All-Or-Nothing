@@ -9,13 +9,14 @@ import {
   useSpring,
   useInView,
 } from "framer-motion";
-import { ArrowUpRight, ArrowRight, Bomb, Flame, Disc3 } from "lucide-react";
+import { ArrowUpRight, ArrowRight, Bomb, Flame, Disc3, Target, Spade } from "lucide-react";
 import "../styles/Landing.css";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
+import { useAuth } from "../contexts/AuthContext";
+import { useWallet } from "../contexts/WalletContext";
 import ComebackStory from "../components/landing/ComebackStory";
 import ScrollStoryVideo from "../components/landing/ScrollStoryVideo";
-import CustomCursor from "../components/landing/CustomCursor";
 import TiltCard from "../components/landing/TiltCard";
 import CountUp from "../components/landing/CountUp";
 
@@ -29,7 +30,7 @@ const GAMES = [
     tag: "Uncover gems. One bomb ends it all.",
     desc: "Flip tiles to grow your multiplier. The more you reveal, the more you risk. Cash out before greed detonates the board.",
     risk: 72,
-    img: "/images/Mines.png",
+    img: "/images/mines_c.png",
     href: "/mines",
     accent: "gold",
   },
@@ -40,7 +41,7 @@ const GAMES = [
     tag: "Climb. Don't wake the dragon.",
     desc: "Pick a safe step on every floor and watch the multiplier soar. Choose the dragon's tile and the tower burns beneath you.",
     risk: 86,
-    img: "/images/D_Tower.png",
+    img: "/images/dragon_c.png",
     href: "/dragon-tower",
     accent: "ember",
   },
@@ -51,8 +52,30 @@ const GAMES = [
     tag: "One spin decides everything.",
     desc: "Set your risk, send it flying, and live with where the pointer lands. No second chances — pure, electric fate.",
     risk: 64,
-    img: "/images/wheel.jpg",
+    img: "/images/wheel_c.png",
     href: "/wheel",
+    accent: "violet",
+  },
+  {
+    id: "roulette",
+    index: "04",
+    name: "ROULETTE",
+    tag: "Drop the ball. Read your fate.",
+    desc: "European single-zero. Stack chips across the felt — straights, splits, dozens, colors — then watch the ball decide it all.",
+    risk: 70,
+    img: "/images/roulette_c.png",
+    href: "/roulette",
+    accent: "ember",
+  },
+  {
+    id: "poker",
+    index: "05",
+    name: "POKER",
+    tag: "Read them. Bluff them. Take it all.",
+    desc: "No-limit Texas Hold'em for up to 6. Create a private room, share the code, and play with credits against your friends in real time.",
+    risk: 90,
+    img: "/images/poker_c.png",
+    href: "/poker",
     accent: "violet",
   },
 ];
@@ -110,6 +133,10 @@ function RiskMeter({ value, accent }: { value: number; accent: string }) {
 
 export default function Home() {
   const router = useRouter();
+  const { user } = useAuth();
+  const { hasClaimed100Bonus } = useWallet();
+  // Once the bonus is claimed, drop the "Claim ₹100" pitch from the bottom CTA.
+  const bonusAvailable = !user || !hasClaimed100Bonus;
 
   const scrollTo = (id: string) => {
     const el = document.getElementById(id);
@@ -134,7 +161,6 @@ export default function Home() {
 
   return (
     <div className="fe">
-      <CustomCursor />
       <motion.div className="fe-progress" style={{ scaleX: bar }} />
 
       <Navbar />
@@ -160,7 +186,7 @@ export default function Home() {
           </h1>
 
           <p className="fe-hero__sub">
-            Three games. One rule — <em>every move decides your fate.</em> Play with
+            Five games. One rule — <em>every move decides your fate.</em> Play with
             virtual credits, chase the leaderboard, risk it to the last tile.
           </p>
 
@@ -173,6 +199,17 @@ export default function Home() {
             </button>
           </div>
         </motion.div>
+
+        {/* right side — 3D spinning disc (temporarily disabled — perf)
+        <motion.div className="fe-hero__disc" aria-hidden style={{ opacity: heroFade }}>
+          <div className="fe-hero__disc-glow" />
+          <motion.div className="fe-hero__disc-stage" style={{ rotateX: discRX, rotateY: discRY }}>
+            <div className="fe-hero__disc-edge" />
+            <div className="fe-hero__disc-spin" />
+            <div className="fe-hero__disc-sheen" />
+          </motion.div>
+        </motion.div>
+        */}
       </section>
 
       {/* marquee ticker */}
@@ -211,6 +248,8 @@ export default function Home() {
                     {g.id === "mines" && <Bomb size={26} />}
                     {g.id === "dragon" && <Flame size={26} />}
                     {g.id === "wheel" && <Disc3 size={26} />}
+                    {g.id === "roulette" && <Target size={26} />}
+                    {g.id === "poker" && <Spade size={26} />}
                   </div>
                   <div className="fe-game__plate">
                     <span className="fe-game__plate-k">{g.index}</span>
@@ -260,7 +299,7 @@ export default function Home() {
           </Reveal>
           <Reveal className="fe-stat" delay={0.16}>
             <div className="fe-stat__num">
-              <CountUp to={3} />
+              <CountUp to={5} />
             </div>
             <div className="fe-stat__label">High-stakes games</div>
           </Reveal>
@@ -302,10 +341,12 @@ export default function Home() {
             ALL <em>or</em> NOTHING
           </h2>
           <p className="fe-final__sub">
-            Claim your ₹100, pick a game, and find out which side of the coin you're on.
+            {bonusAvailable
+              ? "Claim your ₹100, pick a game, and find out which side of the coin you're on."
+              : "Pick a game and find out which side of the coin you're on."}
           </p>
           <button className="fe-btn fe-btn--gold fe-btn--lg" onClick={() => scrollTo("games")} data-cursor>
-            Claim ₹100 &amp; play <ArrowRight size={20} />
+            {bonusAvailable ? "Claim ₹100 & play" : "Enter the arena"} <ArrowRight size={20} />
           </button>
         </Reveal>
       </section>

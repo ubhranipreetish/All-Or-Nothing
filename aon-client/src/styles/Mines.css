@@ -3,9 +3,11 @@
 .mines-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  gap: clamp(8px, 1.4vw, 14px);
+  gap: clamp(10px, 1.5vw, 18px);
   width: 100%;
-  max-width: 520px;
+  /* square grid bounded by BOTH width and viewport height so the whole 5×5
+     board is visible in one screen without scrolling */
+  max-width: min(560px, 56vh);
   margin: 0 auto;
 }
 

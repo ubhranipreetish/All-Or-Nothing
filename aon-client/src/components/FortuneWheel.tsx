@@ -8,6 +8,7 @@ import "../styles/FortuneWheel.css";
 import Navbar from "./Navbar";
 import Footer from "./Footer";
 import SignInDialog from "./SignInDialog";
+import HowToPlay from "./HowToPlay";
 // NOTE: guided tutorial intentionally deferred — see ./tutorial/* (to be re-added later).
 
 type DifficultyLevel = "low" | "medium" | "hard";
@@ -33,7 +34,6 @@ const FortuneWheel = () => {
     const [rotation, setRotation] = useState<number>(0);
     const [segments, setSegments] = useState<Segment[]>([]);
     const [result, setResult] = useState<string | null>(null);
-    const [idx, setIdx] = useState<number>(0);
     const [notification, setNotification] = useState<string>("");
     const [winningIndex, setWinningIndex] = useState<number | null>(null);
 
@@ -133,12 +133,11 @@ const FortuneWheel = () => {
     };
 
     const spinWheel = () => {
+        const n = segments.length;
+        if (!n) return;
+        const anglePerSegment = 360 / n;
         const spins = Math.floor(Math.random() * 5) + 5;
-        const anglePerSegment = 360 / segments.length;
-        const picked = Math.floor(Math.random() * segments.length);
-        const rotate = spins * 360 + (segments.length - picked) * anglePerSegment;
-        const resultIndex = (idx + picked) % segments.length;
-        setIdx(resultIndex);
+        const picked = Math.floor(Math.random() * n);
 
         if (spinSound.current) {
             spinSound.current.currentTime = 0;
@@ -146,13 +145,17 @@ const FortuneWheel = () => {
         }
 
         setRotation((prevRotation) => {
-            const newRotation = prevRotation + rotate;
+            // Land the CENTER of `picked` exactly under the top pointer, several full
+            // spins beyond the current angle. The result is then read from the SAME
+            // segment the pointer points at — no more pointer/result mismatch.
+            const base = Math.ceil(prevRotation / 360) * 360;
+            const newRotation = base + spins * 360 + (n - picked) * anglePerSegment;
             if (wheelRef.current) wheelRef.current.style.transform = `rotate(${newRotation}deg)`;
 
             setTimeout(() => {
-                const resultText = segments[resultIndex]?.label || "Unknown";
+                const resultText = segments[picked]?.label || "Unknown";
                 setResult(resultText);
-                const multiplierVal = parseFloat(segments[resultIndex]?.label || "0x");
+                const multiplierVal = parseFloat(segments[picked]?.label || "0x");
                 const totalReturn = amount * (isNaN(multiplierVal) ? 0 : multiplierVal);
 
                 if (!hasAddedWinnings.current) {
@@ -161,7 +164,7 @@ const FortuneWheel = () => {
                 }
                 setStarted(false);
                 setEarnings(totalReturn);
-                setWinningIndex(resultIndex);
+                setWinningIndex(picked);
                 if (multiplierVal !== 0 && winSound.current) {
                     winSound.current.currentTime = 0;
                     winSound.current.play().catch(() => {});
@@ -177,7 +180,6 @@ const FortuneWheel = () => {
     useEffect(() => {
         setSegments(generateSegments(difficulty, segmentCount));
         setEarningsDisplay(false);
-        setIdx(0);
         const wheel = wheelRef.current;
         if (wheel) {
             wheel.classList.add("no-transition");
@@ -257,7 +259,10 @@ const FortuneWheel = () => {
                             <span className="game-eyebrow"><span className="dot" /> {difficulty} risk · {segmentCount} segments</span>
                             <h1 className="game-title">FORTUNE <em>wheel</em></h1>
                         </div>
-                        <p className="game-sub">Set your risk. One spin. Live with where it lands.</p>
+                        <div className="game-head__right">
+                            <p className="game-sub">Set your risk. One spin. Live with where it lands.</p>
+                            <HowToPlay game="wheel" />
+                        </div>
                     </header>
 
                     <div className="game-layout fw-layout">

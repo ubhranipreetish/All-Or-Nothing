@@ -6,6 +6,7 @@ import { RotateCcw, Undo2, Copy } from "lucide-react";
 import "../styles/Roulette.css";
 import Navbar from "./Navbar";
 import Footer from "./Footer";
+import HowToPlay from "./HowToPlay";
 import { useWallet } from "../contexts/WalletContext";
 
 /* ───────────────────────── constants ───────────────────────── */
@@ -362,6 +363,7 @@ export default function Roulette({ testMode = false }: { testMode?: boolean }) {
                 <div className="rl-head">
                     <div className="rl-eyebrow"><span className="rl-dot" /> EUROPEAN ROULETTE · SINGLE ZERO</div>
                     <h1 className="rl-title">ROULETTE</h1>
+                    <HowToPlay game="roulette" />
                 </div>
 
                 <div className="rl-stat-row">

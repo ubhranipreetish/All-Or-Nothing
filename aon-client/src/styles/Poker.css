@@ -21,6 +21,161 @@
     justify-content: flex-start;
 }
 
+/* lobby page sits under the fixed navbar (+ promo banner) and fills the screen */
+/* body already has padding-top to clear the fixed navbar — only add for spacing */
+.pk-page--lobby {
+    justify-content: center;
+    padding-top: 20px;
+    padding-bottom: 40px;
+}
+
+/* ---------- full-screen split lobby (desktop) ---------- */
+.pk-lobby2 {
+    width: 100%;
+    max-width: 1200px;
+    display: grid;
+    grid-template-columns: 1.05fr 0.95fr;
+    gap: clamp(2rem, 6vw, 6rem);
+    align-items: center;
+    padding: 0 clamp(1rem, 4vw, 3rem);
+}
+.pk-lobby2__brand { min-width: 0; }
+.pk-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-family: var(--font-mono, monospace);
+    font-size: 0.68rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--gold, #e9b949);
+}
+.pk-eyebrow__dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ember, #ff4438); box-shadow: 0 0 10px var(--ember, #ff4438); }
+.pk-lobby2__title {
+    font-family: var(--font-display, sans-serif);
+    text-transform: uppercase;
+    font-size: clamp(3.4rem, 9vw, 8rem);
+    line-height: 0.9;
+    letter-spacing: -0.01em;
+    margin: 1rem 0 0.6rem;
+    background: linear-gradient(110deg, var(--gold-bright, #ffd877) 0%, var(--gold, #e9b949) 45%, var(--gold-deep, #a9791f) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+.pk-lobby2__tag {
+    font-family: var(--font-serif, Georgia, serif);
+    font-style: italic;
+    font-size: clamp(1.2rem, 2.4vw, 1.8rem);
+    color: var(--bone, #f2ecdd);
+    margin-bottom: 1rem;
+}
+.pk-lobby2__desc {
+    color: var(--bone-dim, #a79fb2);
+    line-height: 1.7;
+    max-width: 46ch;
+    margin-bottom: 1.6rem;
+}
+.pk-feats { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.7rem; }
+.pk-feats li { display: flex; align-items: center; gap: 0.7rem; color: var(--bone-dim, #a79fb2); font-size: 0.95rem; }
+.pk-feats__s { color: var(--bone, #f2ecdd); font-size: 1.1rem; width: 1.2em; text-align: center; }
+.pk-feats__s.red { color: var(--ember, #ff4438); }
+
+.pk-lobby2__panel { display: flex; justify-content: center; }
+.pk-panel-card {
+    width: 100%;
+    max-width: 420px;
+    background: linear-gradient(160deg, rgba(255, 216, 119, 0.05), rgba(7, 6, 10, 0.35));
+    border: 1px solid var(--line, #261e33);
+    border-radius: 18px;
+    padding: 2.2rem 2rem;
+    box-shadow: 0 40px 90px -50px rgba(0, 0, 0, 0.9);
+}
+.pk-panel-card__h { font-family: var(--font-display, sans-serif); text-transform: uppercase; font-size: 1.6rem; color: var(--bone, #f2ecdd); }
+.pk-panel-card__p { color: var(--bone-dim, #a79fb2); line-height: 1.6; margin: 0.6rem 0 1rem; }
+
+@media (max-width: 900px) {
+    .pk-lobby2 {
+        grid-template-columns: 1fr;
+        gap: 1.4rem;
+        text-align: center;
+        justify-items: center;
+    }
+    .pk-eyebrow { justify-content: center; }
+    .pk-lobby2__desc { margin-left: auto; margin-right: auto; }
+    .pk-feats { display: none; }
+    .pk-lobby2__title { margin-top: 0.4rem; }
+}
+@media (max-width: 600px) {
+    /* top-align under the navbar + promo banner (no big centered gap) */
+    .pk-page--lobby { justify-content: flex-start; padding-top: 24px; padding-bottom: 28px; }
+    .pk-lobby2__title { font-size: clamp(3rem, 16vw, 4.5rem); margin-top: 0.2rem; }
+    .pk-lobby2__desc { margin-bottom: 1rem; }
+    .pk-panel-card { padding: 1.6rem 1.3rem; }
+    /* the 2-line guest promo banner is taller than the body's navbar padding */
+    .promo-guest ~ .pk-page--lobby { padding-top: 76px; }
+}
+
+.pk-gate {
+    margin: 1.4rem 0;
+    padding: 1rem 1.2rem;
+    border: 1px solid rgba(233, 185, 73, 0.4);
+    border-radius: 12px;
+    background: rgba(233, 185, 73, 0.08);
+    color: var(--bone, #f2ecdd);
+    text-align: center;
+}
+.pk-lobby__err {
+    margin: 0.8rem 0;
+    color: var(--ember, #ff4438);
+    font-size: 0.9rem;
+}
+.pk-buyin-quick { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 1.4rem; }
+.pk-chipbtn-amt {
+    flex: 1;
+    min-width: 70px;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid var(--line, #261e33);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--bone-dim, #a79fb2);
+    font-weight: 700;
+    cursor: pointer;
+}
+.pk-chipbtn-amt.on { border-color: var(--gold, #e9b949); color: var(--gold-bright, #ffd877); background: rgba(233, 185, 73, 0.14); }
+.pk-chipbtn-amt:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* shareable room code banner in the live room */
+.pk-roomcode {
+    position: fixed;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 40;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(7, 6, 10, 0.85);
+    border: 1px solid var(--gold, #e9b949);
+    color: var(--bone-dim, #a79fb2);
+    font-family: var(--font-mono, monospace);
+    font-size: 0.66rem;
+    letter-spacing: 0.18em;
+    padding: 7px 8px 7px 16px;
+    border-radius: 30px;
+}
+.pk-roomcode strong { color: var(--gold-bright, #ffd877); font-size: 1rem; letter-spacing: 0.3em; }
+.pk-roomcode button {
+    border: none;
+    border-radius: 16px;
+    padding: 5px 12px;
+    background: linear-gradient(135deg, var(--gold-bright, #ffd877), var(--gold, #e9b949));
+    color: #1a1206;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.06em;
+}
+
 /* ------------------------------------------------------------- lobby */
 .pk-lobby {
     width: 100%;
@@ -656,4 +811,174 @@
     .pk-raise__num { width: 56px; }
     .pk-btn--raise { flex: 1 1 auto; white-space: nowrap; }
     .pk-preactions { flex-wrap: wrap; }
+}
+
+/* ============================ LOBBY / HOST / SPECTATOR ============================ */
+
+/* success variant of the toast (copy / share confirmations) */
+.pk-toast--ok { background: var(--jade, #2bd4a0); color: #07120d; }
+
+/* share buttons (top bar + lobby) */
+.pk-share { display: inline-flex; gap: 6px; }
+.pk-share__btn {
+    background: transparent;
+    border: 1px solid var(--line, #261e33);
+    color: var(--bone-dim, #a79fb2);
+    padding: 5px 11px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.72rem;
+    font-family: var(--font-mono, monospace);
+    letter-spacing: 0.04em;
+}
+.pk-share__btn:hover { border-color: var(--gold, #e9b949); color: var(--gold-bright, #ffd877); }
+
+/* spinner + animated dots for the waiting states */
+.pk-spinner {
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    border: 3px solid rgba(233, 185, 73, 0.22);
+    border-top-color: var(--gold, #e9b949);
+    animation: pk-spin 0.8s linear infinite;
+    margin: 0 auto 4px;
+}
+.pk-spinner--sm { width: 15px; height: 15px; border-width: 2px; display: inline-block; margin: 0 6px 0 0; vertical-align: -2px; }
+@keyframes pk-spin { to { transform: rotate(360deg); } }
+.pk-dots i { animation: pk-blink 1.4s infinite both; }
+.pk-dots i:nth-child(2) { animation-delay: 0.2s; }
+.pk-dots i:nth-child(3) { animation-delay: 0.4s; }
+@keyframes pk-blink { 0%, 80%, 100% { opacity: 0.2; } 40% { opacity: 1; } }
+
+/* entering / waiting cards in the lobby shell */
+.pk-wait { text-align: center; }
+.pk-wait__txt { font-family: var(--font-mono, monospace); letter-spacing: 0.12em; color: var(--bone-dim, #a79fb2); margin-top: 6px; }
+.pk-entering__eyebrow {
+    display: inline-block;
+    font-family: var(--font-mono, monospace);
+    font-size: 0.66rem;
+    letter-spacing: 0.22em;
+    color: var(--gold, #e9b949);
+    margin-bottom: 8px;
+}
+.pk-mini--wide { width: 100%; margin-top: 10px; padding: 11px; text-align: center; }
+
+/* ----- waiting room (pre-game lobby) ----- */
+.pk-lobby { width: 100%; display: flex; justify-content: center; padding: 10px 0 24px; }
+.pk-lobby__card {
+    width: 100%;
+    max-width: 760px;
+    background: linear-gradient(180deg, rgba(26, 20, 34, 0.92), rgba(13, 10, 18, 0.94));
+    border: 1px solid var(--line, #261e33);
+    border-radius: 16px;
+    padding: 1.8rem 1.6rem;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+}
+.pk-lobby__head { text-align: center; margin-bottom: 1.4rem; }
+.pk-lobby__eyebrow { font-family: var(--font-mono, monospace); font-size: 0.66rem; letter-spacing: 0.24em; color: var(--bone-faint, #6e6678); }
+.pk-lobby__code {
+    font-family: var(--font-display, sans-serif);
+    text-transform: uppercase;
+    font-size: 1.7rem;
+    letter-spacing: 0.18em;
+    color: var(--gold-bright, #ffd877);
+    margin: 4px 0 12px;
+}
+.pk-lobby__share { display: inline-flex; gap: 8px; }
+.pk-lobby__cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1.4rem; }
+.pk-lobby__h3 {
+    font-family: var(--font-mono, monospace);
+    font-size: 0.72rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--bone-faint, #6e6678);
+    margin: 0 0 0.7rem;
+}
+.pk-lobby__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto; }
+.pk-lobby__row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--line, #261e33);
+    border-radius: 10px;
+    padding: 8px 10px;
+}
+.pk-lobby__av {
+    flex-shrink: 0;
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    display: grid; place-items: center;
+    background: linear-gradient(160deg, #241a30, #15101d);
+    border: 1px solid rgba(233, 185, 73, 0.4);
+    color: var(--gold-bright, #ffd877);
+    font-weight: 700;
+    font-size: 0.85rem;
+}
+.pk-lobby__av--wait { border-color: rgba(167, 159, 178, 0.4); color: var(--bone-dim, #a79fb2); }
+.pk-lobby__name { flex: 1; color: var(--bone, #f2ecdd); font-size: 0.9rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pk-lobby__host { color: var(--gold, #e9b949); font-style: normal; font-size: 0.75rem; }
+.pk-lobby__buyin { color: var(--bone-faint, #6e6678); font-style: normal; font-size: 0.78rem; }
+.pk-lobby__chips { color: var(--bone-dim, #a79fb2); font-family: var(--font-mono, monospace); font-size: 0.8rem; }
+.pk-lobby__empty { color: var(--bone-faint, #6e6678); font-size: 0.85rem; line-height: 1.5; }
+.pk-lobby__acts { display: inline-flex; gap: 6px; }
+.pk-admit, .pk-deny {
+    border: none;
+    border-radius: 6px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 0.74rem;
+}
+.pk-admit { background: var(--jade, #2bd4a0); color: #07120d; }
+.pk-deny { background: transparent; border: 1px solid var(--line, #261e33); color: var(--bone-dim, #a79fb2); }
+.pk-deny:hover { border-color: var(--ember, #ff4438); color: var(--ember, #ff4438); }
+.pk-lobby__start { margin-top: 1.5rem; }
+.pk-lobby__start:disabled { opacity: 0.5; cursor: not-allowed; }
+.pk-lobby__waitstart {
+    margin-top: 1.5rem;
+    text-align: center;
+    font-family: var(--font-mono, monospace);
+    font-size: 0.82rem;
+    letter-spacing: 0.08em;
+    color: var(--bone-dim, #a79fb2);
+}
+
+/* ----- mid-game admit/deny dock (Google-Meet style) ----- */
+.pk-dock {
+    position: fixed;
+    top: 84px;
+    right: 18px;
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: min(320px, calc(100vw - 24px));
+}
+.pk-dock__item {
+    background: linear-gradient(180deg, rgba(26, 20, 34, 0.97), rgba(13, 10, 18, 0.97));
+    border: 1px solid rgba(233, 185, 73, 0.4);
+    border-radius: 12px;
+    padding: 12px 14px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    animation: pk-dock-in 0.25s ease-out;
+}
+@keyframes pk-dock-in { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: translateX(0); } }
+.pk-dock__txt { color: var(--bone, #f2ecdd); font-size: 0.86rem; }
+.pk-dock__txt strong { color: var(--gold-bright, #ffd877); }
+.pk-dock__acts { display: flex; gap: 8px; }
+.pk-dock__acts .pk-admit, .pk-dock__acts .pk-deny { flex: 1; padding: 8px; }
+
+/* spectator banner */
+.pk-spectate { color: var(--gold-bright, #ffd877); }
+
+@media (max-width: 720px) {
+    .pk-lobby__cols { grid-template-columns: 1fr; gap: 1rem; }
+    .pk-lobby__card { padding: 1.4rem 1.1rem; }
+    .pk-lobby__code { font-size: 1.4rem; }
+    .pk-share { flex-wrap: wrap; }
+    .pk-dock { top: auto; bottom: 12px; right: 12px; left: 12px; width: auto; }
+    .pk-top__meta { flex-wrap: wrap; gap: 8px 14px; }
 }
