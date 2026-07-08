@@ -136,9 +136,16 @@ body.has-promo .game-stage.dt-stage {
   letter-spacing: 0.16em;
 }
 .dt-game .game-primary:hover:not(:disabled),
-.dt-game .game-cashout:hover {
+.dt-game .game-cashout:hover:not(:disabled) {
   transform: translateY(-2px);
   box-shadow: 0 14px 36px -10px rgba(233, 185, 73, 0.6);
+}
+/* cash-out request in flight — visibly held, no hover lift */
+.dt-game .game-cashout:disabled {
+  opacity: 0.6;
+  cursor: wait;
+  transform: none;
+  box-shadow: none;
 }
 .dt-game .game-clear {
   border-radius: 3px;
@@ -196,6 +203,67 @@ body.has-promo .game-stage.dt-stage {
   font-size: 0.82rem;
   letter-spacing: 0.06em;
 }
+/* ember variant — failed cash-out / failed bet */
+.dt-stage .game-toast.dt-toast--ember {
+  border-color: rgba(255, 68, 56, 0.55);
+  color: var(--ember);
+}
+
+/* ---------------- reserved panel heights ----------------
+   The bet form and every live/verdict state share one minimum height so
+   swapping between them never shifts the tower vertically (no misclicks).
+   Action buttons anchor to the bottom of the reserved space. */
+.dt-game .game-panel form,
+.dt-game .game-live {
+  display: flex;
+  flex-direction: column;
+  min-height: 332px;
+}
+.dt-game .game-panel form > .game-primary,
+.dt-game .game-live > .game-cashout,
+.dt-game .game-live > .game-clear {
+  margin-top: auto;
+}
+
+/* ---------------- verdict panel (banked / torched) ---------------- */
+.dt-result {
+  text-align: center;
+  padding: 1.2rem 0 1.1rem;
+}
+.dt-result__title {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  font-size: 2.6rem;
+  line-height: 1;
+}
+.dt-result.is-won .dt-result__title {
+  background: linear-gradient(110deg, var(--gold-bright), var(--gold) 45%, var(--gold-deep));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 40px rgba(233, 185, 73, 0.25);
+}
+.dt-result.is-lost .dt-result__title {
+  color: var(--ember);
+  text-shadow: 0 0 26px rgba(255, 68, 56, 0.35);
+}
+.dt-result__amount {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 1.25rem;
+  letter-spacing: 0.04em;
+  margin-top: 0.6rem;
+}
+.dt-result.is-lost .dt-result__amount { color: var(--ember); }
+.dt-result__sub {
+  font-family: var(--font-serif);
+  font-style: italic;
+  color: var(--bone-faint);
+  margin-top: 0.55rem;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
 
 /* ==================== the tower ==================== */
 .dt-tower {
@@ -210,14 +278,71 @@ body.has-promo .game-stage.dt-stage {
 /* tile icons scale with the tile so they never overflow on small phones */
 .dt-tile svg { width: clamp(16px, 5vw, 24px); height: clamp(16px, 5vw, 24px); }
 
+/* arming: bet placed but the round isn't ready for clicks yet — visibly
+   held so the first tap is never swallowed */
+.dt-tower { transition: opacity 0.25s ease; }
+.dt-tower.is-arming {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
 .dt-row {
+  position: relative;
   display: grid;
   gap: clamp(6px, 1vw, 10px);
   transition: opacity 0.25s ease;
 }
-/* dim the floors that aren't in play */
-.dt-tower .dt-row { opacity: 0.5; }
+/* dim the floors that aren't in play; climbed floors keep a little light */
+.dt-tower .dt-row { opacity: 0.42; }
+.dt-tower .dt-row.is-climbed { opacity: 0.7; }
 .dt-tower .dt-row.is-active { opacity: 1; }
+/* round settled (banked or torched) — the full reveal reads clearly */
+.dt-tower.is-settled .dt-row { opacity: 0.85; }
+
+/* "you are here" — gold marker beckoning at the current floor */
+.dt-row.is-active::before {
+  content: "";
+  position: absolute;
+  left: -13px;
+  top: 50%;
+  border: 5px solid transparent;
+  border-left-color: var(--gold);
+  filter: drop-shadow(0 0 6px rgba(233, 185, 73, 0.7));
+  animation: dt-beckon 1.4s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes dt-beckon {
+  0%, 100% { transform: translate(0, -50%); }
+  50% { transform: translate(3px, -50%); }
+}
+
+/* per-floor payout ladder at the end of each row */
+.dt-row__mult {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  font-family: var(--font-mono);
+  font-size: clamp(0.58rem, 1.6vw, 0.72rem);
+  letter-spacing: 0.04em;
+  color: var(--bone-faint);
+  opacity: 0.55;
+  transition: color 0.2s ease, opacity 0.2s ease;
+  pointer-events: none;
+}
+.dt-row__mult.is-active {
+  color: var(--gold-bright);
+  opacity: 1;
+  text-shadow: 0 0 12px rgba(233, 185, 73, 0.35);
+}
+.dt-row__mult.is-climbed {
+  color: var(--gold);
+  opacity: 0.9;
+}
+.dt-row__mult.is-climbed::before {
+  content: "✓";
+  margin-right: 0.3em;
+  font-size: 0.9em;
+}
 
 .dt-tile {
   /* Fixed height (only the WIDTH changes with difficulty — more tiles per floor
@@ -248,8 +373,9 @@ body.has-promo .game-stage.dt-stage {
 
 .dt-row.is-active .dt-tile.is-available {
   cursor: pointer;
-  border-color: rgba(233, 185, 73, 0.4);
+  border-color: rgba(233, 185, 73, 0.45);
   background: linear-gradient(180deg, rgba(233, 185, 73, 0.09) 0%, rgba(233, 185, 73, 0.02) 100%);
+  box-shadow: 0 0 16px -6px rgba(233, 185, 73, 0.5);
 }
 .dt-tile.is-available:hover {
   border-color: var(--gold);
@@ -268,6 +394,20 @@ body.has-promo .game-stage.dt-stage {
   border-color: rgba(255, 68, 56, 0.6);
   color: var(--ember);
   box-shadow: 0 0 24px -6px rgba(255, 68, 56, 0.5);
+}
+/* the dragon that ended the climb — ember flare before the verdict lands */
+.dt-tile.is-dragon.is-hit {
+  animation: dt-flare 0.9s ease-out;
+}
+@keyframes dt-flare {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 68, 56, 0.8), 0 0 60px 12px rgba(255, 68, 56, 0.55);
+    transform: scale(1.1);
+  }
+  100% {
+    box-shadow: 0 0 24px -6px rgba(255, 68, 56, 0.5);
+    transform: scale(1);
+  }
 }
 
 /* multiplier pop + arrow in the side panel */
@@ -304,6 +444,16 @@ body.has-promo .game-stage.dt-stage {
   .dt-game .game-hint { flex: 1 1 100%; order: 3; }
   .dt-game .game-cashout,
   .dt-game .game-clear { flex: 1 1 100%; order: 4; }
+  .dt-game .dt-result { flex: 1 1 100%; }
+
+  /* reserved heights, mobile edition: the panel sits ABOVE the tower here, so
+     equal form/live heights stop the board jumping when a bet is placed.
+     space-between keeps stats top / action button bottom in the row layout. */
+  .dt-game .game-panel form,
+  .dt-game .game-live { min-height: 300px; }
+  .dt-game .game-live { align-content: space-between; }
+  .dt-game .game-live > .game-cashout,
+  .dt-game .game-live > .game-clear { margin-top: 0; }
 
   /* tap targets: comfortable >= 44px on touch */
   .dt-game .game-adjust button { padding: 13px; min-height: 44px; }

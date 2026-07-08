@@ -4,6 +4,8 @@ import "./globals.css";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import { AuthProvider } from "../contexts/AuthContext";
 import { WalletProvider } from "../contexts/WalletContext";
+import ScrollToTop from "../components/ScrollToTop";
+import ServerWakeup from "../components/ServerWakeup";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -62,7 +64,11 @@ export default function RootLayout({
       >
         <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!}>
           <AuthProvider>
-            <WalletProvider>{children}</WalletProvider>
+            <WalletProvider>
+              <ScrollToTop />
+              {children}
+              <ServerWakeup />
+            </WalletProvider>
           </AuthProvider>
         </GoogleOAuthProvider>
       </body>

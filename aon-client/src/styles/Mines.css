@@ -13,6 +13,7 @@
 
 /* ---- signature squared panels with gold corner ticks ---- */
 .mines-page .game-board {
+  position: relative;
   border-radius: 0;
   border: 1px solid rgba(233, 185, 73, 0.14);
   /* very faint radial gold glow behind the game board only */
@@ -96,14 +97,27 @@
   border-radius: 3px;
   letter-spacing: 0.18em;
 }
+/* Cash Out is deliberately NOT gold: jade = money leaving the table, so it can
+   never be mistaken for the gold Place Bet button sitting at the same spot. */
 .mines-page .game-cashout {
   border-radius: 3px;
   letter-spacing: 0.18em;
-  background: linear-gradient(135deg, var(--gold-bright), var(--gold));
-  color: #1a1206;
+  background: linear-gradient(135deg, #35e0ac, #1fa87e);
+  color: #06231a;
 }
-.mines-page .game-cashout:hover {
-  box-shadow: 0 14px 36px -10px rgba(233, 185, 73, 0.6);
+.mines-page .game-cashout:hover:not(:disabled) {
+  box-shadow: 0 14px 36px -10px rgba(43, 212, 160, 0.55);
+}
+.mines-page .game-cashout:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+  filter: saturate(0.6);
+}
+.mines-page .game-primary:disabled,
+.mines-page .game-clear:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 .mines-page .game-clear {
   border-radius: 3px;
@@ -156,6 +170,49 @@
   font-size: 0.82rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+}
+/* ember variant for rejections (bad bets, refused cash-outs) */
+.mines-page .game-toast--error {
+  border-color: rgba(255, 68, 56, 0.55);
+  color: var(--ember);
+  box-shadow: 0 0 26px -8px rgba(255, 68, 56, 0.45);
+}
+
+/* ---- syncing gate: board stays visibly disabled until round state is ready ---- */
+.mines-page .game-board.is-syncing .mines-grid {
+  opacity: 0.45;
+  filter: saturate(0.5);
+  pointer-events: none;
+  transition: opacity 0.25s ease, filter 0.25s ease;
+}
+.mines-sync-hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--bone-faint);
+  z-index: 3;
+}
+
+/* ---- resumed-round notice ---- */
+.mines-resume-note {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold);
+  background: rgba(233, 185, 73, 0.06);
+  border: 1px solid rgba(233, 185, 73, 0.3);
+  border-radius: 3px;
+  padding: 0.55rem 0.75rem;
+  margin-bottom: 0.9rem;
+  line-height: 1.5;
 }
 
 /* NOTE on the fixed promo banner: globals.css already offsets the whole
@@ -245,6 +302,34 @@
   border: 1px solid rgba(255, 68, 56, 0.6);
   color: var(--ember);
   box-shadow: 0 0 26px -8px rgba(255, 68, 56, 0.5), inset 0 0 18px rgba(255, 68, 56, 0.07);
+}
+
+/* the killer mine — the one that ended the round — detonates and keeps a
+   hot red ring so it reads clearly apart from the other mines in the reveal */
+@keyframes mine-detonate-shake {
+  0%, 100% { transform: translate(0, 0); }
+  15% { transform: translate(-5px, 3px); }
+  30% { transform: translate(5px, -3px); }
+  45% { transform: translate(-4px, -3px); }
+  60% { transform: translate(4px, 3px); }
+  75% { transform: translate(-2px, 2px); }
+}
+@keyframes killer-ring-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(255, 68, 56, 0.55), 0 0 38px -4px rgba(255, 68, 56, 0.85), inset 0 0 22px rgba(255, 68, 56, 0.16); }
+  50% { box-shadow: 0 0 0 5px rgba(255, 68, 56, 0.35), 0 0 46px -2px rgba(255, 68, 56, 0.95), inset 0 0 26px rgba(255, 68, 56, 0.22); }
+}
+.tile-container.killer {
+  z-index: 6;
+  animation: mine-detonate-shake 0.5s ease;
+}
+.tile-container.killer .tile-inner.mine-reveal .tile-back {
+  border: 2px solid var(--ember);
+  background: radial-gradient(circle at 50% 38%, rgba(255, 68, 56, 0.42) 0%, var(--void-2) 82%);
+  animation: killer-ring-pulse 1.4s ease-in-out infinite;
+}
+/* mines the player never touched stay muted so the killer stands out */
+.tile-container:not(.killer) .tile-inner.mine-reveal .tile-back {
+  opacity: 0.75;
 }
 
 .icon-wrapper {

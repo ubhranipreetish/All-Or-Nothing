@@ -29,6 +29,7 @@ interface WalletContextType {
   takeLoan: (amount: number) => Promise<boolean>;
   repayLoan: (loanId: string) => Promise<boolean>;
   recordLoss: (sessionId: string) => Promise<boolean>;
+  refundBet: (gameType: string, sessionId?: string) => Promise<boolean>;
   refreshWallet: () => Promise<void>;
   fetchLoans: () => Promise<void>;
 }
@@ -141,6 +142,7 @@ export function WalletProvider({ children }: WalletProviderProps) {
       const data = await res.json();
       if (res.ok) {
         setWallet(data.newBalance);
+        if (typeof data.totalEarnings === "number") setTotalEarnings(data.totalEarnings);
         return true;
       }
       console.error("Bet error:", data.message);
@@ -192,6 +194,7 @@ export function WalletProvider({ children }: WalletProviderProps) {
 
       if (res.ok) {
         setWallet(data.newBalance);
+        if (typeof data.totalEarnings === "number") setTotalEarnings(data.totalEarnings);
         return { success: true, sessionId: data.sessionId, newBalance: data.newBalance };
       }
       console.error("Start game error:", data.message);
@@ -336,6 +339,35 @@ export function WalletProvider({ children }: WalletProviderProps) {
     }
   };
 
+  // Refund an unplayed stake (e.g. leaving a poker waiting room before the game starts)
+  const refundBet = async (gameType: string, sessionId?: string): Promise<boolean> => {
+    const token = getToken();
+    if (!token) return false;
+
+    try {
+      const res = await fetch(`${API_URL}/game/refund`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ gameType, sessionId }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setWallet(data.newBalance);
+        if (typeof data.totalEarnings === "number") setTotalEarnings(data.totalEarnings);
+        return true;
+      }
+      console.error("Refund error:", data.message);
+      return false;
+    } catch (error) {
+      console.error("Refund bet error:", error);
+      return false;
+    }
+  };
+
   // Record a loss (End Game)
   const recordLoss = async (sessionId: string): Promise<boolean> => {
     const token = getToken();
@@ -381,6 +413,7 @@ export function WalletProvider({ children }: WalletProviderProps) {
         takeLoan,
         repayLoan,
         recordLoss,
+        refundBet,
         refreshWallet,
         fetchLoans,
       }}

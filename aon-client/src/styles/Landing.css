@@ -215,6 +215,8 @@ body.fe-cursor-on button {
   background: radial-gradient(circle, rgba(233, 185, 73, 0.07) 0%, rgba(233, 185, 73, 0.025) 42%, transparent 66%);
   filter: blur(10px);
   animation: fe-breathe 7s ease-in-out infinite;
+  /* blurred + endlessly animated — keep it on its own compositor layer */
+  will-change: transform, opacity;
 }
 @keyframes fe-breathe {
   0%, 100% { transform: translateY(-50%) scale(1); opacity: 0.9; }
@@ -401,6 +403,7 @@ body.fe-cursor-on button {
 .fe-marquee__track {
   display: inline-flex;
   white-space: nowrap;
+  will-change: transform;
   animation: fe-marquee 26s linear infinite;
   font-family: var(--font-display);
   text-transform: uppercase;
@@ -473,7 +476,9 @@ body.fe-cursor-on button {
   padding: 0 6vw;
   display: flex;
   flex-direction: column;
-  gap: 11vh;
+  /* tighter than the old 11vh — a near-full empty viewport was left
+     between game blocks (worst between 02 → 03) at normal scroll speed */
+  gap: 6vh;
 }
 .fe-game {
   display: grid;
@@ -780,7 +785,7 @@ body.fe-cursor-on button {
 /* ============================== FINAL ============================== */
 .fe-final {
   position: relative;
-  padding: 22vh 6vw;
+  padding: 16vh 6vw;
   text-align: center;
   overflow: hidden;
 }
@@ -1001,7 +1006,8 @@ body.fe-cursor-on button {
 
 /* ===================== QUOTE INTERLUDE (between-section breather) ===================== */
 .fe-interlude {
-  padding: 20vh 6vw;
+  /* was 20vh — enough breathing room without a full-black viewport mid-scroll */
+  padding: 10vh 6vw;
   display: flex;
   justify-content: center;
   text-align: center;
@@ -1017,6 +1023,18 @@ body.fe-cursor-on button {
 .fe-interlude__q em {
   color: var(--gold);
 }
+
+/* ================== PAINT PERF (below-the-fold sections) ================== */
+/* Skip layout/paint for offscreen sections; the intrinsic size keeps the
+   scrollbar stable and `auto` remembers the real size once rendered. */
+.fe-interlude,
+.fe-stats,
+.fe-final {
+  content-visibility: auto;
+}
+.fe-interlude { contain-intrinsic-size: auto 420px; }
+.fe-stats { contain-intrinsic-size: auto 440px; }
+.fe-final { contain-intrinsic-size: auto 720px; }
 
 /* ============================== RESPONSIVE ============================== */
 @media (max-width: 1024px) {
@@ -1046,7 +1064,7 @@ body.fe-cursor-on button {
 }
 
 @media (max-width: 640px) {
-  .fe-interlude { padding: 14vh 22px; }
+  .fe-interlude { padding: 8vh 22px; }
   .fe-hero {
     padding: 120px 22px 70px;
     min-height: 90svh;

@@ -14,12 +14,13 @@ interface TileProps {
     disabled?: boolean;
     isDimmed?: boolean;
     isSpotlight?: boolean;
+    isKiller?: boolean;
     className?: string;
 }
 
-export default function Tile({ tile, onClick, disabled, isDimmed, isSpotlight, className }: TileProps) {
+export default function Tile({ tile, onClick, disabled, isDimmed, isSpotlight, isKiller, className }: TileProps) {
     return (
-        <div className={`tile-container ${tile.revealed ? 'revealed' : ''} ${isDimmed ? 'dimmed' : ''} ${isSpotlight ? 'spotlight' : ''} ${className || ''}`}>
+        <div className={`tile-container ${tile.revealed ? 'revealed' : ''} ${isDimmed ? 'dimmed' : ''} ${isSpotlight ? 'spotlight' : ''} ${isKiller ? 'killer' : ''} ${className || ''}`}>
             <motion.div
                 className={`tile-inner ${tile.revealed ? (tile.isMine ? "mine-reveal" : "gem-reveal") : ""}`}
                 onClick={!disabled && !tile.revealed ? onClick : undefined}

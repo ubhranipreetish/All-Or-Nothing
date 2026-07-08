@@ -56,7 +56,7 @@ function PokerSession({
     token: string;
     onExit: () => void;
 }) {
-    const { wallet, recordBet, recordWin, refreshWallet } = useWallet();
+    const { wallet, recordBet, recordWin, refundBet, refreshWallet } = useWallet();
     const poker = usePoker(name, { playerId, token });
     const { state, connected, error, joinStatus, admittedBuyIn } = poker;
 
@@ -72,12 +72,20 @@ function PokerSession({
     const stakeRef = useRef(start.mode === "create" ? start.buyIn : 0);
 
     const exitRoom = useCallback(() => {
+        const started = state?.started ?? false;
         const myStack = state?.seats.find((s) => s?.isYou)?.stack ?? 0;
-        if (myStack > 0) recordWin(myStack, stakeRef.current || myStack, "POKER");
+        if (started) {
+            // Real game-end settlement: cash the remaining stack out as a win.
+            if (myStack > 0) recordWin(myStack, stakeRef.current || myStack, "POKER");
+        } else if (chargedRef.current) {
+            // Waiting room — the buy-in never hit the felt, so hand it straight
+            // back and stamp the ledger REFUND instead of WIN.
+            refundBet("POKER");
+        }
         poker.leave();
         refreshWallet();
         onExit();
-    }, [state, recordWin, poker, refreshWallet, onExit]);
+    }, [state, recordWin, refundBet, poker, refreshWallet, onExit]);
 
     // On connect: create the room (host) or peek the room (joiner).
     useEffect(() => {
@@ -85,14 +93,27 @@ function PokerSession({
         initedRef.current = true;
         if (start.mode === "create") {
             const amt = start.buyIn;
-            poker.createRoom(amt, async (c) => {
-                if (!c) { setErr("Couldn't create the room"); onExit(); return; }
+            (async () => {
+                // Hold the buy-in first — the "₹X held by the house" copy below
+                // is only honest if the house is actually holding it.
                 const ok = await recordBet(amt, "POKER");
-                if (!ok) { poker.leave(); setErr("Couldn't deduct your buy-in"); onExit(); return; }
+                if (!ok) { setErr("Couldn't hold your buy-in — nothing was charged. Try again."); return; }
+                chargedRef.current = true;
                 stakeRef.current = amt;
-                await refreshWallet();
-                setPhase("room");
-            });
+                poker.createRoom(amt, async (c) => {
+                    if (!c) {
+                        // Room creation failed after the stake was taken — hand it
+                        // back (ledger stamps REFUND) and say so.
+                        await refundBet("POKER");
+                        chargedRef.current = false;
+                        await refreshWallet();
+                        setErr(`Couldn't create the room — your ₹${amt} buy-in has been returned.`);
+                        return;
+                    }
+                    await refreshWallet();
+                    setPhase("room");
+                });
+            })();
         } else {
             poker.peek(code, (r) => {
                 if (!r.exists) { setPhase("notfound"); return; }
@@ -110,7 +131,15 @@ function PokerSession({
             const amt = admittedBuyIn ?? buyIn;
             (async () => {
                 const ok = await recordBet(amt, "POKER");
-                if (!ok) { poker.leave(); setErr("Couldn't deduct your buy-in"); onExit(); return; }
+                if (!ok) {
+                    // Nothing was charged — step back out and let them retry.
+                    poker.leave();
+                    poker.resetJoin();
+                    chargedRef.current = false;
+                    setErr("Couldn't hold your buy-in — nothing was charged. Try again.");
+                    setPhase("entering");
+                    return;
+                }
                 stakeRef.current = amt;
                 await refreshWallet();
                 setPhase("room");
@@ -139,9 +168,23 @@ function PokerSession({
                 <LobbyShell>
                     {phase === "connecting" && (
                         <div className="pk-panel-card pk-wait">
-                            <div className="pk-spinner" />
-                            <p className="pk-wait__txt">{start.mode === "create" ? "Creating your room…" : "Connecting…"}</p>
-                            {err && <div className="pk-lobby__err">{err}</div>}
+                            {!err ? (
+                                <>
+                                    <div className="pk-spinner" />
+                                    <p className="pk-wait__txt">
+                                        {start.mode === "create" ? (
+                                            <>Reserving your seat — ₹{start.buyIn} held by the house<span className="pk-dots"><i>.</i><i>.</i><i>.</i></span></>
+                                        ) : (
+                                            "Connecting…"
+                                        )}
+                                    </p>
+                                </>
+                            ) : (
+                                <>
+                                    <div className="pk-lobby__err">{err}</div>
+                                    <button className="pk-mini pk-mini--wide" onClick={onExit}>Back to lobby</button>
+                                </>
+                            )}
                         </div>
                     )}
 
@@ -251,7 +294,7 @@ function PokerPageInner() {
 
     const startCreate = () => {
         setError("");
-        if (!user) return;
+        if (!user || session) return;
         if (buyIn < 100) return setError("Minimum buy-in is ₹100");
         if (buyIn > wallet) return setError("Buy-in exceeds your balance");
         setSession({ mode: "create", buyIn });
@@ -308,7 +351,7 @@ function PokerPageInner() {
 
                         {error && <div className="pk-lobby__err">{error}</div>}
 
-                        <button className="pk-cta" onClick={startCreate}>Create Room</button>
+                        <button className="pk-cta" onClick={startCreate} disabled={!!session}>Create Room</button>
 
                         <div className="pk-or">or join a room</div>
                         <div className="pk-join">

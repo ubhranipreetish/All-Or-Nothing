@@ -58,6 +58,9 @@ export class GameService {
 
         const newBalance = user.walletBalance - amount;
         user.walletBalance = newBalance;
+        // Lifetime P&L: every stake counts as money out the moment it's placed;
+        // wins credit the full payout back, so unsettled losses still show.
+        user.totalEarnings -= amount;
         await this.users.save(user);
 
         const serverSeed = crypto.randomBytes(32).toString("hex");
@@ -88,7 +91,12 @@ export class GameService {
             totalEarnings: user.totalEarnings,
         });
 
-        return { message: "Game started", sessionId: session._id, newBalance };
+        return {
+            message: "Game started",
+            sessionId: session._id,
+            newBalance,
+            totalEarnings: user.totalEarnings,
+        };
     }
 
     async updateMultiplier(userId: string, sessionId: string, multiplier: number) {
@@ -117,16 +125,21 @@ export class GameService {
         const session = await this.sessions.findActiveByIdForUser(sessionId, userId);
         if (!session) throw AppError.notFound("Active game session not found");
 
+        // A cash-out at 1.00x means nothing was revealed/climbed — that's a
+        // no-op round, not a payout. Reject it so the UI can't fake a "win".
+        if (session.multiplier <= 1) {
+            throw AppError.badRequest("Reveal at least one tile before cashing out");
+        }
+
         const user = await this.users.findById(userId);
         if (!user) throw AppError.notFound("User not found");
 
         // Win is based on the SERVER-TRACKED multiplier, never a client value.
         const winAmount = session.betAmount * session.multiplier;
-        const netProfit = winAmount - session.betAmount;
 
         const newBalance = user.walletBalance + winAmount;
         user.walletBalance = newBalance;
-        user.totalEarnings += netProfit;
+        user.totalEarnings += winAmount;
         await this.users.save(user);
 
         session.status = "CASHED_OUT";
@@ -170,7 +183,60 @@ export class GameService {
         session.completedAt = new Date();
         await this.sessions.save(session);
 
-        return { message: "Game ended", result: "LOST" };
+        // The stake already left P&L when the bet was placed — nothing more to book.
+        return { message: "Game ended", result: "LOST", lostAmount: session.betAmount };
+    }
+
+    /**
+     * Refund an unplayed stake (e.g. leaving a poker waiting room before the
+     * game starts). Credits the bet back and stamps the ledger REFUND — it is
+     * NOT a win and never touches the leaderboard.
+     */
+    async refund(userId: string, gameType: GameType, sessionId?: string) {
+        const session = sessionId
+            ? await this.sessions.findActiveByIdForUser(sessionId, userId)
+            : await this.sessions.findLatestActive(userId, gameType);
+        if (!session) throw AppError.notFound("Active game session not found");
+
+        const user = await this.users.findById(userId);
+        if (!user) throw AppError.notFound("User not found");
+
+        const refundAmount = session.betAmount;
+        const newBalance = user.walletBalance + refundAmount;
+        user.walletBalance = newBalance;
+        // Undo the stake's P&L hit — a refunded round is a net-zero round.
+        user.totalEarnings += refundAmount;
+        await this.users.save(user);
+
+        session.status = "CASHED_OUT";
+        session.actualWin = refundAmount;
+        session.multiplier = 1;
+        session.completedAt = new Date();
+        await this.sessions.save(session);
+
+        await this.transactions.create({
+            userId: user._id,
+            type: "REFUND",
+            gameType: session.gameType as GameType,
+            gameId: session._id.toString(),
+            amount: refundAmount,
+            balanceAfter: newBalance,
+            meta: { betAmount: session.betAmount, description: "Stake refunded" },
+        });
+
+        eventBus.publish(DomainEvent.TransactionRecorded, { userId });
+        eventBus.publish(DomainEvent.WalletUpdated, {
+            userId,
+            balance: newBalance,
+            totalEarnings: user.totalEarnings,
+        });
+
+        return {
+            message: "Stake refunded",
+            refundAmount,
+            newBalance,
+            totalEarnings: user.totalEarnings,
+        };
     }
 
     async getActiveSession(userId: string, gameType?: GameType) {
@@ -206,6 +272,8 @@ export class GameService {
 
         const newBalance = user.walletBalance - amount;
         user.walletBalance = newBalance;
+        // Same P&L rule as startGame: stakes count as money out immediately.
+        user.totalEarnings -= amount;
         await this.users.save(user);
 
         const serverSeed = crypto.randomBytes(32).toString("hex");
@@ -239,6 +307,7 @@ export class GameService {
             transaction,
             sessionId: session._id,
             newBalance,
+            totalEarnings: user.totalEarnings,
         };
     }
 
@@ -281,13 +350,18 @@ export class GameService {
             );
         }
 
+        // Mines can never pay <= the stake once a gem is revealed, so a
+        // break-even "win" there is a 0-reveal cash-out attempt — reject it.
+        if (session.gameType === "MINES" && winAmount <= session.betAmount) {
+            throw AppError.badRequest("Reveal at least one tile before cashing out");
+        }
+
         const user = await this.users.findById(userId);
         if (!user) throw AppError.notFound("User not found");
 
         const newBalance = user.walletBalance + winAmount;
         user.walletBalance = newBalance;
-        const netProfit = winAmount - session.betAmount;
-        user.totalEarnings += netProfit;
+        user.totalEarnings += winAmount;
         await this.users.save(user);
 
         session.status = "WON";

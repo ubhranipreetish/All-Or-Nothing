@@ -1190,6 +1190,11 @@ body.has-promo .pfx { padding-top: 178px; }
   color: var(--gold, #e9b949);
   text-decoration: none;
   transition: color 0.18s;
+  /* Never clip at the panel edge — refuse to shrink and let the head's
+     flex-wrap drop the link to its own line at narrow widths. */
+  flex-shrink: 0;
+  white-space: nowrap;
+  padding: 0.15rem 0;
 }
 a.pfx-panel__aside:hover { color: var(--gold-bright, #ffd877); }
 .pfx-count {
@@ -1268,6 +1273,8 @@ a.pfx-panel__aside:hover { color: var(--gold-bright, #ffd877); }
 .pfx-stamp--win { border-color: rgba(233, 185, 73, 0.55); color: var(--gold-bright, #ffd877); }
 .pfx-stamp--deposit { border-color: rgba(139, 92, 246, 0.5); color: var(--violet-bright, #a78bfa); }
 .pfx-stamp--withdraw { border-color: rgba(167, 159, 178, 0.4); color: var(--bone-dim, #a79fb2); }
+/* Returned stakes — money handed back, not won. Muted violet, never jade. */
+.pfx-stamp--refund { border-color: rgba(139, 92, 246, 0.4); color: var(--violet-bright, #a78bfa); }
 
 .pfx-more {
   display: flex;
@@ -1358,6 +1365,12 @@ a.pfx-panel__aside:hover { color: var(--gold-bright, #ffd877); }
 }
 .pfx-repay:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 10px 26px -8px rgba(233, 185, 73, 0.55); }
 .pfx-repay:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ------------------------------ repay modal ------------------------------ */
+/* Money leaving the player must never read as a gain. Overrides the jade
+   .repay-total in Navbar.css — bone label, ember figure. */
+.loan-modal .repay-info .repay-total { color: var(--bone, #f2ecdd); }
+.loan-modal .repay-info .repay-total span:last-child { color: var(--ember, #ff4438); }
 
 /* ------------------------------ responsive ------------------------------ */
 @media (max-width: 960px) {

@@ -12,7 +12,7 @@ import Footer from "@/components/Footer";
 
 interface Transaction {
     _id: string;
-    type: "BET" | "WIN" | "DEPOSIT" | "WITHDRAW";
+    type: "BET" | "WIN" | "DEPOSIT" | "WITHDRAW" | "REFUND";
     gameType?: string;
     amount: number;
     balanceAfter: number;
@@ -98,6 +98,16 @@ export default function ProfilePage() {
 
     const transactionSectionRef = useRef<HTMLDivElement>(null);
 
+    // A loan can be taken (or repaid) from the navbar wallet menu while this page is open —
+    // when the count changes, the ledger and stats need a fresh look. Skip the initial mount.
+    const loansSeenRef = useRef(false);
+    useEffect(() => {
+        if (!loansSeenRef.current) { loansSeenRef.current = true; return; }
+        fetchTransactions(currentPage, activeFilter, showAllTransactions ? 8 : 5);
+        fetchProfile();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeLoans.length]);
+
     const handleFilterChange = (filter: string) => { setActiveFilter(filter); setCurrentPage(1); fetchTransactions(1, filter, showAllTransactions ? 8 : 5); };
     const handlePageChange = (page: number) => { setCurrentPage(page); fetchTransactions(page, activeFilter, 8); setTimeout(() => transactionSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 100); };
     const handleSeeAll = () => { setShowAllTransactions(true); setCurrentPage(1); fetchTransactions(1, activeFilter, 8); };
@@ -110,7 +120,7 @@ export default function ProfilePage() {
         await new Promise((resolve) => setTimeout(resolve, 500));
         const success = await repayLoan(selectedLoan._id);
         setRepayingLoanId(null);
-        if (success) { setRepayState("success"); fetchProfile(); setTimeout(() => closeRepayModal(), 1000); }
+        if (success) { setRepayState("success"); fetchProfile(); fetchTransactions(currentPage, activeFilter, showAllTransactions ? 8 : 5); setTimeout(() => closeRepayModal(), 1000); }
         else { setRepayState("confirm"); alert("Failed to repay loan. Make sure you have sufficient balance."); }
     };
 
@@ -120,6 +130,7 @@ export default function ProfilePage() {
         if (tx.meta?.bonusType === "WELCOME_100") return "Welcome Bonus";
         if (tx.meta?.bonusType === "LOAN") return "Loan Taken";
         if (tx.meta?.bonusType === "LOAN_REPAY") return "Loan Repaid";
+        if (tx.type === "REFUND" && /refund/i.test(tx.meta?.description ?? "")) return "Stake refunded";
         return null;
     };
     const formatGame = (g?: string) => (g ? g.split("_").map((w) => w.charAt(0) + w.slice(1).toLowerCase()).join(" ") : "-");
@@ -181,7 +192,7 @@ export default function ProfilePage() {
                         <div className="pfx-strip__cell">
                             <span className="pfx-strip__label">Lifetime P&L</span>
                             <span className={`pfx-strip__num ${totalEarnings < 0 ? "is-ember" : "is-gold"}`}>{totalEarnings >= 0 ? "+" : "−"}₹{Math.abs(totalEarnings).toFixed(2)}</span>
-                            <span className="pfx-strip__note">every bet, settled</span>
+                            <span className="pfx-strip__note">wins − stakes − interest</span>
                         </div>
                         <div className="pfx-strip__cell">
                             <span className="pfx-strip__label">Biggest win</span>
@@ -200,7 +211,7 @@ export default function ProfilePage() {
                                 </div>
                                 {showAllTransactions && (
                                     <div className="pfx-tabs">
-                                        {["ALL", "BET", "WIN", "DEPOSIT"].map((filter) => (
+                                        {["ALL", "BET", "WIN", "DEPOSIT", "REFUND"].map((filter) => (
                                             <button key={filter} className={activeFilter === filter ? "is-on" : ""} onClick={() => handleFilterChange(filter)}>{filter}</button>
                                         ))}
                                     </div>
@@ -328,7 +339,7 @@ export default function ProfilePage() {
                             <div className="loan-processing"><div className="processing-spinner" /><h3>Processing…</h3><p>Repaying ₹{(selectedLoan.repaymentAmount ?? selectedLoan.amount).toFixed(2)}</p></div>
                         )}
                         {repayState === "success" && (
-                            <div className="loan-success"><div className="success-icon">✅</div><h3>Loan repaid</h3><p className="success-amount">₹{(selectedLoan.repaymentAmount ?? selectedLoan.amount).toFixed(2)} deducted</p><p className="success-hint">Principal added back to your net worth</p></div>
+                            <div className="loan-success"><div className="success-icon">✅</div><h3>Loan repaid</h3><p className="success-amount">₹{(selectedLoan.repaymentAmount ?? selectedLoan.amount).toFixed(2)} deducted</p><p className="success-hint">Debt cleared — only the interest is the house&apos;s.</p></div>
                         )}
                     </div>
                 </div>

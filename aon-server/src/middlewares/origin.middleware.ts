@@ -34,7 +34,7 @@ const isOriginAllowed = (origin: string): boolean => {
  */
 export const validateOrigin = (req: Request, res: Response, next: NextFunction) => {
     // Skip for health check and warmup
-    if (req.path === "/health" || req.path === "/warmup") {
+    if (["/health", "/warmup", "/api/health", "/api/warmup"].includes(req.path)) {
         return next();
     }
 

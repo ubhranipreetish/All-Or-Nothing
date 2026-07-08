@@ -78,14 +78,25 @@ body.has-promo .fw-stage.game-stage {
   color: var(--bone-faint);
   letter-spacing: 0.26em;
 }
+/* NB: background-COLOR only — the `background` shorthand would wipe the
+   no-repeat chevron settings inherited from Game.css and tile the arrow
+   into a corrupted zigzag texture (the old risk-selector bug). */
 .fw-stage .game-input,
 .fw-stage .game-select {
-  background: rgba(242, 236, 221, 0.04);
+  background-color: var(--void-2);
   border: 1px solid var(--line);
   border-radius: 3px;
+  color: var(--bone);
   font-family: var(--font-mono);
   font-size: 0.95rem;
   letter-spacing: 0.04em;
+}
+.fw-stage .game-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-repeat: no-repeat;
+  background-position: calc(100% - 15px) center;
+  background-size: 12px 8px;
 }
 .fw-stage .game-adjust button {
   background: rgba(242, 236, 221, 0.04);
@@ -94,15 +105,20 @@ body.has-promo .fw-stage.game-stage {
 .fw-stage .game-primary { border-radius: 3px; }
 .fw-stage .game-toast { border-radius: 3px; }
 
-/* risk selector — the fate dial gets the violet accent */
+/* risk selector — the fate dial gets the violet accent: near-black field,
+   bone text, violet border, single (non-repeating) violet chevron. */
 .fw-stage .fw-risk {
-  color: var(--violet-bright);
-  border-color: rgba(139, 92, 246, 0.4);
+  color: var(--bone);
+  border-color: rgba(139, 92, 246, 0.45);
+  background-color: var(--void-2);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23A78BFA' stroke-width='1.7' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: calc(100% - 15px) center;
+  background-size: 12px 8px;
 }
 .fw-stage .fw-risk:focus {
-  border-color: var(--violet);
-  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.18);
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(233, 185, 73, 0.2);
 }
 .fw-stage .fw-risk option {
   background: var(--ink);
@@ -111,6 +127,9 @@ body.has-promo .fw-stage.game-stage {
 .fw-stage .fw-risk option:checked { color: var(--violet-bright); }
 
 /* ==================== wheel ==================== */
+
+/* stack legend above the wheel (shared .game-board is a flex ROW) */
+.fw-board.game-board { flex-direction: column; }
 
 .fw-wrap {
   position: relative;
@@ -129,6 +148,19 @@ body.has-promo .fw-stage.game-stage {
   filter: drop-shadow(0 0 46px rgba(139, 92, 246, 0.22));
 }
 .wheel-svg.no-transition { transition: none !important; }
+
+/* anticipation — subtle tension wobble while the wager is with the server.
+   Uses the individual `rotate` property so it composes with (never clobbers)
+   the inline transform that carries the accumulated spin rotation. */
+@keyframes fw-tension {
+  0% { rotate: 0deg; }
+  30% { rotate: -1.6deg; }
+  65% { rotate: 1.1deg; }
+  100% { rotate: -0.5deg; }
+}
+.wheel-svg.fw-anticipate {
+  animation: fw-tension 0.55s ease-in-out infinite alternate;
+}
 .wheel-svg path {
   stroke: var(--void);
   stroke-width: 1.5;
@@ -183,19 +215,32 @@ body.has-promo .fw-stage.game-stage {
 }
 .fw-overlay__amt.is-win { color: var(--jade); }
 .fw-overlay__amt.is-loss { color: var(--ember); }
+/* honest ember on a 0.00× — no gold glow for the house's round */
+.fw-overlay__result--loss {
+  color: var(--ember);
+  text-shadow: 0 0 24px rgba(255, 68, 56, 0.3);
+}
 
-/* segment win/loss feedback */
-.wheel-svg path.segment-winner { filter: brightness(1.6) saturate(1.3); }
+/* segment win/loss feedback — winner flashes under the pointer */
+@keyframes fw-win-pulse {
+  0%, 100% { filter: brightness(1.4) saturate(1.2); }
+  50% { filter: brightness(2.1) saturate(1.5) drop-shadow(0 0 14px rgba(255, 216, 119, 0.75)); }
+}
+.wheel-svg path.segment-winner {
+  filter: brightness(1.6) saturate(1.3);
+  animation: fw-win-pulse 0.55s ease-in-out 3;
+}
 .wheel-svg path.segment-loss { opacity: 0.45; }
 .wheel-svg path.segment-loser { opacity: 0.35; }
 
-/* payout legend — squared mono chips, functional colour kept on the base rule */
+/* payout legend — squared mono chips, functional colour kept on the base rule.
+   Sits ABOVE the wheel so the multiplier key never falls below the fold. */
 .fw-legend {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   gap: 0.5rem;
-  margin-top: 1.4rem;
+  margin-bottom: 1.4rem;
 }
 .fw-multi {
   font-family: var(--font-mono);
@@ -209,6 +254,42 @@ body.has-promo .fw-stage.game-stage {
   color: var(--bone);
   background: rgba(242, 236, 221, 0.04);
 }
+
+/* payout preview (bet panel) — what a win pays on the current bet */
+.fw-payouts {
+  display: grid;
+  gap: 0.5rem;
+  margin: 1.2rem 0 1.3rem;
+  padding: 0.85rem 0.95rem;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: rgba(242, 236, 221, 0.03);
+}
+.fw-payouts__title {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--bone-faint);
+}
+.fw-payouts__row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-family: var(--font-mono);
+  font-size: 0.84rem;
+  line-height: 1;
+}
+.fw-payouts__swatch {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 1px rgba(242, 236, 221, 0.18);
+}
+.fw-payouts__mult { color: var(--bone-dim); letter-spacing: 0.06em; }
+.fw-payouts__amt { margin-left: auto; color: var(--gold-bright); letter-spacing: 0.04em; }
 
 /* ==================== RESPONSIVE LAYOUT ==================== */
 
@@ -230,7 +311,7 @@ body.has-promo .fw-stage.game-stage {
     /* cap by viewport height too so wheel + controls share the screen */
     width: min(72vw, 60vh, 400px);
   }
-  .fw-legend { margin-top: 1rem; }
+  .fw-legend { margin-bottom: 1rem; }
   /* comfortable single-column panel that doesn't stretch full width awkwardly */
   .fw-panel.game-panel {
     width: 100%;
@@ -247,7 +328,7 @@ body.has-promo .fw-stage.game-stage {
   }
   .fw-legend {
     gap: 0.4rem;
-    margin-top: 0.85rem;
+    margin-bottom: 0.85rem;
   }
   .fw-multi {
     font-size: 0.72rem;

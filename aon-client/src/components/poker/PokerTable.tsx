@@ -79,6 +79,7 @@ export default function PokerTable({
     const mySeat = state.seats.find((s) => s?.isYou) ?? null;
     const clock = useTurnClock(state);
     const [muted, setMuted] = useState(!isSoundEnabled());
+    const [confirmLeave, setConfirmLeave] = useState(false);
     const toast = useToast();
 
     // Lobby/host context — default to "started, not host" so the backend-free
@@ -128,6 +129,25 @@ export default function PokerTable({
     return (
         <div className="pk">
             {toast.msg && <div className="pk-toast pk-toast--ok">{toast.msg}</div>}
+            {confirmLeave && (
+                <div className="pk-confirm-overlay" onClick={() => setConfirmLeave(false)}>
+                    <div className="pk-confirm" onClick={(e) => e.stopPropagation()}>
+                        <h3 className="pk-confirm__h">Leave the table?</h3>
+                        <p className="pk-confirm__p">
+                            Your remaining stack of <strong>₹{mySeat?.stack ?? 0}</strong> will be settled to your
+                            wallet. Mid-hand, your hand is folded.
+                        </p>
+                        <div className="pk-confirm__acts">
+                            <button className="pk-confirm__stay" onClick={() => setConfirmLeave(false)}>
+                                Stay
+                            </button>
+                            <button className="pk-confirm__leave" onClick={() => { setConfirmLeave(false); onLeave(); }}>
+                                Leave
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
             <div className="pk-top">
                 <div className="pk-top__meta">
                     <span className="pk-code">TABLE {state.tableId}</span>
@@ -158,7 +178,9 @@ export default function PokerTable({
                             Rebuy
                         </button>
                     )}
-                    <button className="pk-leave" onClick={onLeave}>
+                    {/* Once hands are being dealt, leaving settles the stack — confirm first.
+                        In the waiting room it's instant (the buy-in is simply refunded). */}
+                    <button className="pk-leave" onClick={() => (started ? setConfirmLeave(true) : onLeave())}>
                         Leave
                     </button>
                 </div>
@@ -199,7 +221,7 @@ export default function PokerTable({
                             <div key={`e${i}`} className="pk-card pk-card--empty" />
                         ))}
                     </div>
-                    <div className="pk-pot">Pot ₵{state.pot}</div>
+                    <div className="pk-pot">Pot ₹{state.pot}</div>
                     {state.winners && state.winners.length > 0 && (
                         <motion.div
                             className="pk-winner"
@@ -207,7 +229,7 @@ export default function PokerTable({
                             animate={{ opacity: 1, scale: 1 }}
                         >
                             {state.winners
-                                .map((w) => `${state.seats[w.seat]?.name ?? "?"} wins ₵${w.amount} · ${w.handName}`)
+                                .map((w) => `${state.seats[w.seat]?.name ?? "?"} wins ₹${w.amount} · ${w.handName}`)
                                 .join("   •   ")}
                         </motion.div>
                     )}
@@ -287,7 +309,7 @@ function LobbyView({
                                         {s!.name}{s!.isYou ? " (you)" : ""}
                                         {state.hostName === s!.name ? <em className="pk-lobby__host"> · host</em> : null}
                                     </span>
-                                    <span className="pk-lobby__chips">₵{s!.stack}</span>
+                                    <span className="pk-lobby__chips">₹{s!.stack}</span>
                                 </li>
                             ))}
                         </ul>
@@ -302,7 +324,7 @@ function LobbyView({
                                 {pending.map((p) => (
                                     <li key={p.id} className="pk-lobby__row">
                                         <span className="pk-lobby__av pk-lobby__av--wait">{p.name.slice(0, 1).toUpperCase()}</span>
-                                        <span className="pk-lobby__name">{p.name}<em className="pk-lobby__buyin"> · ₵{p.buyIn}</em></span>
+                                        <span className="pk-lobby__name">{p.name}<em className="pk-lobby__buyin"> · ₹{p.buyIn}</em></span>
                                         {youHost ? (
                                             <span className="pk-lobby__acts">
                                                 <button className="pk-admit" onClick={() => onAdmit?.(p.id)}>Admit</button>
@@ -346,7 +368,7 @@ function PendingDock({
         <div className="pk-dock">
             {pending.map((p) => (
                 <div key={p.id} className="pk-dock__item">
-                    <span className="pk-dock__txt"><strong>{p.name}</strong> wants to join · ₵{p.buyIn}</span>
+                    <span className="pk-dock__txt"><strong>{p.name}</strong> wants to join · ₹{p.buyIn}</span>
                     <span className="pk-dock__acts">
                         <button className="pk-admit" onClick={() => onAdmit?.(p.id)}>Admit</button>
                         <button className="pk-deny" onClick={() => onDeny?.(p.id)}>Deny</button>
@@ -410,10 +432,10 @@ function Seat({
                     {seat.isYou ? " (you)" : ""}
                     {seat.disconnected ? " ⚠" : ""}
                 </span>
-                <span className="pk-seat__stack">{seat.away ? "Sitting out" : `₵${seat.stack}`}</span>
+                <span className="pk-seat__stack">{seat.away ? "Sitting out" : `₹${seat.stack}`}</span>
             </div>
 
-            {seat.bet > 0 && <div className="pk-seat__bet">₵{seat.bet}</div>}
+            {seat.bet > 0 && <div className="pk-seat__bet">₹{seat.bet}</div>}
             {seat.lastAction && !seat.away && (
                 <div className={`pk-seat__action ${seat.allIn ? "pk-seat__action--allin" : ""}`}>
                     {seat.allIn ? "All-in" : seat.lastAction}
@@ -502,7 +524,7 @@ function ActionArea({
                 </button>
             ) : (
                 <button className="pk-btn pk-btn--call" onClick={() => onAct("call")}>
-                    Call ₵{legal.callAmount}
+                    Call ₹{legal.callAmount}
                 </button>
             )}
             {legal.canRaise && (
@@ -538,7 +560,7 @@ function ActionArea({
                             className="pk-btn pk-btn--raise"
                             onClick={() => onAct(legal.isBet ? "bet" : "raise", raiseValue)}
                         >
-                            {legal.isBet ? "Bet" : "Raise to"} ₵{raiseValue}
+                            {legal.isBet ? "Bet" : "Raise to"} ₹{raiseValue}
                             {raiseValue >= legal.maxRaiseTo ? " (All-in)" : ""}
                         </button>
                     </div>

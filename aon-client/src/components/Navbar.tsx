@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useWallet } from "../contexts/WalletContext";
 import { useAuth } from "../contexts/AuthContext";
 import { GoogleLogin } from "@react-oauth/google";
-import { Wallet, Plus, Gift, AlertTriangle, Ban, CheckCircle2 } from "lucide-react";
+import { Wallet, Plus, Gift, AlertTriangle, Ban, CheckCircle2, Menu, X } from "lucide-react";
 import "../styles/Navbar.css";
 
 export default function Navbar() {
@@ -18,6 +18,8 @@ export default function Navbar() {
     const [scrolled, setScrolled] = useState(false);
     const [claiming, setClaiming] = useState(false);
     const [showGames, setShowGames] = useState(false);
+    // Mobile-only full-width menu sheet (replaces the Games dropdown ≤640px).
+    const [mobileOpen, setMobileOpen] = useState(false);
 
     const GAMES = [
         { name: "Mines", href: "/mines" },
@@ -26,7 +28,7 @@ export default function Navbar() {
         { name: "Roulette", href: "/roulette" },
         { name: "Poker", href: "/poker" },
     ];
-    const goto = (href: string) => { setShowGames(false); router.push(href); };
+    const goto = (href: string) => { setShowGames(false); setMobileOpen(false); router.push(href); };
 
     // Hover-open with a grace period: momentary leaves (crossing the gap
     // between button and menu, cursor jitter) no longer slam the menu shut.
@@ -132,8 +134,18 @@ export default function Navbar() {
                         )}
                     </div>
 
-                    {/* right — profile or sign-in */}
+                    {/* right — menu (mobile) + profile or sign-in */}
                     <div className="nav-right">
+                        <button
+                            className="nav-burger"
+                            onClick={() => setMobileOpen((o) => !o)}
+                            aria-label={mobileOpen ? "Close menu" : "Open menu"}
+                            aria-haspopup="true"
+                            aria-expanded={mobileOpen}
+                            aria-controls="nav-mobile-sheet"
+                        >
+                            {mobileOpen ? <X size={22} /> : <Menu size={22} />}
+                        </button>
                         {!user ? (
                             <GoogleLogin
                                 onSuccess={(credentialResponse) => {
@@ -158,6 +170,21 @@ export default function Navbar() {
                         )}
                     </div>
                 </div>
+
+                {/* mobile menu sheet — full-width, opaque, ≤640px only */}
+                {mobileOpen && (
+                    <>
+                        <div className="nav-sheet__backdrop" onClick={() => setMobileOpen(false)} aria-hidden />
+                        <div className="nav-sheet" id="nav-mobile-sheet" role="menu">
+                            {GAMES.map((g) => (
+                                <button key={g.href} className="nav-sheet__item" role="menuitem" onClick={() => goto(g.href)}>{g.name}</button>
+                            ))}
+                            <div className="nav-sheet__sep" />
+                            <button className="nav-sheet__item" role="menuitem" onClick={() => goto("/leaderboard")}>Leaderboard</button>
+                            <button className="nav-sheet__item" role="menuitem" onClick={() => goto("/profile")}>My Profile</button>
+                        </div>
+                    </>
+                )}
             </nav>
 
             {/* Promo banners */}
@@ -214,12 +241,11 @@ export default function Navbar() {
                                             ))}
                                         </div>
 
-                                        {(parseFloat(loanAmount) || 0) > 0 && (
-                                            <div className="loan2__preview">
-                                                <div><span>You receive</span><b>₹{(parseFloat(loanAmount) || 0).toLocaleString("en-IN")}</b></div>
-                                                <div><span>Repay in 1 day</span><b>₹{Math.round((parseFloat(loanAmount) || 0) * 1.1).toLocaleString("en-IN")}</b></div>
-                                            </div>
-                                        )}
+                                        {/* Always rendered so the modal (and BORROW button) never shifts when a value is typed. */}
+                                        <div className={`loan2__preview ${(parseFloat(loanAmount) || 0) > 0 ? "" : "loan2__preview--empty"}`}>
+                                            <div><span>You receive</span><b>₹{(parseFloat(loanAmount) || 0).toLocaleString("en-IN")}</b></div>
+                                            <div><span>Repay — minimum 1 day interest</span><b>₹{Math.round((parseFloat(loanAmount) || 0) * 1.1).toLocaleString("en-IN")}</b></div>
+                                        </div>
 
                                         <p className="loan2__note"><AlertTriangle size={14} /> Interest compounds daily and lowers your leaderboard net worth until repaid.</p>
 

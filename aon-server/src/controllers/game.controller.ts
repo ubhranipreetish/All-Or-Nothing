@@ -31,6 +31,14 @@ export const cashOut = asyncHandler(async (req: Request, res: Response) => {
     res.json(result);
 });
 
+/** POST /api/game/refund — return an unplayed stake (e.g. poker waiting-room exit). */
+export const refund = asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.user!.userId;
+    const { gameType, sessionId } = req.body as { gameType: GameType; sessionId?: string };
+    const result = await container.gameService.refund(userId, gameType, sessionId);
+    res.json(result);
+});
+
 /** POST /api/game/lose — end the session as a loss. */
 export const loseGame = asyncHandler(async (req: Request, res: Response) => {
     const userId = req.user!.userId;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback, type MouseEvent as ReactMouseEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { RotateCcw, Undo2, Copy } from "lucide-react";
 import "../styles/Roulette.css";
@@ -86,12 +86,12 @@ export default function Roulette({ testMode = false }: { testMode?: boolean }) {
     const [lastRound, setLastRound] = useState<Bet[]>([]);
     const [chip, setChip] = useState(10);
     const [spinning, setSpinning] = useState(false);
-    const [result, setResult] = useState<number | null>(null);
     const [winningIndex, setWinningIndex] = useState<number | null>(null);
     const [showResult, setShowResult] = useState(false);
     const [winnings, setWinnings] = useState(0);
     const [recent, setRecent] = useState<number[]>([]);
     const [toast, setToast] = useState("");
+    const [banner, setBanner] = useState<{ num: number; delta: number } | null>(null);
     const [hover, setHover] = useState<number[] | null>(null);
 
     const wheelRef = useRef<SVGSVGElement>(null);
@@ -102,11 +102,15 @@ export default function Roulette({ testMode = false }: { testMode?: boolean }) {
     const spinSound = useRef<HTMLAudioElement | null>(null);
     const winSound = useRef<HTMLAudioElement | null>(null);
     const audioCtx = useRef<AudioContext | null>(null);
+    const bannerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
         spinSound.current = new Audio("/sounds/roulette.mp3");
         winSound.current = new Audio("/sounds/win_wheel.mp3");
-        return () => { if (raf.current) cancelAnimationFrame(raf.current); };
+        return () => {
+            if (raf.current) cancelAnimationFrame(raf.current);
+            if (bannerTimer.current) clearTimeout(bannerTimer.current);
+        };
     }, []);
 
     const spotsH = useMemo(() => makeSpots("h"), []);
@@ -140,6 +144,11 @@ export default function Roulette({ testMode = false }: { testMode?: boolean }) {
 
     const totalBet = bets.reduce((s, b) => s + b.amount, 0);
     const notify = (m: string) => { setToast(m); setTimeout(() => setToast(""), 2600); };
+    const showBanner = (num: number, delta: number) => {
+        if (bannerTimer.current) clearTimeout(bannerTimer.current);
+        setBanner({ num, delta });
+        bannerTimer.current = setTimeout(() => setBanner(null), 2500);
+    };
 
     const chipClick = () => {
         try {
@@ -196,12 +205,46 @@ export default function Roulette({ testMode = false }: { testMode?: boolean }) {
     const rebet = () => { if (spinning || !lastRound.length) return; const t = lastRound.reduce((s, b) => s + b.amount, 0); if (t > wallet) return notify("Not enough balance to rebet"); setBets(lastRound); };
     const betOn = (key: string) => bets.find((b) => b.key === key);
 
+    /* ---------- shared bet-spot props ----------
+       Click places, right-click removes (pointer devices), long-press ~500ms
+       removes (touch). Hover previews covered numbers and shows the payout. */
+    const lp = useRef<{ timer: ReturnType<typeof setTimeout> | null; fired: boolean; suppressClick: boolean }>({ timer: null, fired: false, suppressClick: false });
+    const cancelPress = () => { if (lp.current.timer) { clearTimeout(lp.current.timer); lp.current.timer = null; } };
+    const bettable = (b: Omit<Bet, "amount">, title?: string) => ({
+        title: title ?? `${b.label} · pays ${b.mult - 1}:1`,
+        onClick: () => {
+            if (lp.current.suppressClick) { lp.current.suppressClick = false; return; }
+            place(b);
+        },
+        onContextMenu: (e: ReactMouseEvent) => {
+            e.preventDefault();
+            cancelPress();
+            const fired = lp.current.fired;
+            lp.current.fired = false;
+            if (!fired) removeKey(b.key); // long-press already removed on browsers that also fire contextmenu
+        },
+        onTouchStart: () => {
+            lp.current.fired = false;
+            lp.current.suppressClick = false;
+            lp.current.timer = setTimeout(() => {
+                lp.current.timer = null;
+                lp.current.fired = true;
+                lp.current.suppressClick = true;
+                removeKey(b.key);
+            }, 500);
+        },
+        onTouchEnd: cancelPress,
+        onTouchMove: cancelPress,
+        onMouseEnter: () => setHover(b.numbers),
+        onMouseLeave: () => setHover(null),
+    });
+
     /* ---------- spin physics ----------
        The wheel settles at a RANDOM orientation and the ball comes to rest in
        the winning pocket wherever that happens to be on screen (like a real
        roulette wheel — no fixed top pointer). The result is still a fair uniform
        draw; only its on-screen position is random. */
-    const runSpin = (resultIndex: number) => {
+    const runSpin = (resultIndex: number, won: number, winPromise: Promise<boolean>) => {
         const wheelEl = wheelRef.current!;
         const ballEl = ballRef.current!;
         const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -236,27 +279,30 @@ export default function Roulette({ testMode = false }: { testMode?: boolean }) {
             ballEl.style.left = `${50 + r * Math.sin(rad)}%`;
             ballEl.style.top = `${50 - r * Math.cos(rad)}%`;
             if (t < 1) raf.current = requestAnimationFrame(frame);
-            else { wheelAngle.current = wheelEnd; ballAngle.current = ballEnd; settle(resultIndex); }
+            else { wheelAngle.current = wheelEnd; ballAngle.current = ballEnd; settle(resultIndex, won, winPromise); }
         };
         raf.current = requestAnimationFrame(frame);
     };
 
-    const settle = (resultIndex: number) => {
+    const settle = async (resultIndex: number, won: number, winPromise: Promise<boolean>) => {
         const num = WHEEL[resultIndex];
         if (spinSound.current) spinSound.current.pause();
-        setResult(num);
+        // the credit was sent the moment the result was drawn — announce only
+        // once BOTH the ball has landed and the server has confirmed the win,
+        // so the balance and the announcement update in the same moment
+        const credited = await winPromise;
         setWinningIndex(resultIndex);
         setShowResult(true);
         setSpinning(false);
         setRecent((r) => [num, ...r].slice(0, 14));
-        let won = 0;
-        for (const b of bets) if (b.numbers.includes(num)) won += b.amount * b.mult;
+        if (won > 0 && !credited) {
+            setWinnings(0);
+            notify("Couldn't credit your win — please refresh");
+            return;
+        }
         setWinnings(won);
-        if (won > 0) {
-            recordWin(won, totalBet, "ROULETTE");
-            winSound.current?.play().catch(() => {});
-            notify(`🎉 ${num} ${colorOf(num).toUpperCase()} · You won ₹${won.toFixed(2)}!`);
-        } else notify(`${num} ${colorOf(num).toUpperCase()} · No win this time`);
+        if (won > 0) winSound.current?.play().catch(() => {});
+        showBanner(num, won > 0 ? won : -totalBet);
     };
 
     const spin = async () => {
@@ -268,14 +314,20 @@ export default function Roulette({ testMode = false }: { testMode?: boolean }) {
         setLastRound(bets);
         setHistory([]);
         setShowResult(false);
-        setResult(null);
         setWinningIndex(null);
         setWinnings(0);
+        setBanner(null);
         setSpinning(true);
         if (spinSound.current) { spinSound.current.currentTime = 0; spinSound.current.play().catch(() => {}); }
-        runSpin(Math.floor(Math.random() * WHEEL.length));
+        const resultIndex = Math.floor(Math.random() * WHEEL.length);
+        const num = WHEEL[resultIndex];
+        let won = 0;
+        for (const b of bets) if (b.numbers.includes(num)) won += b.amount * b.mult;
+        // credit the win now, in parallel with the ball-settle animation
+        const winPromise = won > 0 ? recordWin(won, totalBet, "ROULETTE").catch(() => false) : Promise.resolve(true);
+        runSpin(resultIndex, won, winPromise);
     };
-    const newRound = () => { setShowResult(false); setResult(null); setWinningIndex(null); setWinnings(0); setBets([]); };
+    const newRound = () => { setShowResult(false); setWinningIndex(null); setWinnings(0); setBanner(null); setBets([]); };
     const highlighted = (n: number) => hover?.includes(n) ?? false;
 
     /* ---------- felt renderer (shared by both orientations) ---------- */
@@ -287,7 +339,7 @@ export default function Roulette({ testMode = false }: { testMode?: boolean }) {
         return (
             <div className={`rl-felt rl-felt--${orient}`}>
                 <div className="rl-felt-main">
-                    <button className={`rl-zero ${betOn("z0") ? "bet" : ""} ${highlighted(0) ? "hl" : ""}`} onClick={() => place({ key: "z0", label: "Straight", numbers: [0], mult: 36 })} onContextMenu={(e) => { e.preventDefault(); removeKey("z0"); }} onMouseEnter={() => setHover([0])} onMouseLeave={() => setHover(null)}>
+                    <button className={`rl-zero ${betOn("z0") ? "bet" : ""} ${highlighted(0) ? "hl" : ""}`} {...bettable({ key: "z0", label: "Straight", numbers: [0], mult: 36 })}>
                         0
                         {betOn("z0") && <Chip amount={betOn("z0")!.amount} />}
                     </button>
@@ -298,7 +350,7 @@ export default function Roulette({ testMode = false }: { testMode?: boolean }) {
                                     const n = cellNum(r, c);
                                     const key = `n${n}`;
                                     return (
-                                        <button key={n} className={`rl-num ${colorOf(n)} ${betOn(key) ? "bet" : ""} ${highlighted(n) ? "hl" : ""}`} onClick={() => place({ key, label: "Straight", numbers: [n], mult: 36 })} onContextMenu={(e) => { e.preventDefault(); removeKey(key); }} onMouseEnter={() => setHover([n])} onMouseLeave={() => setHover(null)}>
+                                        <button key={n} className={`rl-num ${colorOf(n)} ${betOn(key) ? "bet" : ""} ${highlighted(n) ? "hl" : ""}`} {...bettable({ key, label: "Straight", numbers: [n], mult: 36 })}>
                                             {n}
                                             {betOn(key) && <Chip amount={betOn(key)!.amount} />}
                                         </button>
@@ -310,7 +362,7 @@ export default function Roulette({ testMode = false }: { testMode?: boolean }) {
                             {spots.map((s) => {
                                 const b = betOn(s.key);
                                 return (
-                                    <button key={`${orient}-${s.key}`} className={`rl-spot ${b ? "bet" : ""}`} style={{ left: s.pos!.left, top: s.pos!.top }} title={`${s.label} (${s.numbers.join(", ")})`} onClick={() => place(s)} onContextMenu={(e) => { e.preventDefault(); removeKey(s.key); }} onMouseEnter={() => setHover(s.numbers)} onMouseLeave={() => setHover(null)}>
+                                    <button key={`${orient}-${s.key}`} className={`rl-spot ${b ? "bet" : ""}`} style={{ left: s.pos!.left, top: s.pos!.top }} {...bettable(s, `${s.label} (${s.numbers.join(", ")}) · pays ${s.mult - 1}:1`)}>
                                         {b && <Chip amount={b.amount} small />}
                                     </button>
                                 );
@@ -319,7 +371,7 @@ export default function Roulette({ testMode = false }: { testMode?: boolean }) {
                     </div>
                     <div className="rl-cols">
                         {colOrder.map((c) => (
-                            <button key={c.key} className={`rl-col ${betOn(c.key) ? "bet" : ""}`} onClick={() => place(c)} onContextMenu={(e) => { e.preventDefault(); removeKey(c.key); }} onMouseEnter={() => setHover(c.numbers)} onMouseLeave={() => setHover(null)}>
+                            <button key={c.key} className={`rl-col ${betOn(c.key) ? "bet" : ""}`} {...bettable(c, "Column · pays 2:1")}>
                                 {c.label}
                                 {betOn(c.key) && <Chip amount={betOn(c.key)!.amount} small />}
                             </button>
@@ -327,7 +379,7 @@ export default function Roulette({ testMode = false }: { testMode?: boolean }) {
                     </div>
                     <div className="rl-dozens">
                         {outside.dozens.map((d) => (
-                            <button key={d.key} className={`rl-dozen ${betOn(d.key) ? "bet" : ""}`} onClick={() => place(d)} onContextMenu={(e) => { e.preventDefault(); removeKey(d.key); }} onMouseEnter={() => setHover(d.numbers)} onMouseLeave={() => setHover(null)}>
+                            <button key={d.key} className={`rl-dozen ${betOn(d.key) ? "bet" : ""}`} {...bettable(d)}>
                                 {d.label}
                                 {betOn(d.key) && <Chip amount={betOn(d.key)!.amount} small />}
                             </button>
@@ -335,7 +387,7 @@ export default function Roulette({ testMode = false }: { testMode?: boolean }) {
                     </div>
                     <div className="rl-outside">
                         {outside.evenMoney.map((o) => (
-                            <button key={o.key} className={`rl-ev ${o.cls} ${betOn(o.key) ? "bet" : ""}`} onClick={() => place(o)} onContextMenu={(e) => { e.preventDefault(); removeKey(o.key); }} onMouseEnter={() => setHover(o.numbers)} onMouseLeave={() => setHover(null)}>
+                            <button key={o.key} className={`rl-ev ${o.cls} ${betOn(o.key) ? "bet" : ""}`} {...bettable(o)}>
                                 {o.cls === "rl-red" ? <span className="rl-diamond" /> : o.cls === "rl-black" ? <span className="rl-diamond dark" /> : o.label}
                                 {betOn(o.key) && <Chip amount={betOn(o.key)!.amount} small />}
                             </button>
@@ -377,6 +429,21 @@ export default function Roulette({ testMode = false }: { testMode?: boolean }) {
                         {recent.map((n, i) => <span key={i} className={`rl-recent__n ${colorOf(n)}`}>{n}</span>)}
                     </div>
                 )}
+
+                {/* anchored result banner — the slot's height is reserved so the page never shifts */}
+                <div className="rl-banner-slot" aria-live="polite">
+                    <AnimatePresence>
+                        {banner && (
+                            <motion.div key={`${banner.num}-${banner.delta}`} className={`rl-banner ${colorOf(banner.num)}`} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.3 }}>
+                                <span className="rl-banner__n">{banner.num}</span>
+                                <span className="rl-banner__c">{colorOf(banner.num)}</span>
+                                <span className={`rl-banner__amt ${banner.delta > 0 ? "up" : "down"}`}>
+                                    {banner.delta > 0 ? `+₹${banner.delta.toFixed(2)}` : `-₹${Math.abs(banner.delta).toFixed(2)}`}
+                                </span>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </div>
 
                 <div className="rl-stage">
                     {/* WHEEL */}
@@ -421,14 +488,6 @@ export default function Roulette({ testMode = false }: { testMode?: boolean }) {
                             </svg>
                             <div className="rl-ball" ref={ballRef} />
                         </div>
-                        <AnimatePresence>
-                            {showResult && result !== null && (
-                                <motion.div className={`rl-result ${colorOf(result)}`} initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.6, opacity: 0 }}>
-                                    <span className="rl-result__n">{result}</span>
-                                    <span className="rl-result__t">{winnings > 0 ? `+₹${winnings.toFixed(2)}` : "No win"}</span>
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
                     </div>
 
                     {/* TABLE — both orientations rendered, CSS shows the right one */}
@@ -461,7 +520,12 @@ export default function Roulette({ testMode = false }: { testMode?: boolean }) {
                     )}
                 </div>
 
-                <p className="rl-tip">Tap a chip value, then tap the table to bet • Right-click a spot to remove • Inside lines = splits, corners, streets &amp; six-lines</p>
+                <p className="rl-tip">
+                    Tap a chip value, then tap the table to bet •{" "}
+                    <span className="rl-tip--fine">Right-click a spot to remove</span>
+                    <span className="rl-tip--coarse">Long-press a spot to remove</span>
+                    {" "}• Inside lines = splits, corners, streets &amp; six-lines
+                </p>
             </div>
             <Footer />
         </>

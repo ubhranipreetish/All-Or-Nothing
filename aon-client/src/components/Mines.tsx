@@ -14,6 +14,8 @@ import HowToPlay from "./HowToPlay";
 
 const TILE_COUNT = 25;
 const MIN_BET = 1;
+const SWAP_GUARD_MS = 600; // primary button is inert this long after it swaps state
+const RESET_WINDOW_MS = 450; // board stays gated while a new round settles in
 
 interface TileData {
     isMine: boolean;
@@ -36,6 +38,8 @@ const generateBoard = (mineCount: number): TileData[] => {
     return board;
 };
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 export default function Mines() {
     const gemSound = useRef<HTMLAudioElement | null>(null);
     const mineSound = useRef<HTMLAudioElement | null>(null);
@@ -54,14 +58,36 @@ export default function Mines() {
     const [multiplier, setMultiplier] = useState<string>("1.00");
     const [cashedOut, setCashedOut] = useState<boolean>(false);
     const [notification, setNotification] = useState<string>("");
+    const [notificationTone, setNotificationTone] = useState<"info" | "error">("info");
     const [spotlightIndex, setSpotlightIndex] = useState<number | null>(null);
+    // --- round-flow gates ---
+    const [hydrated, setHydrated] = useState<boolean>(false); // server round-state sync finished
+    const [resetting, setResetting] = useState<boolean>(false); // brief window after New Round
+    const [cashingOut, setCashingOut] = useState<boolean>(false); // recordWin in flight
+    const [swapGuard, setSwapGuard] = useState<boolean>(false); // primary button just swapped state
+    const [resultReady, setResultReady] = useState<boolean>(false); // BOOM panel gated behind the reveal
+    const [killerIndex, setKillerIndex] = useState<number | null>(null); // the mine that ended the round
+    const [resumed, setResumed] = useState<boolean>(false); // round restored from the server
+    const [roundKey, setRoundKey] = useState<number>(0); // remounts tiles face-down on reset
     const sessionIdRef = useRef<string | null>(null);
     const roundRef = useRef(0); // bumps each round so a stale reveal animation can bail
     const gridRef = useRef<HTMLDivElement>(null);
+    const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const guardTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    const showNotification = (message: string) => {
+    const showNotification = (message: string, tone: "info" | "error" = "info") => {
         setNotification(message);
-        setTimeout(() => setNotification(""), 3000);
+        setNotificationTone(tone);
+        if (toastTimer.current) clearTimeout(toastTimer.current);
+        toastTimer.current = setTimeout(() => setNotification(""), 3000);
+    };
+
+    // Whenever the primary button swaps in place (Place Bet ↔ Cash Out ↔ New Round),
+    // hold it inert briefly so a double-click can't fire both actions.
+    const armSwapGuard = () => {
+        setSwapGuard(true);
+        if (guardTimer.current) clearTimeout(guardTimer.current);
+        guardTimer.current = setTimeout(() => setSwapGuard(false), SWAP_GUARD_MS);
     };
 
     // Restore an in-flight session on mount.
@@ -93,11 +119,15 @@ export default function Mines() {
                             setStarted(true);
                             setGameOver(false);
                             setCashedOut(false);
+                            setResumed(true);
                         }
                     }
                 }
             } catch (err) {
                 console.error("Failed to restore session:", err);
+            } finally {
+                // Only now is the board allowed to take clicks — no swallowed first tap.
+                setHydrated(true);
             }
         };
         restoreSession();
@@ -142,7 +172,8 @@ export default function Mines() {
             return;
         }
         if (amount > wallet) {
-            showNotification("Insufficient balance!");
+            // Rejected bet: the idle board stays exactly as it was — no clearing.
+            showNotification("Insufficient balance!", "error");
             return;
         }
 
@@ -154,12 +185,14 @@ export default function Mines() {
             mineCount: mines,
         });
         if (!success) {
-            showNotification("Failed to place bet");
+            // Board untouched — the idle tiles keep rendering.
+            showNotification("Failed to place bet", "error");
             return;
         }
         if (sessionId) sessionIdRef.current = sessionId;
 
         roundRef.current += 1; // invalidate any still-running reveal from the prior round
+        setRoundKey((k) => k + 1); // fresh face-down tiles, no flip-back artifacts
         setBoard(initialBoard);
         setStarted(true);
         setGameOver(false);
@@ -167,22 +200,25 @@ export default function Mines() {
         setEarnings(amount);
         setMultiplier("1.00");
         setCashedOut(false);
+        setResultReady(false);
+        setKillerIndex(null);
+        setResumed(false);
         setSpotlightIndex(null);
+        armSwapGuard(); // Place Bet just became Cash Out — swallow a stray second click
 
         setTimeout(() => gridRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 100);
     };
 
     const waveReveal = async (lastIndex: number) => {
         const myRound = roundRef.current;
-        const tilesWithDistance = board
-            .map((_, i) => ({
-                index: i,
-                dist: Math.sqrt(
-                    Math.pow(Math.floor(i / 5) - Math.floor(lastIndex / 5), 2) +
-                    Math.pow((i % 5) - (lastIndex % 5), 2)
-                ),
-            }))
-            .sort((a, b) => a.dist - b.dist);
+        // Iterate fixed indices (not the board snapshot) so all 25 tiles always flip.
+        const tilesWithDistance = Array.from({ length: TILE_COUNT }, (_, i) => ({
+            index: i,
+            dist: Math.sqrt(
+                Math.pow(Math.floor(i / 5) - Math.floor(lastIndex / 5), 2) +
+                Math.pow((i % 5) - (lastIndex % 5), 2)
+            ),
+        })).sort((a, b) => a.dist - b.dist);
 
         for (const item of tilesWithDistance) {
             if (roundRef.current !== myRound) return; // a new round started — stop animating the old board
@@ -191,8 +227,12 @@ export default function Mines() {
                 next[item.index] = { ...next[item.index], revealed: true };
                 return next;
             });
-            await new Promise((r) => setTimeout(r, 40));
+            await sleep(40);
         }
+
+        if (roundRef.current !== myRound) return;
+        // Safety sweep: guarantee no tile is left face-down after the round ends.
+        setBoard((prev) => prev.map((t) => (t.revealed ? t : { ...t, revealed: true })));
     };
 
     const calculateMultiplier = (revealed: number, mines: number): number => {
@@ -205,6 +245,7 @@ export default function Mines() {
     };
 
     const revealTile = async (index: number) => {
+        if (!hydrated || resetting || cashingOut) return;
         if (!started || board[index]?.revealed || gameOver || cashedOut) return;
 
         setSpotlightIndex(index);
@@ -218,12 +259,30 @@ export default function Mines() {
             setGameOver(true);
             setMultiplier("0.00");
             setEarnings(0);
+            setKillerIndex(index);
             // Settle the loss immediately (the reveal animation below takes ~1s);
             // otherwise a fast "New Round → Place Bet" hits a still-active session.
             const lostSession = sessionIdRef.current;
             sessionIdRef.current = null;
             if (lostSession) recordLoss(lostSession);
+
+            const myRound = roundRef.current;
+            // 1) Detonate the clicked tile first — the explosion is the headline.
+            setBoard((prev) => {
+                const next = [...prev];
+                next[index] = { ...next[index], revealed: true };
+                return next;
+            });
+            await sleep(700);
+            if (roundRef.current !== myRound) return;
+            // 2) Then wash the rest of the board open.
             await waveReveal(index);
+            if (roundRef.current !== myRound) return;
+            await sleep(250);
+            if (roundRef.current !== myRound) return;
+            // 3) Only now does the BOOM panel land.
+            setResultReady(true);
+            armSwapGuard(); // Cash Out just became New Round
         } else {
             if (gemSound.current) {
                 gemSound.current.currentTime = 0;
@@ -242,26 +301,49 @@ export default function Mines() {
         }
     };
 
+    const handleNewRound = () => {
+        roundRef.current += 1; // kill any straggling reveal animation
+        setRoundKey((k) => k + 1); // remount tiles as face-down frames — never bare gem outlines
+        setResetting(true);
+        setStarted(false);
+        setGameOver(false);
+        setCashedOut(false);
+        setCashingOut(false);
+        setResultReady(false);
+        setKillerIndex(null);
+        setResumed(false);
+        setBoard([]);
+        setMultiplier("1.00");
+        setEarnings(0);
+        setRevealedCount(0);
+        armSwapGuard(); // New Round just became Place Bet
+        setTimeout(() => setResetting(false), RESET_WINDOW_MS);
+    };
+
     const handleCashOut = async () => {
         if (gameOver || cashedOut) {
-            setStarted(false);
-            setGameOver(false);
-            setCashedOut(false);
-            setBoard([]);
-            setMultiplier("1.00");
-            setEarnings(0);
-            setRevealedCount(0);
+            handleNewRound();
             return;
         }
+        if (cashingOut || swapGuard || revealedCount === 0) return;
 
-        if (earnings > amount) {
-            await recordWin(earnings, amount, "MINES", parseFloat(multiplier));
-            showNotification(`Cashed out ₹${earnings.toFixed(2)}!`);
+        // The server is the ledger: no Banked panel until it confirms the credit.
+        setCashingOut(true);
+        const credited = await recordWin(earnings, amount, "MINES", parseFloat(multiplier));
+        if (!credited) {
+            setCashingOut(false);
+            showNotification("The house rejected that cash-out — try again.", "error");
+            return; // round stays alive
         }
+        sessionIdRef.current = null;
+        showNotification(`Cashed out ₹${earnings.toFixed(2)}!`);
         gridRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-        await new Promise((r) => setTimeout(r, 300));
+        await sleep(300);
         setStarted(false);
         setCashedOut(true);
+        setCashingOut(false);
+        setResumed(false);
+        armSwapGuard(); // Cash Out just became New Round
         await waveReveal(Math.floor(TILE_COUNT / 2));
     };
 
@@ -275,6 +357,17 @@ export default function Mines() {
 
     const idle = !started && !gameOver && !cashedOut;
     const playing = started && !gameOver && !cashedOut;
+    const detonating = gameOver && !resultReady; // board explosion still playing out
+    const boardReady = hydrated && !resetting;
+
+    const cashOutDisabled = cashingOut || swapGuard || detonating || revealedCount === 0;
+    const cashOutLabel = detonating
+        ? `Cash Out ₹${earnings.toFixed(2)}`
+        : cashingOut
+            ? "Cashing Out…"
+            : revealedCount === 0
+                ? "Reveal a tile to unlock"
+                : `Cash Out ₹${earnings.toFixed(2)}`;
 
     return (
         <>
@@ -284,7 +377,7 @@ export default function Mines() {
                 <AnimatePresence>
                     {notification && (
                         <motion.div
-                            className="game-toast"
+                            className={`game-toast ${notificationTone === "error" ? "game-toast--error" : ""}`}
                             initial={{ opacity: 0, y: -16, x: "-50%" }}
                             animate={{ opacity: 1, y: 0, x: "-50%" }}
                             exit={{ opacity: 0, y: -16, x: "-50%" }}
@@ -308,19 +401,21 @@ export default function Mines() {
 
                     <div className="game-layout mines-layout">
                         {/* board */}
-                        <div className="game-board" ref={gridRef}>
+                        <div className={`game-board ${boardReady ? "" : "is-syncing"}`} ref={gridRef}>
                             <div className="mines-grid">
                                 {[...Array(TILE_COUNT)].map((_, index) => (
                                     <Tile
-                                        key={index}
+                                        key={`${roundKey}-${index}`}
                                         tile={board[index] || { revealed: false, isMine: false }}
                                         onClick={() => revealTile(index)}
-                                        disabled={gameOver || cashedOut || !started || spotlightIndex !== null}
+                                        disabled={gameOver || cashedOut || !started || spotlightIndex !== null || !boardReady || cashingOut}
                                         isDimmed={spotlightIndex !== null && spotlightIndex !== index}
                                         isSpotlight={spotlightIndex === index}
+                                        isKiller={killerIndex === index}
                                     />
                                 ))}
                             </div>
+                            {!boardReady && <div className="mines-sync-hint">syncing…</div>}
                         </div>
 
                         {/* control panel */}
@@ -353,12 +448,17 @@ export default function Mines() {
                                         />
                                     </div>
 
-                                    <button className="game-primary" type="submit">Place Bet</button>
+                                    <button className="game-primary" type="submit" disabled={swapGuard}>Place Bet</button>
                                 </form>
                             )}
 
-                            {playing && (
+                            {(playing || detonating) && (
                                 <div className="game-live">
+                                    {resumed && (
+                                        <p className="mines-resume-note">
+                                            Round in progress — resumed (₹{amount.toFixed(2)} staked)
+                                        </p>
+                                    )}
                                     <div className="game-stat game-stat--mult">
                                         <div className="game-stat__label">Multiplier</div>
                                         <div className="game-stat__value">{multiplier}×</div>
@@ -368,21 +468,23 @@ export default function Mines() {
                                         <div className="game-stat__value">₹{earnings.toFixed(2)}</div>
                                     </div>
                                     <p className="game-hint">{getThresholdHint()}</p>
-                                    <button className="game-cashout" onClick={handleCashOut}>Cash Out ₹{earnings.toFixed(2)}</button>
+                                    <button className="game-cashout" onClick={handleCashOut} disabled={cashOutDisabled}>
+                                        {cashOutLabel}
+                                    </button>
                                 </div>
                             )}
 
-                            {(gameOver || cashedOut) && (
+                            {((gameOver && resultReady) || cashedOut) && (
                                 <div className="game-live">
                                     <div className={`mines-result ${gameOver ? "is-lost" : "is-won"}`}>
                                         <div className="mines-result__title">{gameOver ? "Boom." : "Banked."}</div>
                                         <div className="mines-result__sub">
                                             {gameOver
-                                                ? "A mine caught you. The house keeps the bet."
+                                                ? `A mine caught you. The house keeps -₹${amount.toFixed(2)}.`
                                                 : `You walked away with ₹${earnings.toFixed(2)}.`}
                                         </div>
                                     </div>
-                                    <button className="game-clear" onClick={handleCashOut}>New Round</button>
+                                    <button className="game-clear" onClick={handleNewRound} disabled={swapGuard}>New Round</button>
                                 </div>
                             )}
                         </aside>

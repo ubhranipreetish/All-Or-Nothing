@@ -95,7 +95,9 @@ function Reveal({
   y?: number;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref, { once: true, margin: "-12%" });
+  // Positive bottom margin = reveal BEFORE the section enters the viewport,
+  // so normal-speed scrolling never lands on a still-black section.
+  const inView = useInView(ref, { once: true, margin: "0px 0px 15% 0px" });
   return (
     <motion.div
       ref={ref}
@@ -111,7 +113,7 @@ function Reveal({
 
 function RiskMeter({ value, accent }: { value: number; accent: string }) {
   const ref = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref, { once: true, margin: "-20%" });
+  const inView = useInView(ref, { once: true, margin: "0px 0px 10% 0px" });
   return (
     <div className="fe-risk" ref={ref} data-accent={accent}>
       <div className="fe-risk__head">

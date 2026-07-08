@@ -2,7 +2,7 @@ import { Schema, model, Types } from "mongoose";
 
 export interface ITransaction {
     userId: Types.ObjectId;
-    type: "BET" | "WIN" | "DEPOSIT" | "WITHDRAW";
+    type: "BET" | "WIN" | "DEPOSIT" | "WITHDRAW" | "REFUND";
     gameId?: string;
     gameType?: "ROULETTE" | "AON" | "DICE" | "MINES" | "DRAGON_TOWER" | "WHEEL" | "POKER";
     amount: number;
@@ -28,7 +28,7 @@ const TransactionSchema = new Schema<ITransaction>(
         },
         type: {
             type: String,
-            enum: ["BET", "WIN", "DEPOSIT", "WITHDRAW"],
+            enum: ["BET", "WIN", "DEPOSIT", "WITHDRAW", "REFUND"],
             required: true,
         },
         gameId: {

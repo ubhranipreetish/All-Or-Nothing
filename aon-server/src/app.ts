@@ -34,9 +34,15 @@ app.use("/api/profile", profileRoutes);
 app.use("/api/bonus", bonusRoutes);
 app.use("/api/loan", loanRoutes);
 
-app.get("/health", (_, res) => {
-  res.json({ status: "OK" });
-});
+// Health/warmup — used by uptime monitors and by the frontend's first-visit
+// ping that wakes the Render free-tier dyno before the player's first bet.
+const health = (_: express.Request, res: express.Response) => {
+  res.json({ status: "OK", uptime: process.uptime() });
+};
+app.get("/health", health);
+app.get("/warmup", health);
+app.get("/api/health", health);
+app.get("/api/warmup", health);
 
 // Central error handler — must be registered last.
 app.use(errorHandler);

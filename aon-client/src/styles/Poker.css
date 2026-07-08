@@ -292,6 +292,12 @@
     transform: translateY(-2px);
     box-shadow: 0 16px 44px -10px rgba(233, 185, 73, 0.7);
 }
+.pk-cta:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
 .pk-or {
     text-align: center;
     font-family: var(--font-serif, Georgia, serif);
@@ -360,6 +366,84 @@
     padding: 10px 18px;
     border-radius: 2px;
     z-index: 50;
+}
+
+/* ------------------------------------------- leave-table confirmation */
+.pk-confirm-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    background: rgba(4, 3, 8, 0.74);
+    backdrop-filter: blur(4px);
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    animation: pk-fade 0.18s ease-out;
+}
+@keyframes pk-fade { from { opacity: 0; } to { opacity: 1; } }
+.pk-confirm {
+    position: relative;
+    width: 100%;
+    max-width: 420px;
+    background: linear-gradient(180deg, #1a1422, #0d0a12);
+    border: 1px solid rgba(233, 185, 73, 0.3);
+    border-radius: 2px;
+    padding: 1.7rem 1.6rem;
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+}
+.pk-confirm__h {
+    margin: 0 0 0.4rem;
+    font-family: var(--font-display, sans-serif);
+    font-size: 1.4rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background: linear-gradient(110deg, var(--gold-bright, #ffd877) 0%, var(--gold, #e9b949) 60%, var(--gold-deep, #a9791f) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+.pk-confirm__p {
+    margin: 0;
+    color: var(--bone-dim, #a79fb2);
+    line-height: 1.6;
+    font-size: 0.95rem;
+}
+.pk-confirm__p strong { color: var(--gold-bright, #ffd877); }
+.pk-confirm__acts {
+    display: flex;
+    gap: 0.7rem;
+    margin-top: 1.3rem;
+}
+.pk-confirm__stay,
+.pk-confirm__leave {
+    flex: 1;
+    padding: 12px;
+    border-radius: 2px;
+    font-family: var(--font-mono, monospace);
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: color 0.18s, border-color 0.18s, background 0.18s;
+}
+.pk-confirm__stay {
+    border: 1px solid rgba(233, 185, 73, 0.6);
+    background: rgba(233, 185, 73, 0.1);
+    color: var(--gold-bright, #ffd877);
+}
+.pk-confirm__stay:hover {
+    border-color: var(--gold-bright, #ffd877);
+    background: rgba(233, 185, 73, 0.18);
+}
+.pk-confirm__leave {
+    border: 1px solid rgba(255, 68, 56, 0.45);
+    background: transparent;
+    color: var(--ember, #ff4438);
+}
+.pk-confirm__leave:hover {
+    border-color: var(--ember, #ff4438);
+    background: rgba(255, 68, 56, 0.1);
 }
 
 .pk-testbadge {

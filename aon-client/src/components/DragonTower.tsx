@@ -28,7 +28,7 @@ const generateDragons = (rows: number, difficulty: number): number[] =>
     Array.from({ length: rows }, () => Math.floor(Math.random() * difficulty));
 
 export default function DragonTower() {
-    const { wallet, recordBet, recordWin } = useWallet();
+    const { wallet, recordBet, recordWin, refundBet } = useWallet();
     const { user } = useAuth();
     const [showSignInDialog, setShowSignInDialog] = useState(false);
 
@@ -40,21 +40,47 @@ export default function DragonTower() {
     const [amount, setAmount] = useState<number>(100);
     const [started, setStarted] = useState<boolean>(false);
     const [notification, setNotification] = useState<string>("");
+    const [notifTone, setNotifTone] = useState<"gold" | "ember">("gold");
     const [revealedRows, setRevealedRows] = useState<number[]>([]);
     const [multiplierPop, setMultiplierPop] = useState<boolean>(false);
+    // Round sequencing: tower stays disabled until the round is ready to take
+    // clicks; the cash-out request is in flight; the win verdict is banked;
+    // the loss verdict waits for the dragon reveal to finish.
+    const [boardReady, setBoardReady] = useState<boolean>(false);
+    const [cashingOut, setCashingOut] = useState<boolean>(false);
+    const [banked, setBanked] = useState<boolean>(false);
+    const [bankedAmount, setBankedAmount] = useState<number>(0);
+    const [lossRevealed, setLossRevealed] = useState<boolean>(false);
     const prevSelectedLength = useRef<number>(0);
     const towerRef = useRef<HTMLDivElement>(null);
 
-    // Staggered dragon reveal on game over.
+    // Keep the tower visibly disabled until the round state has settled after
+    // bet placement (and the scroll-into-view has landed) — prevents the first
+    // click being swallowed while the board is still arming.
+    useEffect(() => {
+        if (!started) {
+            setBoardReady(false);
+            return;
+        }
+        const timer = setTimeout(() => setBoardReady(true), 600);
+        return () => clearTimeout(timer);
+    }, [started]);
+
+    // Staggered dragon reveal on game over — reveal/flare first, verdict after.
     useEffect(() => {
         if (gameOver && dragons.length > 0) {
             setRevealedRows([]);
+            setLossRevealed(false);
             const lostRow = selected.length;
+            const timers: ReturnType<typeof setTimeout>[] = [];
             let delay = 0;
             for (let i = lostRow; i <= ROWS - 1; i++) {
-                setTimeout(() => setRevealedRows((prev) => [...prev, i]), delay);
+                timers.push(setTimeout(() => setRevealedRows((prev) => [...prev, i]), delay));
                 delay += 70;
             }
+            // let the flare on the dragon tile land before the verdict panel
+            timers.push(setTimeout(() => setLossRevealed(true), delay + 500));
+            return () => timers.forEach(clearTimeout);
         } else if (!gameOver && !cashOut) {
             setRevealedRows([]);
         }
@@ -70,9 +96,23 @@ export default function DragonTower() {
         prevSelectedLength.current = selected.length;
     }, [selected.length]);
 
-    const showNotification = (message: string) => {
+    const showNotification = (message: string, tone: "gold" | "ember" = "gold") => {
+        setNotifTone(tone);
         setNotification(message);
         setTimeout(() => setNotification(""), 3000);
+    };
+
+    const resetRound = () => {
+        setStarted(false);
+        setGameOver(false);
+        setCashOut(false);
+        setBanked(false);
+        setLossRevealed(false);
+        setCashingOut(false);
+        setSelected([]);
+        setDragons([]);
+        setRevealedRows([]);
+        prevSelectedLength.current = 0;
     };
 
     const startGame = async (e: React.FormEvent) => {
@@ -92,7 +132,7 @@ export default function DragonTower() {
 
         const success = await recordBet(amount, "DRAGON_TOWER");
         if (!success) {
-            showNotification("Failed to place bet");
+            showNotification("Failed to place bet", "ember");
             return;
         }
 
@@ -101,13 +141,16 @@ export default function DragonTower() {
         setRevealedRows([]);
         setGameOver(false);
         setCashOut(false);
+        setBanked(false);
+        setLossRevealed(false);
+        setCashingOut(false);
         setStarted(true);
         prevSelectedLength.current = 0;
         setTimeout(() => towerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 100);
     };
 
     const handleTileClick = (row: number, index: number) => {
-        if (!started || gameOver || cashOut || selected.length !== row) return;
+        if (!started || !boardReady || gameOver || cashOut || cashingOut || selected.length !== row) return;
         if (index === dragons[row]) {
             setGameOver(true);
         } else {
@@ -115,44 +158,47 @@ export default function DragonTower() {
         }
     };
 
+    // per-floor payout progression — floor `row` (0-indexed) pays factor^(row+1)
+    const stepBase = difficulties[difficulty];
+    const stepFactor = stepBase === 4 ? 1.4 : stepBase === 3 ? 1.6 : 1.8;
+    const floorMultiplier = (row: number): string => (stepFactor ** (row + 1)).toFixed(2);
+
     const getMultiplier = (): string => {
         if (gameOver) return "0.00";
-        const base = difficulties[difficulty];
-        const factor = base === 4 ? 1.4 : base === 3 ? 1.6 : 1.8;
-        return (factor ** selected.length).toFixed(2);
+        return (stepFactor ** selected.length).toFixed(2);
     };
 
     const multiplier = getMultiplier();
     const earnings = parseFloat((amount * parseFloat(multiplier)).toFixed(2));
 
     const handleCashOut = async () => {
-        if (gameOver) {
-            setGameOver(false);
-            setCashOut(false);
-            setStarted(false);
-            setSelected([]);
-            setDragons([]);
-            setRevealedRows([]);
-            prevSelectedLength.current = 0;
+        if (!started || gameOver || cashOut || cashingOut) return;
+
+        setCashingOut(true);
+        towerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+
+        // Floor 0 — nothing climbed, pure refund of the stake.
+        if (selected.length === 0) {
+            const success = await refundBet("DRAGON_TOWER");
+            setCashingOut(false);
+            if (!success) {
+                showNotification("Cash out failed — the round is still live. Try again.", "ember");
+                return;
+            }
+            showNotification(`Stake returned — ₹${amount.toFixed(2)} back in the wallet.`);
+            resetRound();
             return;
         }
 
-        towerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-        await new Promise((r) => setTimeout(r, 400));
-
-        if (selected.length === 0) {
-            await recordWin(amount, amount, "DRAGON_TOWER", 1.0);
-            showNotification(`Returned ₹${amount.toFixed(2)} (no moves made)`);
-        } else if (earnings > 0) {
-            await recordWin(earnings, amount, "DRAGON_TOWER", parseFloat(multiplier));
-            showNotification(`Cashed out ₹${earnings.toFixed(2)}!`);
+        const success = await recordWin(earnings, amount, "DRAGON_TOWER", parseFloat(multiplier));
+        setCashingOut(false);
+        if (!success) {
+            showNotification("Cash out failed — the round is still live. Try again.", "ember");
+            return;
         }
-        setCashOut(true);
-        setStarted(false);
-        setSelected([]);
-        setDragons([]);
-        setRevealedRows([]);
-        prevSelectedLength.current = 0;
+        setBankedAmount(earnings);
+        setCashOut(true); // full tower reveal behind the verdict
+        setBanked(true);
     };
 
     const handleHalf = (e: React.MouseEvent) => {
@@ -170,6 +216,8 @@ export default function DragonTower() {
 
     const isDragonRevealed = (row: number): boolean => gameOver && revealedRows.includes(row);
     const cols = difficulties[difficulty];
+    const arming = started && !boardReady && !gameOver && !cashOut;
+    const settled = gameOver || cashOut;
 
     return (
         <>
@@ -179,7 +227,7 @@ export default function DragonTower() {
                 <AnimatePresence>
                     {notification && (
                         <motion.div
-                            className="game-toast"
+                            className={`game-toast ${notifTone === "ember" ? "dt-toast--ember" : ""}`}
                             initial={{ opacity: 0, y: -16, x: "-50%" }}
                             animate={{ opacity: 1, y: 0, x: "-50%" }}
                             exit={{ opacity: 0, y: -16, x: "-50%" }}
@@ -204,22 +252,27 @@ export default function DragonTower() {
                     <div className="game-layout">
                         {/* tower */}
                         <div className="game-board">
-                            <div className="dt-tower" ref={towerRef}>
+                            <div
+                                className={`dt-tower ${arming ? "is-arming" : ""} ${settled ? "is-settled" : ""}`}
+                                ref={towerRef}
+                            >
                                 {[...Array(ROWS)].map((_, row) => {
                                     const isCurrentRow = started && row === selected.length && !gameOver && !cashOut;
+                                    const isClimbed = selected.length > row;
                                     return (
                                         <div
-                                            className={`dt-row ${isCurrentRow ? "is-active" : ""}`}
+                                            className={`dt-row ${isCurrentRow ? "is-active" : ""} ${isClimbed ? "is-climbed" : ""}`}
                                             key={row}
-                                            style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}
+                                            style={{ gridTemplateColumns: `repeat(${cols}, 1fr) minmax(3.4em, auto)` }}
                                         >
                                             {[...Array(cols)].map((_, index) => {
                                                 const isProgressRevealed = selected.length > row;
                                                 const isDragon = dragons[row] === index;
                                                 const isSelected = selected[row] === index;
                                                 const isRevealed = isProgressRevealed || isDragonRevealed(row) || cashOut;
+                                                const isHitDragon = gameOver && isDragon && row === selected.length;
                                                 const cls = isRevealed && isDragon
-                                                    ? "is-dragon"
+                                                    ? `is-dragon ${isHitDragon ? "is-hit" : ""}`
                                                     : isSelected
                                                         ? "is-safe"
                                                         : isCurrentRow
@@ -231,14 +284,20 @@ export default function DragonTower() {
                                                         type="button"
                                                         className={`dt-tile ${cls}`}
                                                         onClick={() => handleTileClick(row, index)}
-                                                        whileHover={isCurrentRow ? { scale: 1.06, y: -3 } : {}}
-                                                        whileTap={isCurrentRow ? { scale: 0.95 } : {}}
+                                                        whileHover={isCurrentRow && boardReady ? { scale: 1.06, y: -3 } : {}}
+                                                        whileTap={isCurrentRow && boardReady ? { scale: 0.95 } : {}}
                                                     >
                                                         {isRevealed && isDragon && <Flame size={24} />}
                                                         {isRevealed && isSelected && <Coins size={24} />}
                                                     </motion.button>
                                                 );
                                             })}
+                                            {/* per-floor payout ladder */}
+                                            <span
+                                                className={`dt-row__mult ${isCurrentRow ? "is-active" : ""} ${isClimbed ? "is-climbed" : ""}`}
+                                            >
+                                                {floorMultiplier(row)}×
+                                            </span>
                                         </div>
                                     );
                                 })}
@@ -279,6 +338,33 @@ export default function DragonTower() {
                                     </div>
                                     <button className="game-primary" type="submit">Place Bet</button>
                                 </form>
+                            ) : banked ? (
+                                <div className="game-live">
+                                    <motion.div
+                                        className="dt-result is-won"
+                                        initial={{ opacity: 0, y: 12 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ duration: 0.35 }}
+                                    >
+                                        <div className="dt-result__title">Banked.</div>
+                                        <div className="dt-result__sub">You walked away with ₹{bankedAmount.toFixed(2)}.</div>
+                                    </motion.div>
+                                    <button className="game-clear" onClick={resetRound}>New Climb</button>
+                                </div>
+                            ) : gameOver && lossRevealed ? (
+                                <div className="game-live">
+                                    <motion.div
+                                        className="dt-result is-lost"
+                                        initial={{ opacity: 0, y: 12 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ duration: 0.35 }}
+                                    >
+                                        <div className="dt-result__title">Torched.</div>
+                                        <div className="dt-result__amount">−₹{amount.toFixed(2)}</div>
+                                        <div className="dt-result__sub">The dragon caught you. The house keeps the stake.</div>
+                                    </motion.div>
+                                    <button className="game-clear" onClick={resetRound}>New Climb</button>
+                                </div>
                             ) : (
                                 <div className="game-live">
                                     <div className="game-stat game-stat--mult">
@@ -293,12 +379,16 @@ export default function DragonTower() {
                                         <div className="game-stat__value">₹{earnings.toFixed(2)}</div>
                                     </div>
                                     <p className="game-hint">
-                                        {gameOver ? "🔥 The dragon caught you." : `Floor ${selected.length} of ${ROWS} — keep climbing.`}
+                                        {gameOver
+                                            ? "🔥 The dragon caught you."
+                                            : !boardReady
+                                                ? "Setting the floors…"
+                                                : `Floor ${selected.length} of ${ROWS} — keep climbing.`}
                                     </p>
-                                    {gameOver ? (
-                                        <button className="game-clear" onClick={handleCashOut}>Play Again</button>
-                                    ) : (
-                                        <button className="game-cashout" onClick={handleCashOut}>Cash Out ₹{earnings.toFixed(2)}</button>
+                                    {!gameOver && (
+                                        <button className="game-cashout" onClick={handleCashOut} disabled={cashingOut}>
+                                            {cashingOut ? "Cashing Out…" : `Cash Out ₹${earnings.toFixed(2)}`}
+                                        </button>
                                     )}
                                 </div>
                             )}

@@ -9,6 +9,7 @@ import Navbar from "./Navbar";
 import Footer from "./Footer";
 import SignInDialog from "./SignInDialog";
 import HowToPlay from "./HowToPlay";
+import CountUp from "./landing/CountUp";
 // NOTE: guided tutorial intentionally deferred — see ./tutorial/* (to be re-added later).
 
 type DifficultyLevel = "low" | "medium" | "hard";
@@ -36,6 +37,8 @@ const FortuneWheel = () => {
     const [result, setResult] = useState<string | null>(null);
     const [notification, setNotification] = useState<string>("");
     const [winningIndex, setWinningIndex] = useState<number | null>(null);
+    const [anticipating, setAnticipating] = useState<boolean>(false);
+    const [staked, setStaked] = useState<number>(0);
 
     const winSound = useRef<HTMLAudioElement | null>(null);
     const spinSound = useRef<HTMLAudioElement | null>(null);
@@ -172,7 +175,7 @@ const FortuneWheel = () => {
                     winSound.current.play().catch(() => {});
                 }
                 setEarningsDisplay(true);
-                setTimeout(() => setWinningIndex(null), 1200);
+                setTimeout(() => setWinningIndex(null), 1800);
             }, 4200);
 
             return newRotation;
@@ -208,15 +211,22 @@ const FortuneWheel = () => {
             showNotification("Insufficient balance!");
             return;
         }
+        // Lock the button and tense the wheel IMMEDIATELY — the server
+        // round-trip for the wager must never read as dead air.
+        setStarted(true);
+        setResult(null);
+        setEarningsDisplay(false);
+        setWinningIndex(null);
+        setAnticipating(true);
         const success = await recordBet(amount, "WHEEL");
+        setAnticipating(false);
         if (!success) {
+            setStarted(false);
             showNotification("Failed to place bet");
             return;
         }
         hasAddedWinnings.current = false;
-        setStarted(true);
-        setResult(null);
-        setEarningsDisplay(false);
+        setStaked(amount);
         spinWheel();
     };
 
@@ -270,11 +280,24 @@ const FortuneWheel = () => {
                     <div className="game-layout fw-layout">
                         {/* wheel */}
                         <div className="game-board fw-board">
+                            {/* legend sits ABOVE the wheel so payouts read without scrolling */}
+                            <div className="fw-legend">
+                                {legend.map((m, i) => (
+                                    <span
+                                        key={i}
+                                        className="fw-multi"
+                                        style={{ borderBottomColor: multiplierColors[m] || "#FF4438" }}
+                                    >
+                                        {m}
+                                    </span>
+                                ))}
+                            </div>
+
                             <div className="fw-wrap">
                                 <div className="fw-pointer" />
                                 <svg
                                     viewBox={`0 0 ${radius * 2} ${radius * 2}`}
-                                    className="wheel-svg"
+                                    className={`wheel-svg${anticipating ? " fw-anticipate" : ""}`}
                                     ref={wheelRef}
                                     style={{ transform: `rotate(${rotation}deg)` }}
                                 >
@@ -289,24 +312,23 @@ const FortuneWheel = () => {
                                         animate={{ scale: 1, opacity: 1 }}
                                         transition={{ type: "spring", stiffness: 300, damping: 15 }}
                                     >
-                                        <span className="fw-overlay__result">{result}</span>
-                                        <span className={`fw-overlay__amt ${earnings > 0 ? "is-win" : "is-loss"}`}>
-                                            {earnings > 0 ? `+₹${earnings.toFixed(2)}` : "Busted"}
-                                        </span>
+                                        {earnings > 0 ? (
+                                            <>
+                                                <span className="fw-overlay__result">{result}</span>
+                                                <span className="fw-overlay__amt is-win">
+                                                    <CountUp to={earnings} prefix="+₹" decimals={2} duration={1200} />
+                                                </span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <span className="fw-overlay__result fw-overlay__result--loss">0.00×</span>
+                                                <span className="fw-overlay__amt is-loss">
+                                                    the house keeps ₹{staked.toFixed(2)}
+                                                </span>
+                                            </>
+                                        )}
                                     </motion.div>
                                 )}
-
-                                <div className="fw-legend">
-                                    {legend.map((m, i) => (
-                                        <span
-                                            key={i}
-                                            className="fw-multi"
-                                            style={{ borderBottomColor: multiplierColors[m] || "#FF4438" }}
-                                        >
-                                            {m}
-                                        </span>
-                                    ))}
-                                </div>
                             </div>
                         </div>
 
@@ -357,6 +379,21 @@ const FortuneWheel = () => {
                                             <option key={c} value={c}>{c}</option>
                                         ))}
                                     </select>
+                                </div>
+
+                                {/* live payout preview — reacts to bet, risk and segment count */}
+                                <div className="fw-payouts">
+                                    <span className="fw-payouts__title">A win pays on this bet</span>
+                                    {legend.filter((m) => parseFloat(m) > 0).map((m) => (
+                                        <div className="fw-payouts__row" key={m}>
+                                            <span
+                                                className="fw-payouts__swatch"
+                                                style={{ background: multiplierColors[m] || "#FF4438" }}
+                                            />
+                                            <span className="fw-payouts__mult">{m}</span>
+                                            <span className="fw-payouts__amt">₹{((amount || 0) * parseFloat(m)).toFixed(2)}</span>
+                                        </div>
+                                    ))}
                                 </div>
 
                                 <button className="game-primary" type="submit" disabled={started}>

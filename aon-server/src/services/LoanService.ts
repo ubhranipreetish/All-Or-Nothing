@@ -45,8 +45,8 @@ export class LoanService {
 
         const newBalance = user.walletBalance + amount;
         user.walletBalance = newBalance;
-        // Borrowing reduces net worth on the leaderboard until it's repaid.
-        user.totalEarnings = user.totalEarnings - amount;
+        // Loan principal never touches lifetime P&L (totalEarnings) — the
+        // leaderboard already accounts for outstanding debt via net worth.
         await this.users.save(user);
 
         const loan = await this.loans.create({ userId: user._id, amount, status: "ACTIVE" });
@@ -114,8 +114,9 @@ export class LoanService {
 
         const newBalance = user.walletBalance - repaymentAmount;
         user.walletBalance = newBalance;
-        // Only the principal is restored to net worth — interest is the house's cut.
-        user.totalEarnings = user.totalEarnings + loan.amount;
+        // Principal in/out cancels itself; only the interest is a real loss,
+        // so it's the only part of a loan that hits lifetime P&L.
+        user.totalEarnings = user.totalEarnings - interestPaid;
         await this.users.save(user);
 
         loan.status = "REPAID";

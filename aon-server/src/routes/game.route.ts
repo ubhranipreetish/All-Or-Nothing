@@ -6,6 +6,7 @@ import {
     updateMultiplier,
     cashOut,
     loseGame,
+    refund,
     getActiveSession
 } from "../controllers/game.controller";
 import { protect } from "../middlewares/auth.middleware";
@@ -21,6 +22,7 @@ router.post("/start", startGame);
 router.post("/update-multiplier", updateMultiplier);
 router.post("/cashout", cashOut);
 router.post("/lose", loseGame);
+router.post("/refund", refund);
 
 // Legacy endpoints (secured with session validation)
 router.post("/bet", recordBet);
