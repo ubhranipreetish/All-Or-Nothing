@@ -107,7 +107,7 @@ Open `http://localhost:3000`, sign in with Google, claim the ₹100 welcome bonu
 | Ledger | `GET /api/transactions/me` (paginated, filterable) |
 | Leaderboard & profile | `GET /api/leaderboard/all-time`, `GET /api/profile/me` |
 | Health | `GET /api/health` · `GET /api/warmup` — no auth; used to wake the free-tier dyno on first visit |
-| Poker | Socket.IO events (`table:create/join/admit/leave`, actions, reconnect) — see [POKER.md](POKER.md) |
+| Poker | Socket.IO events (`table:create/join/admit/leave`, actions, reconnect) |
 
 Direct API access is origin-validated (browser-only by design); the health endpoints are exempt for uptime monitors.
 
