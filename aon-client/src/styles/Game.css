@@ -92,13 +92,30 @@
   gap: clamp(1rem, 2.6vw, 2rem);
   align-items: center;
 }
+/* Premium noir panel: deep cool void, hairline gold border, dossier
+   corner ticks, subtle inner vignette. No warm browns/olives anywhere.
+   Padding is untouched so game internals never reflow. */
 .game-panel {
-  background: linear-gradient(180deg, var(--obsidian) 0%, var(--void-2) 100%);
-  border: 1px solid var(--line);
-  border-radius: 20px;
+  position: relative;
+  background: linear-gradient(180deg, #0b0910 0%, #080609 100%);
+  border: 1px solid rgba(217, 169, 76, 0.14);
+  border-radius: 2px;
   padding: clamp(1.2rem, 2.4vw, 1.7rem);
-  box-shadow: 0 30px 70px -40px rgba(0, 0, 0, 0.8);
+  box-shadow:
+    inset 0 0 46px rgba(2, 1, 4, 0.5),
+    0 30px 70px -40px rgba(0, 0, 0, 0.8);
 }
+.game-panel::before,
+.game-panel::after {
+  content: "";
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  pointer-events: none;
+  z-index: 1;
+}
+.game-panel::before { top: -1px; left: -1px; border-top: 2px solid var(--gold); border-left: 2px solid var(--gold); }
+.game-panel::after { bottom: -1px; right: -1px; border-bottom: 2px solid var(--gold); border-right: 2px solid var(--gold); }
 
 /* fields */
 .game-field { margin-bottom: 1.2rem; }
@@ -226,17 +243,97 @@
 .game-stat--pay .game-stat__value { color: var(--jade); }
 .game-hint { font-size: 0.8rem; color: var(--bone-dim); text-align: center; min-height: 1.1em; }
 
-/* play area shell */
+/* play area shell — the table itself. Deep void with a cool violet cast,
+   inner vignette, and a faint violet ambient glow behind the board only.
+   ::before carries the four gold L-corners; ::after is reserved for the
+   staging shimmer (see .game-board.is-staging below). Padding untouched. */
 .game-board {
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: clamp(320px, 50vh, 520px);
-  background: linear-gradient(180deg, rgba(17, 13, 24, 0.55), rgba(11, 9, 16, 0.55));
-  border: 1px solid var(--line);
-  border-radius: 22px;
+  background: linear-gradient(180deg, #0b0910 0%, #080609 100%);
+  border: 1px solid rgba(217, 169, 76, 0.14);
+  border-radius: 2px;
   padding: clamp(0.9rem, 2.4vw, 2rem);
+  box-shadow:
+    inset 0 0 80px rgba(2, 1, 4, 0.55),
+    0 34px 90px -44px rgba(0, 0, 0, 0.85),
+    0 0 120px -28px rgba(139, 92, 246, 0.2);
+}
+.game-board::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  pointer-events: none;
+  z-index: 2;
+  background-image:
+    linear-gradient(var(--gold), var(--gold)),
+    linear-gradient(var(--gold), var(--gold)),
+    linear-gradient(var(--gold), var(--gold)),
+    linear-gradient(var(--gold), var(--gold)),
+    linear-gradient(var(--gold), var(--gold)),
+    linear-gradient(var(--gold), var(--gold)),
+    linear-gradient(var(--gold), var(--gold)),
+    linear-gradient(var(--gold), var(--gold));
+  background-size: 14px 2px, 2px 14px, 14px 2px, 2px 14px, 14px 2px, 2px 14px, 14px 2px, 2px 14px;
+  background-position: 0 0, 0 0, 100% 0, 100% 0, 0 100%, 0 100%, 100% 100%, 100% 100%;
+  background-repeat: no-repeat;
+}
+/* staging veil + gold "dealing" sheen — invisible until .is-staging */
+.game-board::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  background-color: rgba(4, 3, 8, 0.32);
+  background-image: linear-gradient(
+    115deg,
+    transparent 32%,
+    rgba(233, 185, 73, 0.06) 45%,
+    rgba(255, 216, 119, 0.13) 50%,
+    rgba(233, 185, 73, 0.06) 55%,
+    transparent 68%
+  );
+  background-size: 250% 100%;
+  background-repeat: no-repeat;
+  background-position: 200% 0;
+}
+/* The 1–3s gap between "Place Bet" and round start should read as the
+   house dealing, not lag: board dims under the veil and a slow diagonal
+   gold sheen sweeps across. Pair with a `.staging-note` microcopy line. */
+.game-board.is-staging::after {
+  opacity: 1;
+  animation: gb-deal 1.2s linear infinite;
+}
+@keyframes gb-deal {
+  from { background-position: 200% 0; }
+  to { background-position: -100% 0; }
+}
+.staging-note {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--gold);
+  text-align: center;
+  animation: staging-pulse 1.5s ease-in-out infinite;
+}
+.game-board .staging-note {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: clamp(10px, 2vw, 18px);
+  z-index: 3;
+}
+@keyframes staging-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
 }
 
 /* toast */
@@ -272,7 +369,7 @@
   .game-title { font-size: 2rem; margin-top: 0.2rem; }
   .game-eyebrow { font-size: 0.6rem; }
   .game-layout { gap: 1rem; }
-  .game-panel { padding: 1.1rem; border-radius: 16px; }
+  .game-panel { padding: 1.1rem; }
   .game-board { min-height: 220px; padding: 0.85rem; }
   /* Guaranteed comfortable tap targets on phones. */
   .game-input,
@@ -287,4 +384,255 @@
   /* Single-column adjust controls so they don't squash on tiny phones. */
   .game-adjust { grid-template-columns: 1fr; }
   .game-stage { padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right)); }
+}
+
+/* ====================================================================
+   GAME CHROME PRIMITIVES — GameHeader (.gh-), LeaveGuard dialog (.lg-),
+   bet-pending UX (.gp-). Components live in src/components/game/;
+   integration guide: src/components/game/GAME_CHROME.md.
+   ==================================================================== */
+
+/* ---------------------------------------------------- GameHeader (.gh-) */
+.gh { margin-bottom: clamp(1.2rem, 3vw, 2rem); }
+
+.gh-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: clamp(0.9rem, 2vw, 1.3rem);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--bone-faint);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+.gh-back:hover { color: var(--gold-bright); }
+.gh-back__arrow { transition: transform 0.2s; }
+.gh-back:hover .gh-back__arrow { transform: translateX(-3px); }
+
+.gh-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem 2rem;
+  flex-wrap: wrap;
+}
+.gh-id { min-width: 0; }
+
+.gh-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--gold);
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.gh-eyebrow__dot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ember);
+  box-shadow: 0 0 10px var(--ember);
+}
+
+.gh-title {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  font-size: clamp(2.4rem, 6vw, 4.4rem);
+  line-height: 0.88;
+  letter-spacing: -0.01em;
+  margin: 0.5rem 0 0;
+  background: linear-gradient(110deg, var(--gold-bright) 0%, var(--gold) 55%, var(--gold-deep) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.gh-title em {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.gh-tagline {
+  font-family: var(--font-serif);
+  font-style: italic;
+  color: var(--bone-dim);
+  font-size: clamp(0.95rem, 1.6vw, 1.15rem);
+  line-height: 1.45;
+  max-width: 52ch;
+  margin: 0.7rem 0 0;
+}
+
+.gh-howto {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 0.35rem; /* optically aligns with the tagline baseline */
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--bone-dim);
+  padding: 9px 16px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+}
+.gh-howto:hover { border-color: var(--gold); color: var(--gold-bright); }
+.gh-howto__q {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 1px solid currentColor;
+  font-size: 0.64rem;
+  font-weight: 700;
+}
+
+@media (max-width: 600px) {
+  .gh { margin-bottom: 1rem; }
+  .gh-back { margin-bottom: 0.7rem; }
+  .gh-row { align-items: flex-start; }
+  .gh-eyebrow { font-size: 0.6rem; }
+  .gh-title { font-size: 2rem; margin-top: 0.25rem; }
+  .gh-tagline { font-size: 0.9rem; margin-top: 0.5rem; }
+  .gh-howto { margin-bottom: 0; min-height: 40px; }
+}
+
+/* ---------------------------------------------- LeaveGuard dialog (.lg-) */
+.lg-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2400;
+  background: rgba(4, 3, 8, 0.74);
+  backdrop-filter: blur(4px);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  animation: lg-fade 0.18s ease-out;
+}
+@keyframes lg-fade { from { opacity: 0; } to { opacity: 1; } }
+
+.lg-dialog {
+  position: relative;
+  width: 100%;
+  max-width: 440px;
+  background: linear-gradient(180deg, #14101c 0%, #0b0812 100%);
+  border: 1px solid rgba(233, 185, 73, 0.3);
+  border-radius: 2px;
+  padding: 1.7rem 1.6rem;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+}
+/* dossier corner ticks, same pattern as the other modals */
+.lg-dialog::before,
+.lg-dialog::after {
+  content: "";
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  pointer-events: none;
+}
+.lg-dialog::before { top: -1px; left: -1px; border-top: 2px solid var(--gold); border-left: 2px solid var(--gold); }
+.lg-dialog::after { bottom: -1px; right: -1px; border-bottom: 2px solid var(--gold); border-right: 2px solid var(--gold); }
+
+.lg-title {
+  margin: 0 0 0.45rem;
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: linear-gradient(110deg, var(--gold-bright) 0%, var(--gold) 60%, var(--gold-deep) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.lg-message {
+  margin: 0;
+  color: var(--bone-dim);
+  line-height: 1.6;
+  font-size: 0.95rem;
+}
+
+.lg-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  margin-top: 1.4rem;
+}
+.lg-btn {
+  flex: 1 1 auto;
+  min-width: 120px;
+  min-height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 12px 14px;
+  border-radius: 2px;
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 0.18s, border-color 0.18s, background 0.18s, opacity 0.18s;
+}
+.lg-btn:disabled { cursor: default; }
+.lg-btn:disabled:not(.is-busy) { opacity: 0.45; }
+
+.lg-btn--gold {
+  border: 1px solid rgba(233, 185, 73, 0.6);
+  background: rgba(233, 185, 73, 0.1);
+  color: var(--gold-bright);
+}
+.lg-btn--gold:hover:not(:disabled) { border-color: var(--gold-bright); background: rgba(233, 185, 73, 0.18); }
+
+.lg-btn--ember {
+  border: 1px solid rgba(255, 68, 56, 0.45);
+  background: transparent;
+  color: var(--ember);
+}
+.lg-btn--ember:hover:not(:disabled) { border-color: var(--ember); background: rgba(255, 68, 56, 0.1); }
+
+.lg-btn--ghost {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--bone-dim);
+}
+.lg-btn--ghost:hover:not(:disabled) { border-color: var(--bone-dim); color: var(--bone); }
+
+/* --------------------------------------------- bet-pending UX (.gp-) */
+/* PendingButton renders `.game-primary.is-pending > .gp-pending`. */
+.gp-pending {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.gp-spinner {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  border-top-color: currentColor;
+  border-right-color: currentColor;
+  animation: gp-spin 0.7s linear infinite;
+}
+@keyframes gp-spin { to { transform: rotate(360deg); } }
+/* While dealing, the primary button should read "busy", not "dead". */
+.game-primary.is-pending:disabled {
+  opacity: 1;
+  cursor: progress;
 }

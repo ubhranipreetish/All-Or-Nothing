@@ -116,6 +116,18 @@ const SLOTS: { x: number; y: number; s: number }[] = [
   { x: 0.68, y: 0.18, s: 0.06 },  // chip — top, right of centre
 ];
 
+/* portrait phones: min(W, H) is the narrow width, which collapses the desktop
+   `s` values to near-invisible — same sky, compressed, with larger fractions:
+   suits hold the four corners, dice + chip flank the very top */
+const SLOTS_PORTRAIT: { x: number; y: number; s: number }[] = [
+  { x: 0.18, y: 0.24, s: 0.13 },  // spade — top left
+  { x: 0.82, y: 0.22, s: 0.125 }, // heart — top right
+  { x: 0.17, y: 0.8, s: 0.12 },   // club — bottom left
+  { x: 0.83, y: 0.78, s: 0.13 },  // diamond — bottom right
+  { x: 0.32, y: 0.14, s: 0.09 },  // dice — top, left of centre
+  { x: 0.68, y: 0.14, s: 0.085 }, // chip — top, right of centre
+];
+
 const CYCLE = 27; // seconds for a full tour of the six constellations
 const SLOT_T = CYCLE / SIGILS.length;
 
@@ -167,10 +179,11 @@ export function mount(canvas: HTMLCanvasElement): HeroHandle {
     g.globalCompositeOperation = "lighter";
 
     // ---- the six constellations ----
+    const slots = W < H ? SLOTS_PORTRAIT : SLOTS;
     const cyc = (t / SLOT_T) % SIGILS.length;
     for (let si = 0; si < SIGILS.length; si++) {
       const sig = SIGILS[si];
-      const slot = SLOTS[si];
+      const slot = slots[si];
       let d = cyc - si;
       if (d < -SIGILS.length / 2) d += SIGILS.length;
       if (d > SIGILS.length / 2) d -= SIGILS.length;

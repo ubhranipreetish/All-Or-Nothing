@@ -2,27 +2,65 @@
 
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { X } from "lucide-react";
 import { usePoker } from "../../components/poker/usePoker";
 import PokerTable from "../../components/poker/PokerTable";
 import Navbar from "../../components/Navbar";
-import HowToPlay from "../../components/HowToPlay";
+import Footer from "../../components/Footer";
+import GameHeader from "../../components/game/GameHeader";
+import { useLeaveGuard } from "../../components/game/LeaveGuard";
 import { useAuth } from "../../contexts/AuthContext";
 import { useWallet } from "../../contexts/WalletContext";
 import "../../styles/Poker.css";
 
 type SessionStart = { mode: "create"; buyIn: number } | { mode: "join"; code: string };
 
+/* ---------------------------------------------------------------- rules */
+/* Poker's how-to content, shown from GameHeader's "? How to play" button.
+   Reuses the shared howto- modal chrome (globals.css). */
+const POKER_RULES = {
+    title: "How to play Poker",
+    steps: [
+        "No-Limit Texas Hold'em for up to 6 friends.",
+        "Create a room and share the code — you're the host.",
+        "Admit players from the waiting room, then Start the game.",
+        "Make the best 5-card hand (or get everyone to fold) to win the pot.",
+    ],
+    tip: "Late joiners spectate the current hand, then are dealt in next hand.",
+};
+
+function PokerRulesModal({ onClose }: { onClose: () => void }) {
+    return (
+        <div className="howto-overlay" onClick={onClose}>
+            <div className="howto-modal" onClick={(e) => e.stopPropagation()}>
+                <button className="howto-close" onClick={onClose} aria-label="Close"><X size={18} /></button>
+                <h3 className="howto-title">{POKER_RULES.title}</h3>
+                <ol className="howto-steps">
+                    {POKER_RULES.steps.map((s, i) => (
+                        <li key={i}><span className="howto-num">{i + 1}</span>{s}</li>
+                    ))}
+                </ol>
+                <p className="howto-tip"><strong>Tip:</strong> {POKER_RULES.tip}</p>
+            </div>
+        </div>
+    );
+}
+
 /* ------------------------------------------------------------------ shell */
 /* The cinematic two-column lobby frame, reused by the menu and the
    pre-admit (entering / waiting) screens so they feel like one place. */
 function LobbyShell({ children }: { children: React.ReactNode }) {
+    const [showRules, setShowRules] = useState(false);
     return (
         <div className="pk-page pk-page--lobby">
             <div className="pk-lobby2">
                 <div className="pk-lobby2__brand">
-                    <div className="pk-eyebrow"><span className="pk-eyebrow__dot" /> PRIVATE TABLES · PLAY-MONEY ₹</div>
-                    <h1 className="pk-lobby2__title">POKER</h1>
-                    <p className="pk-lobby2__tag">Read them. Bluff them. Take it all.</p>
+                    <GameHeader
+                        eyebrow="NO-LIMIT HOLD'EM · 6 SEATS"
+                        title="POKER"
+                        tagline="Read them. Bluff them. Take it all."
+                        onHowToPlay={() => setShowRules(true)}
+                    />
                     <p className="pk-lobby2__desc">
                         No-limit Texas Hold&apos;em for up to six friends, in real time. Spin up a
                         private room, share the code, and play with credits from your wallet.
@@ -32,10 +70,10 @@ function LobbyShell({ children }: { children: React.ReactNode }) {
                         <li><span className="pk-feats__s">♠</span> The host admits players &amp; starts the game</li>
                         <li><span className="pk-feats__s red">♦</span> Up to 6 seats · live betting &amp; showdowns</li>
                     </ul>
-                    <div style={{ marginTop: "1.4rem" }}><HowToPlay game="poker" /></div>
                 </div>
                 <div className="pk-lobby2__panel">{children}</div>
             </div>
+            {showRules && <PokerRulesModal onClose={() => setShowRules(false)} />}
         </div>
     );
 }
@@ -70,22 +108,53 @@ function PokerSession({
     const initedRef = useRef(false);
     const chargedRef = useRef(false);
     const stakeRef = useRef(start.mode === "create" ? start.buyIn : 0);
+    // Render-safe mirror of chargedRef/stakeRef for the leave-guard copy:
+    // the ₹ currently held by the house, or null while nothing is charged.
+    const [heldStake, setHeldStake] = useState<number | null>(null);
 
-    const exitRoom = useCallback(() => {
-        const started = state?.started ?? false;
-        const myStack = state?.seats.find((s) => s?.isYou)?.stack ?? 0;
+    const started = state?.started ?? false;
+    const myStack = state?.seats.find((s) => s?.isYou)?.stack ?? 0;
+
+    /* Tells the table we're gone, then settles the money. Shared by the
+       in-UI LEAVE button and the leave-guard dialog — one routine, one truth. */
+    const settleRoom = useCallback(async () => {
+        // Emit the leave to the socket FIRST — if the component unmounts while
+        // the wallet call is in flight, the table must already know we're gone.
+        if (joinStatus === "pending") poker.cancelWait();
+        poker.leave();
         if (started) {
             // Real game-end settlement: cash the remaining stack out as a win.
-            if (myStack > 0) recordWin(myStack, stakeRef.current || myStack, "POKER");
+            if (myStack > 0) await recordWin(myStack, stakeRef.current || myStack, "POKER");
         } else if (chargedRef.current) {
             // Waiting room — the buy-in never hit the felt, so hand it straight
             // back and stamp the ledger REFUND instead of WIN.
-            refundBet("POKER");
+            await refundBet("POKER");
         }
-        poker.leave();
-        refreshWallet();
+        await refreshWallet();
+    }, [started, myStack, joinStatus, poker, recordWin, refundBet, refreshWallet]);
+
+    const exitRoom = useCallback(() => {
+        void settleRoom();
         onExit();
-    }, [state, recordWin, refundBet, poker, refreshWallet, onExit]);
+    }, [settleRoom, onExit]);
+
+    /* Leave guard — armed for the whole room session (entering / waiting /
+       playing). Guards navbar & footer links plus browser Back; the in-UI
+       LEAVE button keeps its own confirm. */
+    const guardMessage = started
+        ? `Your remaining stack of ₹${myStack} is settled to your wallet. Mid-hand, your hand is folded and the table plays on without you.`
+        : heldStake != null
+            ? `Your ₹${heldStake} buy-in returns to your wallet.`
+            : "You haven't been charged yet — your seat request is simply withdrawn.";
+    useLeaveGuard({
+        when: phase !== "notfound" && phase !== "denied",
+        title: "Leave the table?",
+        message: guardMessage,
+        actions: [
+            { label: "Stay", tone: "ghost", leave: false },
+            { label: "Leave & settle", tone: "ember", leave: true, run: settleRoom },
+        ],
+    });
 
     // On connect: create the room (host) or peek the room (joiner).
     useEffect(() => {
@@ -100,12 +169,14 @@ function PokerSession({
                 if (!ok) { setErr("Couldn't hold your buy-in — nothing was charged. Try again."); return; }
                 chargedRef.current = true;
                 stakeRef.current = amt;
+                setHeldStake(amt);
                 poker.createRoom(amt, async (c) => {
                     if (!c) {
                         // Room creation failed after the stake was taken — hand it
                         // back (ledger stamps REFUND) and say so.
                         await refundBet("POKER");
                         chargedRef.current = false;
+                        setHeldStake(null);
                         await refreshWallet();
                         setErr(`Couldn't create the room — your ₹${amt} buy-in has been returned.`);
                         return;
@@ -136,11 +207,13 @@ function PokerSession({
                     poker.leave();
                     poker.resetJoin();
                     chargedRef.current = false;
+                    setHeldStake(null);
                     setErr("Couldn't hold your buy-in — nothing was charged. Try again.");
                     setPhase("entering");
                     return;
                 }
                 stakeRef.current = amt;
+                setHeldStake(amt);
                 await refreshWallet();
                 setPhase("room");
             })();
@@ -239,33 +312,38 @@ function PokerSession({
                         </div>
                     )}
                 </LobbyShell>
+                <Footer />
             </>
         );
     }
 
     /* ----- live table / host lobby ----- */
     return (
-        <div className="pk-page">
-            {error && <div className="pk-toast">{error}</div>}
-            {!state ? (
-                <div className="pk-loading">
-                    Taking a seat…
-                    <button className="pk-mini" style={{ marginLeft: 12 }} onClick={exitRoom}>Back to lobby</button>
-                </div>
-            ) : (
-                <PokerTable
-                    state={state}
-                    onAct={poker.act}
-                    onLeave={exitRoom}
-                    onSitOut={poker.sitOut}
-                    onSitIn={poker.sitIn}
-                    onRebuy={poker.rebuy}
-                    onAdmit={poker.admit}
-                    onDeny={poker.deny}
-                    onStart={poker.startGame}
-                />
-            )}
-        </div>
+        <>
+            <Navbar />
+            <div className="pk-page pk-page--nav">
+                {error && <div className="pk-toast">{error}</div>}
+                {!state ? (
+                    <div className="pk-loading">
+                        Taking a seat…
+                        <button className="pk-mini" style={{ marginLeft: 12 }} onClick={exitRoom}>Back to lobby</button>
+                    </div>
+                ) : (
+                    <PokerTable
+                        state={state}
+                        onAct={poker.act}
+                        onLeave={exitRoom}
+                        onSitOut={poker.sitOut}
+                        onSitIn={poker.sitIn}
+                        onRebuy={poker.rebuy}
+                        onAdmit={poker.admit}
+                        onDeny={poker.deny}
+                        onStart={poker.startGame}
+                    />
+                )}
+            </div>
+            <Footer />
+        </>
     );
 }
 
@@ -363,6 +441,7 @@ function PokerPageInner() {
                     </div>
                 )}
             </LobbyShell>
+            <Footer />
         </>
     );
 }

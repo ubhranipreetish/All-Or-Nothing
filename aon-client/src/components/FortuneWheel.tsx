@@ -2,13 +2,16 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { X } from "lucide-react";
 import { useWallet } from "../contexts/WalletContext";
 import { useAuth } from "../contexts/AuthContext";
 import "../styles/FortuneWheel.css";
 import Navbar from "./Navbar";
 import Footer from "./Footer";
 import SignInDialog from "./SignInDialog";
-import HowToPlay from "./HowToPlay";
+import GameHeader from "./game/GameHeader";
+import PendingButton from "./game/PendingButton";
+import { useLeaveGuard } from "./game/LeaveGuard";
 import CountUp from "./landing/CountUp";
 // NOTE: guided tutorial intentionally deferred — see ./tutorial/* (to be re-added later).
 
@@ -19,12 +22,27 @@ interface Segment {
     color: string;
 }
 
+interface AwayResult {
+    mult: number;
+    amount: number;
+    win: boolean;
+}
+
 const MIN_BET = 1;
+const AWAY_RESULT_KEY = "fw:awayResult";
+
+const WHEEL_RULES = [
+    "Set your bet, risk level and number of segments.",
+    "Spin the wheel and watch where the pointer lands.",
+    "Your payout is bet × the multiplier you land on.",
+    "Landing on 0.00× means you lose the bet.",
+];
 
 const FortuneWheel = () => {
     const { wallet, recordBet, recordWin } = useWallet();
     const { user } = useAuth();
     const [showSignInDialog, setShowSignInDialog] = useState(false);
+    const [showRules, setShowRules] = useState(false);
 
     const [difficulty, setDifficulty] = useState<DifficultyLevel>("medium");
     const [segmentCount, setSegmentCount] = useState<number>(20);
@@ -39,11 +57,17 @@ const FortuneWheel = () => {
     const [winningIndex, setWinningIndex] = useState<number | null>(null);
     const [anticipating, setAnticipating] = useState<boolean>(false);
     const [staked, setStaked] = useState<number>(0);
+    const [unsettled, setUnsettled] = useState<boolean>(false);
+    const [awayResult, setAwayResult] = useState<AwayResult | null>(null);
 
     const winSound = useRef<HTMLAudioElement | null>(null);
     const spinSound = useRef<HTMLAudioElement | null>(null);
     const wheelRef = useRef<SVGSVGElement | null>(null);
+    const wrapRef = useRef<HTMLDivElement | null>(null);
     const hasAddedWinnings = useRef<boolean>(false);
+    // The spin outcome is decided client-side at spin start — held here so the
+    // leave guard can settle it immediately if the player walks away mid-spin.
+    const pendingSpinRef = useRef<{ mult: number; betAmount: number; totalReturn: number } | null>(null);
 
     const showNotification = (message: string) => {
         setNotification(message);
@@ -91,6 +115,56 @@ const FortuneWheel = () => {
         window.addEventListener("touchstart", unlockAudio, { once: true });
     }, []);
 
+    // A spin settled in the background last visit? Surface it once, then clear.
+    useEffect(() => {
+        try {
+            const raw = sessionStorage.getItem(AWAY_RESULT_KEY);
+            if (raw) {
+                sessionStorage.removeItem(AWAY_RESULT_KEY);
+                setAwayResult(JSON.parse(raw) as AwayResult);
+            }
+        } catch {
+            /* corrupt/blocked storage — nothing to show */
+        }
+    }, []);
+
+    // Leave guard — armed only while a confirmed bet is riding on an
+    // unresolved spin. The outcome is already known client-side, so leaving
+    // settles it immediately and parks the result for the next visit.
+    useLeaveGuard({
+        when: unsettled,
+        title: "Spin in flight",
+        message: "Your spin settles on its own — the result will be waiting when you return.",
+        actions: [
+            { label: "Stay", tone: "ghost", leave: false },
+            {
+                label: "Leave — settle in background",
+                tone: "gold",
+                leave: true,
+                run: async () => {
+                    const spin = pendingSpinRef.current;
+                    if (!spin) return;
+                    if (!hasAddedWinnings.current) {
+                        hasAddedWinnings.current = true;
+                        if (spin.totalReturn > 0) {
+                            await recordWin(spin.totalReturn, spin.betAmount, "WHEEL", spin.mult);
+                        }
+                    }
+                    sessionStorage.setItem(
+                        AWAY_RESULT_KEY,
+                        JSON.stringify({
+                            mult: spin.mult,
+                            amount: spin.totalReturn > 0 ? spin.totalReturn : spin.betAmount,
+                            win: spin.totalReturn > 0,
+                        } satisfies AwayResult)
+                    );
+                    pendingSpinRef.current = null;
+                    setUnsettled(false);
+                },
+            },
+        ],
+    });
+
     const generateSegments = (diff: DifficultyLevel, count: number): Segment[] => {
         const segs: Segment[] = [];
         if (diff === "hard") {
@@ -137,12 +211,30 @@ const FortuneWheel = () => {
         return paths;
     };
 
+    // On small screens the wheel can sit above the fold while the bet panel is
+    // in view — spinning an off-screen wheel shows nothing. Bring it (mostly)
+    // into the viewport and let the smooth scroll settle before spinning.
+    const ensureWheelVisible = async () => {
+        const el = wrapRef.current;
+        if (!el) return;
+        const rect = el.getBoundingClientRect();
+        const viewH = window.innerHeight || document.documentElement.clientHeight;
+        const visible = Math.min(rect.bottom, viewH) - Math.max(rect.top, 0);
+        if (visible >= rect.height * 0.6) return; // already mostly on screen
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        await new Promise((resolve) => setTimeout(resolve, 450));
+    };
+
     const spinWheel = () => {
         const n = segments.length;
         if (!n) return;
         const anglePerSegment = 360 / n;
         const spins = Math.floor(Math.random() * 5) + 5;
         const picked = Math.floor(Math.random() * n);
+
+        const label = segments[picked]?.label || "0.00x";
+        const mult = parseFloat(label) || 0;
+        pendingSpinRef.current = { mult, betAmount: amount, totalReturn: amount * mult };
 
         if (spinSound.current) {
             spinSound.current.currentTime = 0;
@@ -168,6 +260,8 @@ const FortuneWheel = () => {
                     if (totalReturn > 0) recordWin(totalReturn, amount, "WHEEL", multiplierVal);
                 }
                 setStarted(false);
+                setUnsettled(false);
+                pendingSpinRef.current = null;
                 setEarnings(totalReturn);
                 setWinningIndex(picked);
                 if (multiplierVal !== 0 && winSound.current) {
@@ -176,6 +270,8 @@ const FortuneWheel = () => {
                 }
                 setEarningsDisplay(true);
                 setTimeout(() => setWinningIndex(null), 1800);
+                // numbers land, breathe, then the hub fades back to idle
+                setTimeout(() => setEarningsDisplay(false), 2500);
             }, 4200);
 
             return newRotation;
@@ -218,6 +314,8 @@ const FortuneWheel = () => {
         setEarningsDisplay(false);
         setWinningIndex(null);
         setAnticipating(true);
+        // Mobile: the wheel must be watchable before anything spins.
+        await ensureWheelVisible();
         const success = await recordBet(amount, "WHEEL");
         setAnticipating(false);
         if (!success) {
@@ -227,6 +325,7 @@ const FortuneWheel = () => {
         }
         hasAddedWinnings.current = false;
         setStaked(amount);
+        setUnsettled(true); // bet confirmed — money is riding until the spin settles
         spinWheel();
     };
 
@@ -247,6 +346,8 @@ const FortuneWheel = () => {
         ? ["0.00x", `${(segmentCount - 0.5).toFixed(2)}x`]
         : multi_divs[difficulty];
 
+    const resultMult = result ? parseFloat(result) || 0 : 0;
+
     return (
         <>
             <Navbar />
@@ -266,20 +367,36 @@ const FortuneWheel = () => {
                 </AnimatePresence>
 
                 <div className="game-shell">
-                    <header className="game-head">
-                        <div>
-                            <span className="game-eyebrow"><span className="dot" /> {difficulty} risk · {segmentCount} segments</span>
-                            <h1 className="game-title">FORTUNE <em>wheel</em></h1>
-                        </div>
-                        <div className="game-head__right">
-                            <p className="game-sub">Set your risk. One spin. Live with where it lands.</p>
-                            <HowToPlay game="wheel" />
-                        </div>
-                    </header>
+                    <GameHeader
+                        eyebrow={`${difficulty} risk · ${segmentCount} segments`}
+                        title="FORTUNE"
+                        titleAccent="wheel"
+                        tagline="Set your risk. One spin. Live with where it lands."
+                        onHowToPlay={() => setShowRules(true)}
+                    />
 
                     <div className="game-layout fw-layout">
                         {/* wheel */}
-                        <div className="game-board fw-board">
+                        <div className={`game-board fw-board${anticipating ? " is-staging" : ""}`}>
+                            {awayResult && (
+                                <div className={`fw-away ${awayResult.win ? "is-win" : "is-loss"}`}>
+                                    <span className="fw-away__text">
+                                        While you were away: {awayResult.mult.toFixed(2)}× ·{" "}
+                                        {awayResult.win
+                                            ? `+₹${awayResult.amount.toFixed(2)} banked`
+                                            : `−₹${awayResult.amount.toFixed(2)}`}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        className="fw-away__dismiss"
+                                        onClick={() => setAwayResult(null)}
+                                        aria-label="Dismiss"
+                                    >
+                                        <X size={13} />
+                                    </button>
+                                </div>
+                            )}
+
                             {/* legend sits ABOVE the wheel so payouts read without scrolling */}
                             <div className="fw-legend">
                                 {legend.map((m, i) => (
@@ -293,8 +410,19 @@ const FortuneWheel = () => {
                                 ))}
                             </div>
 
-                            <div className="fw-wrap">
-                                <div className="fw-pointer" />
+                            <div className="fw-wrap" ref={wrapRef}>
+                                {/* pin: mounted above the rim, tip reaching into the segment band */}
+                                <svg className="fw-pin" viewBox="0 0 40 64" aria-hidden="true">
+                                    <defs>
+                                        <linearGradient id="fwPinGold" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="0" stopColor="#FFD877" />
+                                            <stop offset="0.55" stopColor="#E9B949" />
+                                            <stop offset="1" stopColor="#A9791F" />
+                                        </linearGradient>
+                                    </defs>
+                                    <path d="M 20 62 L 8.5 21 A 13 13 0 1 1 31.5 21 Z" fill="url(#fwPinGold)" />
+                                    <circle cx="20" cy="15" r="4.5" fill="#0B0910" stroke="rgba(255, 216, 119, 0.55)" strokeWidth="1" />
+                                </svg>
                                 <svg
                                     viewBox={`0 0 ${radius * 2} ${radius * 2}`}
                                     className={`wheel-svg${anticipating ? " fw-anticipate" : ""}`}
@@ -305,31 +433,35 @@ const FortuneWheel = () => {
                                     <circle cx={radius} cy={radius} r={radius / 3} stroke="var(--gold)" strokeWidth="3" fill="rgba(7,6,10,0.6)" />
                                 </svg>
 
-                                {earningsDisplay && (
-                                    <motion.div
-                                        className="fw-overlay"
-                                        initial={{ scale: 0, opacity: 0 }}
-                                        animate={{ scale: 1, opacity: 1 }}
-                                        transition={{ type: "spring", stiffness: 300, damping: 15 }}
-                                    >
-                                        {earnings > 0 ? (
-                                            <>
-                                                <span className="fw-overlay__result">{result}</span>
-                                                <span className="fw-overlay__amt is-win">
-                                                    <CountUp to={earnings} prefix="+₹" decimals={2} duration={1200} />
-                                                </span>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <span className="fw-overlay__result fw-overlay__result--loss">0.00×</span>
-                                                <span className="fw-overlay__amt is-loss">
-                                                    the house keeps ₹{staked.toFixed(2)}
-                                                </span>
-                                            </>
-                                        )}
-                                    </motion.div>
-                                )}
+                                <AnimatePresence>
+                                    {earningsDisplay && (
+                                        <motion.div
+                                            className="fw-overlay"
+                                            initial={{ scale: 0.6, opacity: 0 }}
+                                            animate={{ scale: 1, opacity: 1 }}
+                                            exit={{ opacity: 0, transition: { duration: 0.45 } }}
+                                            transition={{ type: "spring", stiffness: 300, damping: 18 }}
+                                        >
+                                            {earnings > 0 ? (
+                                                <div className="fw-hub-result">
+                                                    <span className="fw-hub-pulse" aria-hidden="true" />
+                                                    <span className="fw-hub-result__mult">{resultMult.toFixed(2)}×</span>
+                                                    <span className="fw-hub-result__amt is-win">
+                                                        <CountUp to={earnings} prefix="+₹" decimals={2} duration={1200} />
+                                                    </span>
+                                                </div>
+                                            ) : (
+                                                <div className="fw-hub-result fw-hub-result--shake">
+                                                    <span className="fw-hub-result__mult fw-hub-result__mult--loss">0.00×</span>
+                                                    <span className="fw-hub-result__amt is-loss">−₹{staked.toFixed(2)}</span>
+                                                </div>
+                                            )}
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
                             </div>
+
+                            {anticipating && <p className="staging-note">Weighting the wheel…</p>}
                         </div>
 
                         {/* control panel */}
@@ -396,9 +528,13 @@ const FortuneWheel = () => {
                                     ))}
                                 </div>
 
-                                <button className="game-primary" type="submit" disabled={started}>
-                                    {started ? "Spinning…" : "Spin the Wheel"}
-                                </button>
+                                <PendingButton
+                                    pending={started}
+                                    pendingLabel={anticipating ? "Weighting the wheel…" : "Spinning…"}
+                                    type="submit"
+                                >
+                                    Spin the Wheel
+                                </PendingButton>
                             </form>
                         </aside>
                     </div>
@@ -407,6 +543,21 @@ const FortuneWheel = () => {
 
             <Footer />
             <SignInDialog isOpen={showSignInDialog} onClose={() => setShowSignInDialog(false)} />
+
+            {showRules && (
+                <div className="howto-overlay" onClick={() => setShowRules(false)}>
+                    <div className="howto-modal" onClick={(e) => e.stopPropagation()}>
+                        <button className="howto-close" onClick={() => setShowRules(false)} aria-label="Close"><X size={18} /></button>
+                        <h3 className="howto-title">How to play Fortune Wheel</h3>
+                        <ol className="howto-steps">
+                            {WHEEL_RULES.map((s, i) => (
+                                <li key={i}><span className="howto-num">{i + 1}</span>{s}</li>
+                            ))}
+                        </ol>
+                        <p className="howto-tip"><strong>Tip:</strong> Higher risk has bigger top multipliers but more losing segments.</p>
+                    </div>
+                </div>
+            )}
         </>
     );
 };

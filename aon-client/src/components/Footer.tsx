@@ -37,7 +37,6 @@ export default function Footer() {
                         <h4 className="ft__h">Account</h4>
                         <Link href="/leaderboard">Leaderboard</Link>
                         <Link href="/profile">My Profile</Link>
-                        <Link href="/#fairness">Provably Fair</Link>
                     </div>
                 </nav>
             </div>

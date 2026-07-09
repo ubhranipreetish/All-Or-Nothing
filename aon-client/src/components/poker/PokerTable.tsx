@@ -93,10 +93,7 @@ export default function PokerTable({
     const copyCode = async () => {
         try { await navigator.clipboard.writeText(state.tableId); toast.show("Code copied"); } catch { /* clipboard blocked */ }
     };
-    const shareLink = async () => {
-        if (typeof navigator !== "undefined" && navigator.share) {
-            try { await navigator.share({ title: "Join my poker room", text: `Join my poker table — room ${state.tableId}`, url: shareUrl }); return; } catch { /* cancelled */ }
-        }
+    const copyLink = async () => {
         try { await navigator.clipboard.writeText(shareUrl); toast.show("Link copied"); } catch { /* clipboard blocked */ }
     };
 
@@ -134,8 +131,8 @@ export default function PokerTable({
                     <div className="pk-confirm" onClick={(e) => e.stopPropagation()}>
                         <h3 className="pk-confirm__h">Leave the table?</h3>
                         <p className="pk-confirm__p">
-                            Your remaining stack of <strong>₹{mySeat?.stack ?? 0}</strong> will be settled to your
-                            wallet. Mid-hand, your hand is folded.
+                            Your remaining stack of <strong>₹{mySeat?.stack ?? 0}</strong> is settled to your
+                            wallet. Mid-hand, your hand is folded and the table plays on without you.
                         </p>
                         <div className="pk-confirm__acts">
                             <button className="pk-confirm__stay" onClick={() => setConfirmLeave(false)}>
@@ -156,7 +153,7 @@ export default function PokerTable({
                     </span>
                     <span className="pk-share">
                         <button className="pk-share__btn" onClick={copyCode} title="Copy room code">Copy code</button>
-                        <button className="pk-share__btn" onClick={shareLink} title="Share invite link">Share link</button>
+                        <button className="pk-share__btn" onClick={copyLink} title="Copy invite link">Copy link</button>
                     </span>
                 </div>
                 <div className="pk-top__right">
@@ -196,7 +193,7 @@ export default function PokerTable({
                     onDeny={onDeny}
                     onStart={onStart}
                     onCopy={copyCode}
-                    onShare={shareLink}
+                    onCopyLink={copyLink}
                 />
             ) : (
                 <>
@@ -273,7 +270,7 @@ function LobbyView({
     onDeny,
     onStart,
     onCopy,
-    onShare,
+    onCopyLink,
 }: {
     state: TableState;
     youHost: boolean;
@@ -283,7 +280,7 @@ function LobbyView({
     onDeny?: (id: string) => void;
     onStart?: () => void;
     onCopy: () => void;
-    onShare: () => void;
+    onCopyLink: () => void;
 }) {
     const seated = state.seats.map((s, i) => ({ s, i })).filter((x) => x.s);
     return (
@@ -294,7 +291,7 @@ function LobbyView({
                     <h2 className="pk-lobby__code">ROOM {state.tableId}</h2>
                     <div className="pk-lobby__share">
                         <button className="pk-share__btn" onClick={onCopy}>Copy code</button>
-                        <button className="pk-share__btn" onClick={onShare}>Share link</button>
+                        <button className="pk-share__btn" onClick={onCopyLink}>Copy link</button>
                     </div>
                 </div>
 

@@ -2,14 +2,16 @@
 
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Flame, Coins, ChevronUp } from "lucide-react";
+import { Flame, Coins, ChevronUp, X } from "lucide-react";
 import "../styles/DragonTower.css";
 import Navbar from "./Navbar";
 import { useWallet } from "../contexts/WalletContext";
 import { useAuth } from "../contexts/AuthContext";
 import Footer from "./Footer";
 import SignInDialog from "./SignInDialog";
-import HowToPlay from "./HowToPlay";
+import GameHeader from "./game/GameHeader";
+import PendingButton from "./game/PendingButton";
+import { useLeaveGuard } from "./game/LeaveGuard";
 // NOTE: guided tutorial intentionally deferred — see ./tutorial/* (to be re-added later).
 
 type DifficultyLevel = "Low" | "Medium" | "High";
@@ -26,6 +28,55 @@ const ROWS = 10;
 
 const generateDragons = (rows: number, difficulty: number): number[] =>
     Array.from({ length: rows }, () => Math.floor(Math.random() * difficulty));
+
+const DRAGON_RULES = [
+    "Set your bet and difficulty, then Place Bet.",
+    "On each floor, pick one stone — a safe stone lets you climb and grows your multiplier.",
+    "Cash out any time to bank your winnings.",
+    "Pick the dragon's tile and the climb ends — you lose the bet.",
+];
+
+/* --------------------------------------------------------------------
+   Art direction: "THE KEEP". Stake-style composition, AON palette: the
+   grid sits inside a stone tower frame (CSS masonry walls on the left/
+   right/bottom, an SVG crenellated battlement on top) and a flat-vector
+   dragon peers over the battlement — head BEHIND the wall, two clawed
+   hands hooked OVER it. The ember eyes are the focal point: they blink,
+   breathe, flare on climbs; the whole dragon rises on a hit and sinks
+   behind the wall on cash-out. All decoration is pointer-events:none;
+   tile hit areas are untouched. Classes live in DragonTower.css
+   (.dt-lair / .dt-dragon* / .dt-keep / .dt-wall*).
+   -------------------------------------------------------------------- */
+
+/* battlement geometry (svg user units, viewBox 0 0 700 200):
+   wall base y158..200, merlons y134..160; the head sits in the wide
+   central crenel, claw merlons center on x=174 and x=526 */
+const MERLONS = [
+    [0, 30], [63, 46], [151, 46], [239, 46], [415, 46], [503, 46], [591, 46], [670, 30],
+] as const;
+
+/* one clawed hand gripping the merlon at x=151..197 — a paw mass wider
+   than the merlon (x=138..208) plus three chunky wedge fingers wrapping
+   down over the wall face, short ember talon tips, gold knuckle rims;
+   the right hand reuses this mirrored about the board center */
+const ClawShape = () => (
+    <>
+        {/* hand mass arcing over the wall top — clearly overlaps the merlon */}
+        <polygon className="dt-paw" points="138,138 146,112 174,104 200,112 208,138" />
+        {/* three chunky wedge fingers over the stone face */}
+        <polygon className="dt-paw" points="142,140 145,122 152,117 159,122 162,140 162,156 152,168 142,156" />
+        <polygon className="dt-paw" points="164,140 167,120 174,115 181,120 184,140 184,162 174,176 164,162" />
+        <polygon className="dt-paw" points="186,140 189,122 196,118 203,123 206,140 206,152 196,164 186,152" />
+        {/* short ember talon tips (small relative to the fingers) */}
+        <polygon className="dt-talon" points="146,158 158,158 152,168" />
+        <polygon className="dt-talon" points="168,164 180,164 174,176" />
+        <polygon className="dt-talon" points="190,154 202,154 196,164" />
+        {/* gold rim-light on the knuckle tops */}
+        <path className="dt-rim dt-rim--thin" d="M145 122 L152 117 L159 122" />
+        <path className="dt-rim dt-rim--thin" d="M167 120 L174 115 L181 120" />
+        <path className="dt-rim dt-rim--thin" d="M189 122 L196 118 L203 123" />
+    </>
+);
 
 export default function DragonTower() {
     const { wallet, recordBet, recordWin, refundBet } = useWallet();
@@ -51,6 +102,9 @@ export default function DragonTower() {
     const [banked, setBanked] = useState<boolean>(false);
     const [bankedAmount, setBankedAmount] = useState<number>(0);
     const [lossRevealed, setLossRevealed] = useState<boolean>(false);
+    const [placingBet, setPlacingBet] = useState<boolean>(false);
+    const [showRules, setShowRules] = useState<boolean>(false);
+    const [lairPulse, setLairPulse] = useState<boolean>(false);
     const prevSelectedLength = useRef<number>(0);
     const towerRef = useRef<HTMLDivElement>(null);
 
@@ -86,12 +140,17 @@ export default function DragonTower() {
         }
     }, [gameOver, dragons.length, cashOut, selected.length]);
 
-    // Multiplier pop when progress is made.
+    // Multiplier pop + lair pulse (eye brightens, seams flare) on progress.
     useEffect(() => {
         if (selected.length > prevSelectedLength.current && selected.length > 0) {
             setMultiplierPop(true);
-            const timer = setTimeout(() => setMultiplierPop(false), 150);
-            return () => clearTimeout(timer);
+            setLairPulse(true);
+            const popTimer = setTimeout(() => setMultiplierPop(false), 150);
+            const pulseTimer = setTimeout(() => setLairPulse(false), 750);
+            return () => {
+                clearTimeout(popTimer);
+                clearTimeout(pulseTimer);
+            };
         }
         prevSelectedLength.current = selected.length;
     }, [selected.length]);
@@ -130,7 +189,9 @@ export default function DragonTower() {
             return;
         }
 
+        setPlacingBet(true);
         const success = await recordBet(amount, "DRAGON_TOWER");
+        setPlacingBet(false);
         if (!success) {
             showNotification("Failed to place bet", "ember");
             return;
@@ -158,10 +219,9 @@ export default function DragonTower() {
         }
     };
 
-    // per-floor payout progression — floor `row` (0-indexed) pays factor^(row+1)
+    // payout progression — climbing `n` floors pays factor^n
     const stepBase = difficulties[difficulty];
     const stepFactor = stepBase === 4 ? 1.4 : stepBase === 3 ? 1.6 : 1.8;
-    const floorMultiplier = (row: number): string => (stepFactor ** (row + 1)).toFixed(2);
 
     const getMultiplier = (): string => {
         if (gameOver) return "0.00";
@@ -170,6 +230,46 @@ export default function DragonTower() {
 
     const multiplier = getMultiplier();
     const earnings = parseFloat((amount * parseFloat(multiplier)).toFixed(2));
+
+    // Navigation guard while a climb is live (bet placed, not yet banked or
+    // torched). Floor 0 offers a clean stake refund; mid-climb offers the
+    // same bank / forfeit choice as the side panel. A torched climb needs no
+    // settle call — the stake was already taken when the bet was placed.
+    useLeaveGuard({
+        when: started && !gameOver && !cashOut,
+        title: "Leave the tower?",
+        message:
+            selected.length > 0
+                ? `Bank your current ₹${earnings.toFixed(2)} at ${multiplier}× or forfeit the stake — the dragon doesn't hold seats.`
+                : "You haven't climbed yet — take the stake back before you go.",
+        actions:
+            selected.length > 0
+                ? [
+                      { label: "Stay", tone: "ghost", leave: false },
+                      {
+                          label: `Bank ₹${earnings.toFixed(2)} & leave`,
+                          tone: "gold",
+                          leave: true,
+                          run: async () => {
+                              const ok = await recordWin(earnings, amount, "DRAGON_TOWER", parseFloat(multiplier));
+                              if (!ok) throw new Error("Cash out failed — the round is still live.");
+                          },
+                      },
+                      { label: "Forfeit & leave", tone: "ember", leave: true },
+                  ]
+                : [
+                      { label: "Stay", tone: "ghost", leave: false },
+                      {
+                          label: "Refund stake & leave",
+                          tone: "gold",
+                          leave: true,
+                          run: async () => {
+                              const ok = await refundBet("DRAGON_TOWER");
+                              if (!ok) throw new Error("Refund failed — the round is still live.");
+                          },
+                      },
+                  ],
+    });
 
     const handleCashOut = async () => {
         if (!started || gameOver || cashOut || cashingOut) return;
@@ -238,70 +338,209 @@ export default function DragonTower() {
                 </AnimatePresence>
 
                 <div className="game-shell dt-game">
-                    <header className="game-head">
-                        <div>
-                            <span className="game-eyebrow"><span className="dot" /> {difficultyLabels[difficulty]}</span>
-                            <h1 className="game-title">DRAGON <em>tower</em></h1>
-                        </div>
-                        <div className="game-head__right">
-                            <p className="game-sub">Pick a safe stone each floor. One dragon ends the climb.</p>
-                            <HowToPlay game="dragon" />
-                        </div>
-                    </header>
+                    <GameHeader
+                        eyebrow={difficultyLabels[difficulty]}
+                        title="DRAGON"
+                        titleAccent="tower"
+                        tagline="Pick a safe stone each floor. One dragon ends the climb."
+                        onHowToPlay={() => setShowRules(true)}
+                    />
 
                     <div className="game-layout">
-                        {/* tower */}
-                        <div className="game-board">
+                        {/* the lair: the dragon looms above the tower it guards */}
+                        <div className={`game-board ${placingBet ? "is-staging" : ""}`}>
                             <div
-                                className={`dt-tower ${arming ? "is-arming" : ""} ${settled ? "is-settled" : ""}`}
-                                ref={towerRef}
+                                className={`dt-lair ${lairPulse ? "is-pulse" : ""} ${gameOver ? "is-bite" : ""} ${banked || cashOut ? "is-dimmed" : ""}`}
                             >
-                                {[...Array(ROWS)].map((_, row) => {
-                                    const isCurrentRow = started && row === selected.length && !gameOver && !cashOut;
-                                    const isClimbed = selected.length > row;
-                                    return (
-                                        <div
-                                            className={`dt-row ${isCurrentRow ? "is-active" : ""} ${isClimbed ? "is-climbed" : ""}`}
-                                            key={row}
-                                            style={{ gridTemplateColumns: `repeat(${cols}, 1fr) minmax(3.4em, auto)` }}
-                                        >
-                                            {[...Array(cols)].map((_, index) => {
-                                                const isProgressRevealed = selected.length > row;
-                                                const isDragon = dragons[row] === index;
-                                                const isSelected = selected[row] === index;
-                                                const isRevealed = isProgressRevealed || isDragonRevealed(row) || cashOut;
-                                                const isHitDragon = gameOver && isDragon && row === selected.length;
-                                                const cls = isRevealed && isDragon
-                                                    ? `is-dragon ${isHitDragon ? "is-hit" : ""}`
-                                                    : isSelected
-                                                        ? "is-safe"
-                                                        : isCurrentRow
-                                                            ? "is-available"
-                                                            : "";
-                                                return (
-                                                    <motion.button
-                                                        key={index}
-                                                        type="button"
-                                                        className={`dt-tile ${cls}`}
-                                                        onClick={() => handleTileClick(row, index)}
-                                                        whileHover={isCurrentRow && boardReady ? { scale: 1.06, y: -3 } : {}}
-                                                        whileTap={isCurrentRow && boardReady ? { scale: 0.95 } : {}}
-                                                    >
-                                                        {isRevealed && isDragon && <Flame size={24} />}
-                                                        {isRevealed && isSelected && <Coins size={24} />}
-                                                    </motion.button>
-                                                );
-                                            })}
-                                            {/* per-floor payout ladder */}
-                                            <span
-                                                className={`dt-row__mult ${isCurrentRow ? "is-active" : ""} ${isClimbed ? "is-climbed" : ""}`}
+                                {/* the battlement crown: flat-vector dragon peeking over the
+                                    top wall. Paint order = z-order: wings/horns/head (behind
+                                    the wall) -> stone wall strip -> claws + fangs (hooked over
+                                    the front). Both dragon groups share .dt-dragon__rig so
+                                    reactions move them as one body. */}
+                                <svg
+                                    className="dt-dragon"
+                                    viewBox="0 0 700 200"
+                                    aria-hidden="true"
+                                    focusable="false"
+                                >
+                                    <defs>
+                                        <radialGradient id="dtEyeFire" cx="50%" cy="42%" r="65%">
+                                            <stop offset="0%" stopColor="#FFD877" />
+                                            <stop offset="52%" stopColor="#ff4438" />
+                                            <stop offset="100%" stopColor="#8a1f14" />
+                                        </radialGradient>
+                                        <filter id="dtEyeGlow" x="-120%" y="-120%" width="340%" height="340%">
+                                            <feGaussianBlur stdDeviation="7" />
+                                        </filter>
+                                        {/* obsidian masonry for the wall base: staggered courses,
+                                            gold-tinted mortar, per-block top highlight */}
+                                        <pattern id="dtMasonry" width="88" height="24" patternUnits="userSpaceOnUse">
+                                            <rect width="88" height="24" fill="#16121d" />
+                                            <rect y="11" width="88" height="13" fill="#181322" />
+                                            <rect width="88" height="1" fill="rgba(233,185,73,0.10)" />
+                                            <rect y="1" width="88" height="1" fill="rgba(255,255,255,0.045)" />
+                                            <rect y="11" width="88" height="1" fill="rgba(233,185,73,0.10)" />
+                                            <rect y="12" width="88" height="1" fill="rgba(255,255,255,0.03)" />
+                                            <rect x="43" width="1" height="11" fill="rgba(233,185,73,0.08)" />
+                                            <rect x="87" y="12" width="1" height="12" fill="rgba(233,185,73,0.08)" />
+                                        </pattern>
+                                    </defs>
+
+                                    {/* aft rig: everything BEHIND the wall */}
+                                    <g className="dt-dragon__rig">
+                                        {/* wing-spike silhouettes, lowest contrast */}
+                                        <g className="dt-dragon__wings">
+                                            <path d="M268 158 L150 52 L184 120 L120 104 L196 158 Z" />
+                                            <path d="M432 158 L550 52 L516 120 L580 104 L504 158 Z" />
+                                        </g>
+                                        {/* swept-back horns (asymmetric) with darker inner faces,
+                                            plus a smaller secondary pair */}
+                                        <g className="dt-dragon__horns">
+                                            <path className="dt-horn" d="M306 76 L214 14 L236 4 L262 34 L324 60 Z" />
+                                            <path className="dt-horn" d="M394 78 L478 22 L458 8 L434 36 L376 60 Z" />
+                                            <path className="dt-facet" d="M306 76 L214 14 L258 42 Z" />
+                                            <path className="dt-facet" d="M394 78 L478 22 L436 44 Z" />
+                                            {/* lit slivers along the horn top edges — the flat-art
+                                                rim-light that makes the silhouette read */}
+                                            <path className="dt-hornlit" d="M236 4 L262 34 L324 60 L316 53 L263 27 L243 7 Z" />
+                                            <path className="dt-hornlit" d="M458 8 L434 36 L376 60 L384 54 L432 30 L451 10 Z" />
+                                            <path className="dt-horn2" d="M322 60 L288 20 L306 14 L340 52 Z" />
+                                            <path className="dt-horn2" d="M378 60 L410 22 L394 16 L360 52 Z" />
+                                            {/* single gold accent hugging the left horn's top edge */}
+                                            <path className="dt-rim" d="M292 46 L262 34 L236 4" />
+                                        </g>
+                                        {/* wedge skull */}
+                                        <path
+                                            className="dt-dragon__skull"
+                                            d="M350 30 L296 46 L258 78 L238 116 L262 140 L306 162 L350 176 L394 162 L438 140 L462 116 L442 78 L404 46 Z"
+                                        />
+                                        {/* flat facet planes: crest + snout ridge catch the light
+                                            (anchor the gold accent), cheek planes fall to shadow */}
+                                        <g className="dt-dragon__facets">
+                                            <path className="dt-crest" d="M350 30 L322 54 L350 66 L378 54 Z" />
+                                            <path className="dt-crest" d="M350 66 L336 118 L350 132 L364 118 Z" />
+                                            <path className="dt-facet" d="M238 116 L258 96 L290 126 L262 138 Z" />
+                                            <path className="dt-facet" d="M462 116 L442 96 L410 126 L438 138 Z" />
+                                        </g>
+                                        {/* short gold accent on the crest peak */}
+                                        <path className="dt-rim" d="M322 38 L350 30 L378 38" />
+                                        {/* THE EYES — angry slanted kite/almond irises (sharp outer
+                                            points tilted UP toward the horns, wide inner corners) on
+                                            darker sockets, ember gradient + slit pupils, glow behind */}
+                                        <g className="dt-dragon__eyes">
+                                            <ellipse className="dt-dragon__glow" cx="288" cy="103" rx="26" ry="16" filter="url(#dtEyeGlow)" />
+                                            <ellipse className="dt-dragon__glow" cx="412" cy="103" rx="26" ry="16" filter="url(#dtEyeGlow)" />
+                                            <g className="dt-dragon__eye">
+                                                <polygon className="dt-socket" points="263,91 292,92 311,103 306,116 276,115" />
+                                                <polygon fill="url(#dtEyeFire)" points="268,94 290,95 306,104 302,112 280,111" />
+                                                <polygon className="dt-pupil" points="286,96 290,96 291,111 285,110" />
+                                            </g>
+                                            <g className="dt-dragon__eye">
+                                                <polygon className="dt-socket" points="437,91 408,92 389,103 394,116 424,115" />
+                                                <polygon fill="url(#dtEyeFire)" points="432,94 410,95 394,104 398,112 420,111" />
+                                                <polygon className="dt-pupil" points="414,96 410,96 409,111 415,110" />
+                                            </g>
+                                        </g>
+                                        {/* brow plates — angled ANGRY (inner ends lower than outer),
+                                            overhanging so the eye tops fall into shadow */}
+                                        <g className="dt-dragon__brows">
+                                            <polygon points="256,86 318,98 314,108 296,100 260,97" />
+                                            <polygon points="444,86 382,98 386,108 404,100 440,97" />
+                                        </g>
+                                        {/* snout tip resting on the wall edge (anchors the fangs) +
+                                            slit nostrils with faint ember dots */}
+                                        <g className="dt-dragon__nostrils">
+                                            <path className="dt-snout" d="M330 144 L370 144 L366 160 L334 160 Z" />
+                                            <polygon className="dt-socket" points="334,138 339,136 340,150 335,151" />
+                                            <polygon className="dt-socket" points="366,138 361,136 360,150 365,151" />
+                                            <circle cx="337.5" cy="149" r="1.8" fill="#ff6a3c" opacity="0.55" />
+                                            <circle cx="362.5" cy="149" r="1.8" fill="#ff6a3c" opacity="0.55" />
+                                        </g>
+                                    </g>
+
+                                    {/* crenellated top wall — covers the dragon's jaw/neck */}
+                                    <g className="dt-wall-top">
+                                        <rect x="0" y="158" width="700" height="42" fill="url(#dtMasonry)" />
+                                        {MERLONS.map(([x, w]) => (
+                                            <g key={x}>
+                                                <rect x={x} y={134} width={w} height={26} fill="#221a30" />
+                                                <rect x={x} y={134} width={w} height={1.5} fill="rgba(233,185,73,0.14)" />
+                                                <rect x={x} y={135.5} width={w} height={1} fill="rgba(255,255,255,0.05)" />
+                                            </g>
+                                        ))}
+                                    </g>
+
+                                    {/* fore rig: claws + fangs hooked OVER the wall front */}
+                                    <g className="dt-dragon__rig dt-dragon__fore">
+                                        <g className="dt-dragon__claw">
+                                            <ClawShape />
+                                        </g>
+                                        {/* right hand: same shape mirrored about the board center */}
+                                        <g transform="matrix(-1 0 0 1 700 0)">
+                                            <g className="dt-dragon__claw">
+                                                <ClawShape />
+                                            </g>
+                                        </g>
+                                        {/* fangs hooked over the wall line, anchored to the snout tip */}
+                                        <g className="dt-dragon__fangs">
+                                            <polygon points="332,152 342,152 337,166" />
+                                            <polygon points="358,152 368,152 363,166" />
+                                        </g>
+                                    </g>
+                                </svg>
+
+                                {/* the keep: masonry walls framing the grid */}
+                                <div className="dt-keep">
+                                    <span className="dt-wall dt-wall--left" aria-hidden="true" />
+                                    <span className="dt-wall dt-wall--right" aria-hidden="true" />
+                                    <span className="dt-wall dt-wall--bottom" aria-hidden="true" />
+                                    <div
+                                    className={`dt-tower ${arming ? "is-arming" : ""} ${settled ? "is-settled" : ""}`}
+                                    ref={towerRef}
+                                >
+                                    {[...Array(ROWS)].map((_, row) => {
+                                        const isCurrentRow = started && row === selected.length && !gameOver && !cashOut;
+                                        const isClimbed = selected.length > row;
+                                        return (
+                                            <div
+                                                className={`dt-row ${isCurrentRow ? "is-active" : ""} ${isClimbed ? "is-climbed" : ""}`}
+                                                key={row}
+                                                style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}
                                             >
-                                                {floorMultiplier(row)}×
-                                            </span>
-                                        </div>
-                                    );
-                                })}
+                                                {[...Array(cols)].map((_, index) => {
+                                                    const isProgressRevealed = selected.length > row;
+                                                    const isDragon = dragons[row] === index;
+                                                    const isSelected = selected[row] === index;
+                                                    const isRevealed = isProgressRevealed || isDragonRevealed(row) || cashOut;
+                                                    const isHitDragon = gameOver && isDragon && row === selected.length;
+                                                    const cls = isRevealed && isDragon
+                                                        ? `is-dragon ${isHitDragon ? "is-hit" : ""}`
+                                                        : isSelected
+                                                            ? "is-safe"
+                                                            : isCurrentRow
+                                                                ? "is-available"
+                                                                : "";
+                                                    return (
+                                                        <motion.button
+                                                            key={index}
+                                                            type="button"
+                                                            className={`dt-tile ${cls}`}
+                                                            onClick={() => handleTileClick(row, index)}
+                                                            whileHover={isCurrentRow && boardReady ? { scale: 1.06, y: -3 } : {}}
+                                                            whileTap={isCurrentRow && boardReady ? { scale: 0.95 } : {}}
+                                                        >
+                                                            {isRevealed && isDragon && <Flame size={24} />}
+                                                            {isRevealed && isSelected && <Coins size={24} />}
+                                                        </motion.button>
+                                                    );
+                                                })}
+                                            </div>
+                                        );
+                                    })}
+                                    </div>
+                                </div>
                             </div>
+                            {placingBet && <p className="staging-note">The dragon stirs…</p>}
                         </div>
 
                         {/* control panel */}
@@ -318,10 +557,11 @@ export default function DragonTower() {
                                             placeholder="Enter amount"
                                             step="any"
                                             min={MIN_BET}
+                                            disabled={placingBet}
                                         />
                                         <div className="game-adjust">
-                                            <button type="button" onClick={handleHalf}>½</button>
-                                            <button type="button" onClick={handleDouble}>2×</button>
+                                            <button type="button" onClick={handleHalf} disabled={placingBet}>½</button>
+                                            <button type="button" onClick={handleDouble} disabled={placingBet}>2×</button>
                                         </div>
                                     </div>
                                     <div className="game-field">
@@ -330,13 +570,16 @@ export default function DragonTower() {
                                             className="game-select"
                                             value={difficulty}
                                             onChange={(e) => setDifficulty(e.target.value as DifficultyLevel)}
+                                            disabled={placingBet}
                                         >
                                             {(Object.keys(difficulties) as DifficultyLevel[]).map((lvl) => (
                                                 <option key={lvl} value={lvl}>{difficultyLabels[lvl]}</option>
                                             ))}
                                         </select>
                                     </div>
-                                    <button className="game-primary" type="submit">Place Bet</button>
+                                    <PendingButton pending={placingBet} pendingLabel="PLACING BET…" type="submit">
+                                        Place Bet
+                                    </PendingButton>
                                 </form>
                             ) : banked ? (
                                 <div className="game-live">
@@ -399,6 +642,25 @@ export default function DragonTower() {
 
             <Footer />
             <SignInDialog isOpen={showSignInDialog} onClose={() => setShowSignInDialog(false)} />
+
+            {/* rules modal — same .howto- chrome as the old inline trigger,
+                now opened from the standardized GameHeader */}
+            {showRules && (
+                <div className="howto-overlay" onClick={() => setShowRules(false)}>
+                    <div className="howto-modal" onClick={(e) => e.stopPropagation()}>
+                        <button className="howto-close" onClick={() => setShowRules(false)} aria-label="Close">
+                            <X size={18} />
+                        </button>
+                        <h3 className="howto-title">How to play Dragon Tower</h3>
+                        <ol className="howto-steps">
+                            {DRAGON_RULES.map((s, i) => (
+                                <li key={i}><span className="howto-num">{i + 1}</span>{s}</li>
+                            ))}
+                        </ol>
+                        <p className="howto-tip"><strong>Tip:</strong> Higher difficulty has fewer safe tiles per floor but pays much more.</p>
+                    </div>
+                </div>
+            )}
         </>
     );
 }

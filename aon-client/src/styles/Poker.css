@@ -25,11 +25,15 @@
     justify-content: flex-start;
 }
 
-/* lobby page sits under the fixed navbar (+ promo banner) and fills the screen */
-/* body already has padding-top to clear the fixed navbar — only add for spacing */
+/* Pages that render the fixed <Navbar /> clear it with their own top padding
+   (same pattern as .game-stage in Game.css — the navbar is ~72px tall; the
+   promo banner, when present, is handled by body:has(.promo-banner)). */
+.pk-page--lobby,
+.pk-page--nav {
+    padding-top: clamp(84px, 10vh, 110px);
+}
 .pk-page--lobby {
     justify-content: center;
-    padding-top: 20px;
     padding-bottom: 40px;
 }
 
@@ -44,43 +48,8 @@
     padding: 0 clamp(1rem, 4vw, 3rem);
 }
 .pk-lobby2__brand { min-width: 0; }
-.pk-eyebrow {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.7rem;
-    font-family: var(--font-mono, monospace);
-    font-size: 0.68rem;
-    letter-spacing: 0.3em;
-    text-transform: uppercase;
-    color: var(--bone-faint, #6e6678);
-}
-.pk-eyebrow__dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--violet, #8b5cf6);
-    box-shadow: 0 0 10px rgba(139, 92, 246, 0.8);
-}
-.pk-lobby2__title {
-    font-family: var(--font-display, sans-serif);
-    text-transform: uppercase;
-    font-size: clamp(3.4rem, 9vw, 8rem);
-    line-height: 0.9;
-    letter-spacing: -0.01em;
-    margin: 1rem 0 0.6rem;
-    background: linear-gradient(110deg, var(--gold-bright, #ffd877) 0%, var(--gold, #e9b949) 45%, var(--gold-deep, #a9791f) 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-    text-shadow: 0 0 60px rgba(233, 185, 73, 0.18);
-}
-.pk-lobby2__tag {
-    font-family: var(--font-serif, Georgia, serif);
-    font-style: italic;
-    font-size: clamp(1.2rem, 2.4vw, 1.8rem);
-    color: var(--gold, #e9b949);
-    margin-bottom: 1rem;
-}
+/* the brand column's title block is the shared GameHeader (.gh- in Game.css) */
+.pk-lobby2__brand .gh { margin-bottom: 1.2rem; }
 .pk-lobby2__desc {
     color: var(--bone-dim, #a79fb2);
     line-height: 1.7;
@@ -134,19 +103,21 @@
         text-align: center;
         justify-items: center;
     }
-    .pk-eyebrow { justify-content: center; }
+    .pk-lobby2__brand { width: 100%; }
+    .pk-lobby2__brand .gh { margin-bottom: 0.8rem; }
+    .pk-lobby2__brand .gh-back,
+    .pk-lobby2__brand .gh-eyebrow,
+    .pk-lobby2__brand .gh-row { justify-content: center; }
+    .pk-lobby2__brand .gh-tagline { margin-left: auto; margin-right: auto; }
     .pk-lobby2__desc { margin-left: auto; margin-right: auto; }
     .pk-feats { display: none; }
-    .pk-lobby2__title { margin-top: 0.4rem; }
 }
 @media (max-width: 600px) {
-    /* top-align under the navbar + promo banner (no big centered gap) */
-    .pk-page--lobby { justify-content: flex-start; padding-top: 24px; padding-bottom: 28px; }
-    .pk-lobby2__title { font-size: clamp(3rem, 16vw, 4.5rem); margin-top: 0.2rem; }
+    /* top-align under the navbar (no big centered gap); top padding lives in
+       the fixed-navbar offset section at the end of this file */
+    .pk-page--lobby { justify-content: flex-start; }
     .pk-lobby2__desc { margin-bottom: 1rem; }
     .pk-panel-card { padding: 1.6rem 1.3rem; }
-    /* the 2-line guest promo banner is taller than the body's navbar padding */
-    .promo-guest ~ .pk-page--lobby { padding-top: 76px; }
 }
 
 .pk-gate {
@@ -358,7 +329,7 @@
 }
 .pk-toast {
     position: fixed;
-    top: 18px;
+    top: 84px; /* below the fixed navbar */
     left: 50%;
     transform: translateX(-50%);
     background: var(--ember, #ff4438);
@@ -977,7 +948,7 @@
     .pk-testbadge { font-size: 0.56rem; padding: 5px 12px; letter-spacing: 0.1em; margin-bottom: 8px; }
     .pk-felt {
         aspect-ratio: 3 / 4;
-        max-height: 54vh;
+        max-height: 48vh; /* leaves room for the navbar + top bar + action bar */
         border-radius: 46% / 30%;
     }
     .pk-felt::before { inset: 6px; }
@@ -1232,4 +1203,34 @@
     .pk-share { flex-wrap: wrap; }
     .pk-dock { top: auto; bottom: 12px; right: 12px; left: 12px; width: auto; }
     .pk-top__meta { flex-wrap: wrap; gap: 8px 14px; }
+}
+
+/* ============================ FIXED-NAVBAR OFFSET + SMALL-PHONE PASS ============================ */
+/* Last in the file on purpose: the generic `.pk-page { padding: 12px 8px }`
+   mobile rule above must never win over the navbar clearance. */
+
+@media (max-width: 720px) {
+    /* the fixed navbar is ~72px tall on phones — keep the TABLE XXXX · Blinds
+       row (and the lobby header) fully below it */
+    .pk-page.pk-page--nav { padding-top: 80px; }
+    .pk-page.pk-page--lobby { padding-top: 84px; padding-bottom: 28px; }
+
+    /* comfortable tap targets for the table chrome */
+    .pk-share__btn { min-height: 40px; padding: 5px 12px; }
+    .pk-mini,
+    .pk-icon,
+    .pk-leave { min-height: 40px; }
+}
+
+/* 360–480px lobby pass: chip row, create/join cards and the room-code row
+   fit without horizontal scroll, with ≥44px tap targets */
+@media (max-width: 480px) {
+    .pk-chipbtn-amt { min-width: 62px; min-height: 44px; padding: 10px 6px; }
+    .pk-cta { min-height: 48px; padding: 13px; }
+    .pk-join { gap: 8px; }
+    .pk-join input { min-width: 0; }
+    .pk-join button { min-height: 44px; padding: 0 18px; }
+    .pk-mini--wide { min-height: 44px; }
+    .pk-lobby__share .pk-share__btn { min-height: 44px; }
+    .pk-admit, .pk-deny { min-height: 40px; }
 }

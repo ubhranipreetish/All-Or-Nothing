@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { X } from "lucide-react";
 import Tile from "./Tile";
 import "../styles/Mines.css";
 import Navbar from "./Navbar";
@@ -9,11 +10,15 @@ import { useWallet } from "../contexts/WalletContext";
 import { useAuth } from "../contexts/AuthContext";
 import Footer from "./Footer";
 import SignInDialog from "./SignInDialog";
-import HowToPlay from "./HowToPlay";
+import GameHeader from "./game/GameHeader";
+import PendingButton from "./game/PendingButton";
+import { useLeaveGuard } from "./game/LeaveGuard";
 // NOTE: guided tutorial intentionally deferred — see ./tutorial/* (to be re-added later).
 
 const TILE_COUNT = 25;
 const MIN_BET = 1;
+const MIN_MINES = 1;
+const MAX_MINES = 24;
 const SWAP_GUARD_MS = 600; // primary button is inert this long after it swaps state
 const RESET_WINDOW_MS = 450; // board stays gated while a new round settles in
 
@@ -21,6 +26,23 @@ interface TileData {
     isMine: boolean;
     revealed: boolean;
 }
+
+/** Clamp a typed/derived mine count into the legal 1–24 range (empty → 3). */
+const clampMines = (n: number): number =>
+    Math.max(MIN_MINES, Math.min(MAX_MINES, Math.floor(n) || 3));
+
+// Rules copy for the shared header's "? How to play" trigger — same content
+// the old inline <HowToPlay game="mines" /> showed, now controlled by Mines.
+const MINES_RULES = {
+    title: "How to play Mines",
+    steps: [
+        "Set your bet and how many mines hide on the 5×5 board, then Place Bet.",
+        "Flip tiles to find gems — every gem raises your multiplier.",
+        "Cash out any time to bank bet × multiplier.",
+        "Hit a mine and you lose the bet — so quit while you're ahead.",
+    ],
+    tip: "More mines = bigger multiplier per gem, but a higher chance of busting.",
+};
 
 const generateBoard = (mineCount: number): TileData[] => {
     const board: TileData[] = Array.from({ length: TILE_COUNT }, () => ({
@@ -57,6 +79,8 @@ export default function Mines() {
     const [earnings, setEarnings] = useState<number>(0);
     const [multiplier, setMultiplier] = useState<string>("1.00");
     const [cashedOut, setCashedOut] = useState<boolean>(false);
+    const [showRules, setShowRules] = useState<boolean>(false);
+    const [placingBet, setPlacingBet] = useState<boolean>(false); // startGameSession in flight
     const [notification, setNotification] = useState<string>("");
     const [notificationTone, setNotificationTone] = useState<"info" | "error">("info");
     const [spotlightIndex, setSpotlightIndex] = useState<number | null>(null);
@@ -160,8 +184,14 @@ export default function Mines() {
         checkActiveSession();
     }, [checkActiveSession]);
 
+    // Stepper for the mine count — a bare number input gave no cue it was
+    // adjustable, so [−]/[+] nudge it while the middle stays typeable.
+    const stepMines = (delta: number) =>
+        setMineCount((c) => Math.max(MIN_MINES, Math.min(MAX_MINES, (Math.floor(c) || 3) + delta)));
+
     const startGame = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (placingBet) return;
 
         if (!user) {
             setShowSignInDialog(true);
@@ -177,19 +207,24 @@ export default function Mines() {
             return;
         }
 
-        const mines = Math.max(1, Math.min(24, Math.floor(mineCount) || 3));
+        const mines = clampMines(mineCount);
         setMineCount(mines);
         const initialBoard = generateBoard(mines);
+        // The hosted backend takes 1–3s to open the session — stage the board
+        // and hold Place Bet in its pending state until the round is confirmed.
+        setPlacingBet(true);
         const { success, sessionId } = await startGameSession(amount, "MINES", {
             board: initialBoard,
             mineCount: mines,
         });
         if (!success) {
+            setPlacingBet(false);
             // Board untouched — the idle tiles keep rendering.
             showNotification("Failed to place bet", "error");
             return;
         }
         if (sessionId) sessionIdRef.current = sessionId;
+        setPlacingBet(false);
 
         roundRef.current += 1; // invalidate any still-running reveal from the prior round
         setRoundKey((k) => k + 1); // fresh face-down tiles, no flip-back artifacts
@@ -347,6 +382,34 @@ export default function Mines() {
         await waveReveal(Math.floor(TILE_COUNT / 2));
     };
 
+    // Navigation guard while money is on the board (issue #15). `when` disarms
+    // it on cash-out, boom, and unmount. "Save round & leave" needs no run():
+    // the server session persists and the mount-time restore resumes it.
+    useLeaveGuard({
+        when: started && !gameOver && !cashedOut,
+        title: "Leave mid-round?",
+        message: `Your round stays open — come back and it resumes right where you left it. Or forfeit and the house keeps ₹${amount.toFixed(2)}.`,
+        actions: [
+            { label: "Stay", tone: "ghost", leave: false },
+            { label: "Save round & leave", tone: "gold", leave: true },
+            {
+                label: "Forfeit & leave",
+                tone: "ember",
+                leave: true,
+                run: async () => {
+                    const sid = sessionIdRef.current;
+                    if (!sid) return;
+                    const settled = await recordLoss(sid);
+                    // A refused forfeit must keep the player at the table —
+                    // throwing makes the LeaveGuard cancel the navigation.
+                    if (!settled) throw new Error("Forfeit rejected by the house");
+                    sessionIdRef.current = null;
+                    handleNewRound();
+                },
+            },
+        ],
+    });
+
     const getThresholdHint = () => {
         const m = parseFloat(multiplier);
         if (m >= 2 && m < 5) return "Most players bank around 2–3×.";
@@ -361,13 +424,9 @@ export default function Mines() {
     const boardReady = hydrated && !resetting;
 
     const cashOutDisabled = cashingOut || swapGuard || detonating || revealedCount === 0;
-    const cashOutLabel = detonating
-        ? `Cash Out ₹${earnings.toFixed(2)}`
-        : cashingOut
-            ? "Cashing Out…"
-            : revealedCount === 0
-                ? "Reveal a tile to unlock"
-                : `Cash Out ₹${earnings.toFixed(2)}`;
+    const cashOutLabel = !detonating && revealedCount === 0
+        ? "Reveal a tile to unlock"
+        : `Cash Out ₹${earnings.toFixed(2)}`;
 
     return (
         <>
@@ -388,20 +447,16 @@ export default function Mines() {
                 </AnimatePresence>
 
                 <div className="game-shell">
-                    <header className="game-head">
-                        <div>
-                            <span className="game-eyebrow"><span className="dot" /> Provably fair · {mineCount} mines</span>
-                            <h1 className="game-title">MINES</h1>
-                        </div>
-                        <div className="game-head__right">
-                            <p className="game-sub">Flip gems, dodge the bombs, and bank it before the board blows.</p>
-                            <HowToPlay game="mines" />
-                        </div>
-                    </header>
+                    <GameHeader
+                        eyebrow={`PROVABLY FAIR · ${mineCount} MINES`}
+                        title="MINES"
+                        tagline="Flip gems, dodge the bombs, and bank it before the board blows."
+                        onHowToPlay={() => setShowRules(true)}
+                    />
 
                     <div className="game-layout mines-layout">
                         {/* board */}
-                        <div className={`game-board ${boardReady ? "" : "is-syncing"}`} ref={gridRef}>
+                        <div className={`game-board ${boardReady ? "" : "is-syncing"}${placingBet ? " is-staging" : ""}`} ref={gridRef}>
                             <div className="mines-grid">
                                 {[...Array(TILE_COUNT)].map((_, index) => (
                                     <Tile
@@ -416,6 +471,7 @@ export default function Mines() {
                                 ))}
                             </div>
                             {!boardReady && <div className="mines-sync-hint">syncing…</div>}
+                            {placingBet && <p className="staging-note">The house is dealing…</p>}
                         </div>
 
                         {/* control panel */}
@@ -428,27 +484,48 @@ export default function Mines() {
                                             className="game-input"
                                             type="number"
                                             value={amount || ""}
+                                            disabled={placingBet}
                                             onChange={(e) => setAmount(Number(e.target.value))}
                                         />
                                         <div className="game-adjust">
-                                            <button type="button" onClick={() => setAmount(Math.max(MIN_BET, Math.floor(amount / 2)))}>½</button>
-                                            <button type="button" onClick={() => setAmount(Math.min(wallet || amount * 2, amount * 2))}>2×</button>
+                                            <button type="button" disabled={placingBet} onClick={() => setAmount(Math.max(MIN_BET, Math.floor(amount / 2)))}>½</button>
+                                            <button type="button" disabled={placingBet} onClick={() => setAmount(Math.min(wallet || amount * 2, amount * 2))}>2×</button>
                                         </div>
                                     </div>
 
                                     <div className="game-field">
                                         <label className="game-label">Mines (1–24)</label>
-                                        <input
-                                            className="game-input"
-                                            type="number"
-                                            min={1}
-                                            max={24}
-                                            value={mineCount || ""}
-                                            onChange={(e) => setMineCount(Number(e.target.value))}
-                                        />
+                                        <div className="mines-stepper">
+                                            <button
+                                                type="button"
+                                                className="mines-stepper__btn"
+                                                onClick={() => stepMines(-1)}
+                                                disabled={placingBet || mineCount <= MIN_MINES}
+                                                aria-label="Fewer mines"
+                                            >−</button>
+                                            <input
+                                                className="game-input mines-stepper__input"
+                                                type="number"
+                                                min={MIN_MINES}
+                                                max={MAX_MINES}
+                                                value={mineCount || ""}
+                                                disabled={placingBet}
+                                                onChange={(e) => setMineCount(Number(e.target.value))}
+                                                onBlur={() => setMineCount(clampMines(mineCount))}
+                                            />
+                                            <button
+                                                type="button"
+                                                className="mines-stepper__btn"
+                                                onClick={() => stepMines(1)}
+                                                disabled={placingBet || mineCount >= MAX_MINES}
+                                                aria-label="More mines"
+                                            >+</button>
+                                        </div>
                                     </div>
 
-                                    <button className="game-primary" type="submit" disabled={swapGuard}>Place Bet</button>
+                                    <PendingButton pending={placingBet} pendingLabel="PLACING BET…" type="submit" disabled={swapGuard}>
+                                        Place Bet
+                                    </PendingButton>
                                 </form>
                             )}
 
@@ -468,8 +545,15 @@ export default function Mines() {
                                         <div className="game-stat__value">₹{earnings.toFixed(2)}</div>
                                     </div>
                                     <p className="game-hint">{getThresholdHint()}</p>
-                                    <button className="game-cashout" onClick={handleCashOut} disabled={cashOutDisabled}>
-                                        {cashOutLabel}
+                                    <button className="game-cashout" onClick={handleCashOut} disabled={cashOutDisabled} aria-busy={cashingOut}>
+                                        {cashingOut ? (
+                                            <span className="gp-pending">
+                                                <span className="gp-spinner" aria-hidden="true" />
+                                                Cashing Out…
+                                            </span>
+                                        ) : (
+                                            cashOutLabel
+                                        )}
                                     </button>
                                 </div>
                             )}
@@ -494,6 +578,23 @@ export default function Mines() {
 
             <Footer />
             <SignInDialog isOpen={showSignInDialog} onClose={() => setShowSignInDialog(false)} />
+
+            {/* How-to-play modal, opened from the shared GameHeader trigger.
+                Reuses the global .howto-* modal styles (globals.css). */}
+            {showRules && (
+                <div className="howto-overlay" onClick={() => setShowRules(false)}>
+                    <div className="howto-modal" onClick={(e) => e.stopPropagation()}>
+                        <button className="howto-close" onClick={() => setShowRules(false)} aria-label="Close"><X size={18} /></button>
+                        <h3 className="howto-title">{MINES_RULES.title}</h3>
+                        <ol className="howto-steps">
+                            {MINES_RULES.steps.map((s, i) => (
+                                <li key={i}><span className="howto-num">{i + 1}</span>{s}</li>
+                            ))}
+                        </ol>
+                        <p className="howto-tip"><strong>Tip:</strong> {MINES_RULES.tip}</p>
+                    </div>
+                </div>
+            )}
         </>
     );
 }

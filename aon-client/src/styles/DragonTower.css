@@ -34,22 +34,7 @@ body.has-promo .game-stage.dt-stage {
   padding-top: calc(clamp(110px, 12vh, 120px) + 50px);
 }
 
-/* ------------------------------ header ------------------------------ */
-.dt-game .game-eyebrow {
-  letter-spacing: 0.28em;
-  font-size: 0.66rem;
-}
-.dt-game .game-title {
-  background: linear-gradient(110deg, var(--gold-bright) 0%, var(--gold) 45%, var(--gold-deep) 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  text-shadow: 0 0 60px rgba(233, 185, 73, 0.18);
-}
-.dt-game .game-title em { color: transparent; } /* inherits the gold gradient fill */
-.dt-game .game-sub {
-  color: var(--bone-faint);
-}
+/* header: shared GameHeader chrome (.gh- in Game.css) — no local overrides */
 
 /* ------------------------------ panels ------------------------------ */
 /* Squared, hairline gold border, gold corner ticks (top-left / bottom-right). */
@@ -100,12 +85,28 @@ body.has-promo .game-stage.dt-stage {
 }
 .dt-game .game-input,
 .dt-game .game-select {
-  background: rgba(242, 236, 221, 0.04);
+  background-color: rgba(242, 236, 221, 0.04);
   border: 1px solid var(--line);
   border-radius: 3px;
   font-family: var(--font-mono);
   font-weight: 500;
   font-size: 0.98rem;
+  color: var(--bone);
+}
+/* fixed select: kill native chrome, paint an explicit gold chevron
+   (same working pattern as .fw-risk in FortuneWheel.css) */
+.dt-game .game-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23E9B949' stroke-width='1.7' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: calc(100% - 15px) center;
+  background-size: 12px 8px;
+  padding-right: 38px;
+  cursor: pointer;
+}
+.dt-game .game-select option {
+  background: var(--ink);
   color: var(--bone);
 }
 .dt-game .game-input:focus,
@@ -265,14 +266,230 @@ body.has-promo .game-stage.dt-stage {
   line-height: 1.5;
 }
 
-/* ==================== the tower ==================== */
+/* ==================== THE KEEP ====================
+   Stake-style composition, AON palette: the grid sits inside a stone
+   tower frame — CSS masonry walls on the left/right/bottom, an SVG
+   crenellated battlement on top — and a flat-vector dragon peers over
+   the battlement (head BEHIND the wall, clawed hands hooked OVER it).
+   One unit, one width: [battlement svg] -> [walled grid] stacked in
+   normal flow inside .dt-lair, so the whole assembly scales with a
+   single --lair-w. Every decorative layer is pointer-events:none —
+   nothing can ever block a tile click. */
+.dt-lair {
+  --lair-w: min(100%, 520px);
+  --dt-wall: clamp(16px, 4vw, 22px); /* side/bottom wall thickness */
+  position: relative;
+  width: var(--lair-w);
+  margin: 0 auto;
+}
+
+/* ---------------- battlement svg (top wall + dragon) ---------------- */
+.dt-dragon {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-bottom: -1px; /* flush against the keep — no subpixel seam */
+  pointer-events: none;
+}
+
+/* flat-illustration fills — the page is the darkest thing on screen, so
+   the dragon sits a full tone step ABOVE it: body #241a33 (violet-
+   charcoal), shadow planes #150e1f, horns #2b2040 with darker inner
+   faces, wings #1a1228, paws #2e2344 so the grip reads on the merlons.
+   Gold rim accents only on crest + left horn, ember for eyes/talons. */
+.dt-dragon .dt-paw { fill: #352a4e; }
+.dt-dragon .dt-horn { fill: #3a2c5c; }
+.dt-dragon .dt-hornlit { fill: #4a3870; }
+.dt-dragon .dt-horn2 { fill: #241a48; }
+.dt-dragon .dt-facet { fill: #150e1f; }
+.dt-dragon .dt-crest { fill: #332852; }
+.dt-dragon .dt-snout { fill: #322650; }
+.dt-dragon__wings path { fill: #1d1430; }
+.dt-dragon__skull { fill: #291e3b; }
+.dt-dragon__brows polygon { fill: #150e1f; }
+.dt-dragon .dt-socket { fill: #0a0612; }
+.dt-dragon .dt-pupil { fill: #0d0913; }
+.dt-dragon__fangs polygon { fill: #cfc4ab; }
+.dt-dragon .dt-talon { fill: #a03524; }
+.dt-dragon .dt-rim {
+  fill: none;
+  stroke: rgba(233, 185, 73, 0.35);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.dt-dragon .dt-rim--thin {
+  stroke-width: 1.2;
+  stroke: rgba(233, 185, 73, 0.4);
+}
+.dt-dragon__glow {
+  fill: #ff4438;
+  opacity: 0.5;
+  transition: opacity 0.8s ease;
+}
+
+/* the rig: aft group (wings/horns/head, behind the wall) and fore group
+   (claws/fangs, in front of it) share this class so reactions move the
+   dragon as one body around the interleaved stone strip */
+.dt-dragon__rig {
+  transition: transform 0.3s ease-out;
+  will-change: transform;
+}
+
+/* ---------------- the living eyes ----------------
+   Focal point of the whole board: ember-gradient irises with slit
+   pupils, blurred glow blobs behind, brightness breathing (3.5s) and a
+   slow synchronized blink (~7s, scaleY squish). */
+.dt-dragon__eyes {
+  animation: dt-eye-breathe 3.5s ease-in-out infinite;
+}
+@keyframes dt-eye-breathe {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.28); }
+}
+.dt-dragon__eye {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: dt-blink 7s ease-in-out infinite;
+}
+@keyframes dt-blink {
+  0%, 94.5%, 98.5%, 100% { transform: scaleY(1); }
+  96.5% { transform: scaleY(0.06); }
+}
+
+/* ---------------- the keep: masonry frame around the grid ---------------- */
+.dt-keep {
+  position: relative;
+  background: #0e0a13; /* flat interior so the slabs pop */
+  padding: 10px calc(var(--dt-wall) + 10px) calc(var(--dt-wall) + 10px);
+}
+/* subtle ember under-glow along the frame's inner bottom edge */
+.dt-keep::after {
+  content: "";
+  position: absolute;
+  left: var(--dt-wall);
+  right: var(--dt-wall);
+  bottom: var(--dt-wall);
+  height: 28px;
+  background: radial-gradient(60% 100% at 50% 100%, rgba(255, 68, 56, 0.11) 0%, transparent 75%);
+  pointer-events: none;
+}
+
+/* wall strips: cool obsidian block stacks — gold-tinted mortar hairline
+   + top-edge highlight per block, with alternate blocks tinted violet
+   so the courses read individually. NO browns. */
+.dt-wall {
+  position: absolute;
+  pointer-events: none;
+}
+.dt-wall--left,
+.dt-wall--right {
+  top: 0;
+  bottom: 0;
+  width: var(--dt-wall);
+  background:
+    repeating-linear-gradient(
+      180deg,
+      rgba(233, 185, 73, 0.10) 0 1px,
+      rgba(255, 255, 255, 0.045) 1px 2px,
+      transparent 2px 24px
+    ),
+    repeating-linear-gradient(180deg, rgba(28, 20, 38, 0.55) 0 24px, rgba(28, 20, 38, 0) 24px 48px),
+    #16121d;
+}
+.dt-wall--left {
+  left: 0;
+  box-shadow: inset -1px 0 0 rgba(233, 185, 73, 0.12);
+}
+.dt-wall--right {
+  right: 0;
+  box-shadow: inset 1px 0 0 rgba(233, 185, 73, 0.12);
+}
+.dt-wall--bottom {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--dt-wall);
+  background:
+    repeating-linear-gradient(
+      90deg,
+      rgba(233, 185, 73, 0.10) 0 1px,
+      rgba(255, 255, 255, 0.04) 1px 2px,
+      transparent 2px 34px
+    ),
+    repeating-linear-gradient(90deg, rgba(28, 20, 38, 0.55) 0 34px, rgba(28, 20, 38, 0) 34px 68px),
+    #16121d;
+  box-shadow: inset 0 1px 0 rgba(233, 185, 73, 0.12);
+}
+
+/* ---------------- dragon reactions ---------------- */
+/* floor climbed: eyes flare briefly, claws tighten their grip */
+.dt-lair.is-pulse .dt-dragon__eyes {
+  animation: dt-eye-flare 0.7s ease-out 1;
+}
+@keyframes dt-eye-flare {
+  0% { filter: brightness(2.1); }
+  100% { filter: brightness(1); }
+}
+.dt-lair.is-pulse .dt-dragon__claw {
+  animation: dt-claw-grip 0.45s ease-out 1;
+}
+@keyframes dt-claw-grip {
+  0%, 100% { transform: translateY(0); }
+  40% { transform: translateY(2.5px); }
+}
+
+/* dragon hit: the whole dragon RISES over the wall, eyes hard-flare and
+   stay furious; the keep takes a short shake */
+.dt-lair.is-bite .dt-dragon__rig {
+  transform: translateY(-14px); /* svg user units — ~10px on screen */
+}
+.dt-lair.is-bite .dt-dragon__eyes {
+  animation: dt-eye-hardflare 0.9s ease-out forwards;
+}
+@keyframes dt-eye-hardflare {
+  0% { filter: brightness(2.6); }
+  100% { filter: brightness(1.6); }
+}
+.dt-lair.is-bite .dt-keep {
+  animation: dt-keep-shake 0.4s ease-in-out 1;
+}
+@keyframes dt-keep-shake {
+  0%, 100% { transform: translate(0, 0); }
+  20% { transform: translate(-3px, 1px); }
+  40% { transform: translate(3px, -1px); }
+  60% { transform: translate(-2px, 1px); }
+  80% { transform: translate(2px, 0); }
+}
+
+/* cash-out: the dragon sinks lower behind the wall, glow dims to embers */
+.dt-lair.is-dimmed .dt-dragon__rig {
+  transform: translateY(19px); /* svg user units — ~14px on screen */
+  transition: transform 0.8s ease;
+}
+.dt-lair.is-dimmed .dt-dragon__eyes {
+  animation: none;
+  opacity: 0.3;
+  transition: opacity 0.8s ease;
+}
+.dt-lair.is-dimmed .dt-dragon__eye { animation: none; }
+.dt-lair.is-dimmed .dt-dragon__glow { opacity: 0.12; }
+.dt-lair.is-dimmed .dt-keep::after { opacity: 0.4; }
+
+/* ==================== the tower grid ==================== */
+.dt-lair .dt-tower {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  margin: 0 auto;
+}
 .dt-tower {
+  --dt-gap: clamp(7px, 1.1vw, 12px);
   display: flex;
   flex-direction: column-reverse; /* row 0 sits at the bottom — you climb up */
-  gap: clamp(7px, 1.1vw, 12px);
+  gap: var(--dt-gap);
   width: 100%;
-  max-width: 500px;
-  margin: 0 auto;
+  transition: opacity 0.25s ease;
 }
 
 /* tile icons scale with the tile so they never overflow on small phones */
@@ -280,7 +497,6 @@ body.has-promo .game-stage.dt-stage {
 
 /* arming: bet placed but the round isn't ready for clicks yet — visibly
    held so the first tap is never swallowed */
-.dt-tower { transition: opacity 0.25s ease; }
 .dt-tower.is-arming {
   opacity: 0.55;
   pointer-events: none;
@@ -293,11 +509,11 @@ body.has-promo .game-stage.dt-stage {
   transition: opacity 0.25s ease;
 }
 /* dim the floors that aren't in play; climbed floors keep a little light */
-.dt-tower .dt-row { opacity: 0.42; }
-.dt-tower .dt-row.is-climbed { opacity: 0.7; }
+.dt-tower .dt-row { opacity: 0.55; }
+.dt-tower .dt-row.is-climbed { opacity: 0.8; }
 .dt-tower .dt-row.is-active { opacity: 1; }
 /* round settled (banked or torched) — the full reveal reads clearly */
-.dt-tower.is-settled .dt-row { opacity: 0.85; }
+.dt-tower.is-settled .dt-row { opacity: 0.9; }
 
 /* "you are here" — gold marker beckoning at the current floor */
 .dt-row.is-active::before {
@@ -316,84 +532,85 @@ body.has-promo .game-stage.dt-stage {
   50% { transform: translate(3px, -50%); }
 }
 
-/* per-floor payout ladder at the end of each row */
-.dt-row__mult {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  font-family: var(--font-mono);
-  font-size: clamp(0.58rem, 1.6vw, 0.72rem);
-  letter-spacing: 0.04em;
-  color: var(--bone-faint);
-  opacity: 0.55;
-  transition: color 0.2s ease, opacity 0.2s ease;
-  pointer-events: none;
-}
-.dt-row__mult.is-active {
-  color: var(--gold-bright);
-  opacity: 1;
-  text-shadow: 0 0 12px rgba(233, 185, 73, 0.35);
-}
-.dt-row__mult.is-climbed {
-  color: var(--gold);
-  opacity: 0.9;
-}
-.dt-row__mult.is-climbed::before {
-  content: "✓";
-  margin-right: 0.3em;
-  font-size: 0.9em;
-}
-
+/* ---------------- tiles: stone slabs ----------------
+   Clearly LIGHTER than the keep interior (#0e0a13) so every slab pops:
+   violet-charcoal gradient face, gold hairline, top catchlight, and a
+   faint 45°/-45° diamond cross-hatch emboss on the face. */
 .dt-tile {
-  /* Fixed height (only the WIDTH changes with difficulty — more tiles per floor
-     just makes each narrower). Height is viewport-bounded so all 10 floors fit
-     one screen. */
+  /* Fixed height (only the WIDTH changes with difficulty — more tiles per
+     floor just makes each narrower). Height is viewport-bounded so all 10
+     floors fit one screen. */
   height: clamp(30px, 4.4vh, 50px);
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 3px;
-  background: linear-gradient(180deg, rgba(242, 236, 221, 0.035) 0%, rgba(242, 236, 221, 0.01) 100%);
-  border: 1px solid var(--line);
+  background:
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.035) 0 1px, transparent 1px 7px),
+    repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.035) 0 1px, transparent 1px 7px),
+    linear-gradient(180deg, #221a2e 0%, #191320 100%);
+  border: 1px solid rgba(233, 185, 73, 0.20);
+  box-shadow:
+    inset 0 1px 0 rgba(242, 236, 221, 0.10),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.5),
+    0 2px 5px -2px rgba(0, 0, 0, 0.7);
   color: var(--bone-dim);
   cursor: default;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, filter 0.2s ease;
 }
 
-/* ascending into ember heat: the upper floors of the tower run hotter.
-   (column-reverse — nth-child counts from the bottom floor upward.) */
-.dt-tower .dt-row:nth-child(n+4) .dt-tile:not(.is-safe):not(.is-dragon):not(.is-available) {
-  border-color: rgba(255, 68, 56, 0.12);
-  box-shadow: inset 0 -8px 18px -14px rgba(255, 68, 56, 0.3);
-}
-.dt-tower .dt-row:nth-child(n+8) .dt-tile:not(.is-safe):not(.is-dragon):not(.is-available) {
-  border-color: rgba(255, 68, 56, 0.22);
-  box-shadow: inset 0 -10px 20px -12px rgba(255, 68, 56, 0.45);
-}
-
+/* the clickable row — unmistakable: brighter slab + gold/ember edge-glow
+   pulse; hover brightens the stone itself */
 .dt-row.is-active .dt-tile.is-available {
   cursor: pointer;
-  border-color: rgba(233, 185, 73, 0.45);
-  background: linear-gradient(180deg, rgba(233, 185, 73, 0.09) 0%, rgba(233, 185, 73, 0.02) 100%);
-  box-shadow: 0 0 16px -6px rgba(233, 185, 73, 0.5);
+  border-color: rgba(233, 185, 73, 0.55);
+  background:
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.045) 0 1px, transparent 1px 7px),
+    repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.045) 0 1px, transparent 1px 7px),
+    linear-gradient(180deg, #2f2542 0%, #211a31 100%);
+  animation: dt-avail-pulse 2.4s ease-in-out infinite;
+}
+@keyframes dt-avail-pulse {
+  0%, 100% {
+    box-shadow:
+      inset 0 1px 0 rgba(242, 236, 221, 0.12),
+      0 0 10px -2px rgba(255, 68, 56, 0.35),
+      0 0 18px -4px rgba(233, 185, 73, 0.2);
+  }
+  50% {
+    box-shadow:
+      inset 0 1px 0 rgba(242, 236, 221, 0.15),
+      0 0 18px -2px rgba(255, 68, 56, 0.6),
+      0 0 28px -4px rgba(233, 185, 73, 0.32);
+  }
 }
 .dt-tile.is-available:hover {
   border-color: var(--gold);
-  box-shadow: 0 0 0 1px rgba(233, 185, 73, 0.3), 0 10px 24px -12px rgba(233, 185, 73, 0.6);
+  background:
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 7px),
+    repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 7px),
+    linear-gradient(180deg, #3a2e52 0%, #291f3c 100%);
 }
 
 /* safe stone claimed — gold, the house pays for nerve */
 .dt-tile.is-safe {
-  background: radial-gradient(circle at 50% 40%, rgba(233, 185, 73, 0.24) 0%, rgba(233, 185, 73, 0.03) 78%);
-  border-color: rgba(233, 185, 73, 0.6);
+  background:
+    radial-gradient(circle at 50% 35%, rgba(233, 185, 73, 0.34) 0%, rgba(20, 14, 10, 0) 80%),
+    linear-gradient(180deg, #241c14 0%, #151009 100%);
+  border-color: rgba(233, 185, 73, 0.78);
   color: var(--gold-bright);
+  box-shadow:
+    inset 0 1px 0 rgba(242, 236, 221, 0.1),
+    0 0 14px -4px rgba(233, 185, 73, 0.4);
 }
 /* the dragon — ember, fire, the end of the climb */
 .dt-tile.is-dragon {
-  background: radial-gradient(circle at 50% 40%, rgba(255, 68, 56, 0.32) 0%, rgba(194, 31, 26, 0.06) 78%);
-  border-color: rgba(255, 68, 56, 0.6);
+  background:
+    radial-gradient(circle at 50% 35%, rgba(255, 68, 56, 0.42) 0%, rgba(32, 14, 18, 0) 80%),
+    linear-gradient(180deg, #221216 0%, #14090c 100%);
+  border-color: rgba(255, 68, 56, 0.75);
   color: var(--ember);
-  box-shadow: 0 0 24px -6px rgba(255, 68, 56, 0.5);
+  box-shadow: 0 0 24px -6px rgba(255, 68, 56, 0.55);
 }
 /* the dragon that ended the climb — ember flare before the verdict lands */
 .dt-tile.is-dragon.is-hit {
@@ -407,6 +624,30 @@ body.has-promo .game-stage.dt-stage {
   100% {
     box-shadow: 0 0 24px -6px rgba(255, 68, 56, 0.5);
     transform: scale(1);
+  }
+}
+
+/* respect reduced-motion: everything holds still, eyes statically lit */
+@media (prefers-reduced-motion: reduce) {
+  .dt-dragon__rig,
+  .dt-dragon__eyes,
+  .dt-dragon__eye,
+  .dt-dragon__claw,
+  .dt-keep,
+  .dt-row.is-active::before,
+  .dt-row.is-active .dt-tile.is-available,
+  .dt-tile.is-dragon.is-hit {
+    animation: none;
+  }
+  .dt-dragon__rig { transition: none; }
+  .dt-lair.is-bite .dt-dragon__rig,
+  .dt-lair.is-dimmed .dt-dragon__rig { transform: none; }
+  /* the clickable row keeps a static glow when the pulse is stilled */
+  .dt-row.is-active .dt-tile.is-available {
+    box-shadow:
+      inset 0 1px 0 rgba(242, 236, 221, 0.12),
+      0 0 14px -3px rgba(255, 68, 56, 0.5),
+      0 0 22px -4px rgba(233, 185, 73, 0.3);
   }
 }
 
@@ -425,7 +666,8 @@ body.has-promo .game-stage.dt-stage {
    right away — the user shouldn't scroll past a 10-floor tower to find them.
    Strategy: put the control panel ABOVE the tower on narrow screens and
    scale the tower so the whole board fits without excessive scrolling.
-   All rules are scoped under .dt-game so the shared Game.css is untouched. */
+   The battlement svg keeps its aspect and the wall thickness clamps
+   down with the viewport, so the frame stays proportional at every width. */
 
 /* tablet & phone: single column, controls first, tower second */
 @media (max-width: 900px) {
@@ -466,16 +708,18 @@ body.has-promo .game-stage.dt-stage {
 
   .dt-game .game-board { padding: clamp(0.7rem, 3vw, 1rem); border-radius: 4px; }
 
-  .dt-game .dt-tower {
-    /* cap by viewport so all 10 floors stay visible without long scrolling */
-    max-width: min(100%, 70vh);
-    gap: clamp(4px, 1.4vw, 8px);
+  .dt-game .dt-lair {
+    /* cap the whole lair by viewport so all 10 floors stay visible
+       without long scrolling (battlement + walled grid scale as one unit) */
+    --lair-w: min(100%, 70vh);
   }
+  .dt-game .dt-keep { padding: 8px calc(var(--dt-wall) + 7px) calc(var(--dt-wall) + 7px); }
+  .dt-game .dt-tower { --dt-gap: clamp(4px, 1.4vw, 8px); }
   .dt-game .dt-row { gap: clamp(4px, 1.4vw, 8px); }
 
   /* shorter tiles -> the full tower is much closer to one screenful,
      while staying tall enough to tap reliably */
-  .dt-game .dt-tile { height: clamp(26px, 3.8vh, 40px); border-radius: 2px; }
+  .dt-game .dt-tile { height: clamp(26px, 3.8vh, 40px); }
 
   /* keep the bet/cash-out buttons a full 44px tap target */
   .dt-game .game-primary,

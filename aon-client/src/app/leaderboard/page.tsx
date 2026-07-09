@@ -39,7 +39,19 @@ export default function LeaderboardPage() {
     }, []);
 
     const medals = ["I", "II", "III"];
-    const myRank = user ? leaderboard.find((e) => e.userId === user.id)?.rank : null;
+    // Rank shown in the header comes from the same array we render, so it
+    // always matches the row position (server assigns rank = sorted index + 1).
+    const myRank = user ? leaderboard.find((e) => e.userId === user.id)?.rank ?? null : null;
+
+    // Whole rupees with Indian digit grouping — matches "The Table" on the profile.
+    const formatNetWorth = (n: number) => `${n < 0 ? "−" : "+"}₹${Math.round(Math.abs(n)).toLocaleString("en-IN")}`;
+
+    // Display names aren't unique (two accounts can both be "Preetish Ubhrani").
+    // The API only returns name + avatar + ids, so distinguish duplicates with a
+    // masked account-id suffix rather than inventing data.
+    const dupNames = new Set(
+        leaderboard.filter((e, _, arr) => arr.some((o) => o.userId !== e.userId && o.username === e.username)).map((e) => e.username)
+    );
 
     return (
         <>
@@ -75,17 +87,21 @@ export default function LeaderboardPage() {
                                     <div
                                         key={entry.userId}
                                         className={`leaderboard-item ${user && entry.userId === user.id ? "is-you" : ""} ${entry.rank <= 3 ? `is-top is-top-${entry.rank}` : ""}`}
+                                        title={`Rank #${entry.rank} — ${entry.username}`}
                                     >
                                         <span className={`rank rank-${entry.rank}`}>
-                                            {entry.rank <= 3 ? medals[entry.rank - 1] : entry.rank}
+                                            {entry.rank <= 3 ? medals[entry.rank - 1] : String(entry.rank).padStart(2, "0")}
                                         </span>
                                         <img src={entry.avatar} alt={entry.username} className="lb-avatar" />
                                         <span className="lb-name">
                                             {entry.username}
                                             {user && entry.userId === user.id && <span className="you-badge">You</span>}
+                                            {dupNames.has(entry.username) && !(user && entry.userId === user.id) && (
+                                                <span className="lb-disc">#{String(entry.userId).slice(-4)}</span>
+                                            )}
                                         </span>
                                         <span className={`lb-earnings ${entry.netWorth < 0 ? "negative" : ""}`}>
-                                            {entry.netWorth >= 0 ? "+" : ""}₹{entry.netWorth.toFixed(0)}
+                                            {formatNetWorth(entry.netWorth)}
                                         </span>
                                     </div>
                                 ))}

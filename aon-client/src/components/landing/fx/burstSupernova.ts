@@ -175,9 +175,14 @@ export function mount(canvas: HTMLCanvasElement): BurstHandle {
 
   const rand = mulberry32(4200109);
 
+  // everything coin-born (coin, shards, dust) rides one rig so narrow screens
+  // can scale the whole story down together (see resize)
+  const rig = new THREE.Group();
+  scene.add(rig);
+
   // --- intact coin ---------------------------------------------------------
   const coin = new THREE.Group();
-  scene.add(coin);
+  rig.add(coin);
   const texAll = faceTexture("ALL");
   const texNothing = faceTexture("NOTHING");
   // the cylinder is tipped 90° to face the camera, which rotates the cap UVs —
@@ -220,7 +225,7 @@ export function mount(canvas: HTMLCanvasElement): BurstHandle {
   const shards: Shard[] = [];
   const shardGroup = new THREE.Group();
   shardGroup.visible = false;
-  scene.add(shardGroup);
+  rig.add(shardGroup);
   const shardMat = new THREE.MeshStandardMaterial({ color: 0xe9b949, roughness: 0.3, metalness: 1 });
 
   const SECT = 12;
@@ -309,7 +314,7 @@ export function mount(canvas: HTMLCanvasElement): BurstHandle {
   });
   const nebula = new THREE.Points(pGeo, pMat);
   nebula.visible = false;
-  scene.add(nebula);
+  rig.add(nebula);
 
   // --- detonation flash ------------------------------------------------------
   const flash = new THREE.Mesh(
@@ -332,6 +337,12 @@ export function mount(canvas: HTMLCanvasElement): BurstHandle {
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
+    // Portrait phones: the coin (Ø 2R world units, ×1.14 spin-up swell, camera
+    // as close as z≈9.1 while it's whole) otherwise spans the full viewport
+    // width and crowds the captions. Fit the rig so the coin peaks at ~62vw;
+    // on landscape/desktop the fit clamps to 1 and nothing changes.
+    const visW = 2 * 9.1 * Math.tan((camera.fov * Math.PI) / 360) * camera.aspect;
+    rig.scale.setScalar(Math.min(1, (visW * 0.62) / (2 * R * 1.14)));
   };
 
   const setCoinOpacity = (op: number) => {

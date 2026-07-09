@@ -7,6 +7,9 @@ import "../styles/Roulette.css";
 import Navbar from "./Navbar";
 import Footer from "./Footer";
 import HowToPlay from "./HowToPlay";
+import GameHeader from "./game/GameHeader";
+import { useLeaveGuard } from "./game/LeaveGuard";
+import PendingButton from "./game/PendingButton";
 import { useWallet } from "../contexts/WalletContext";
 
 /* ───────────────────────── constants ───────────────────────── */
@@ -85,13 +88,14 @@ export default function Roulette({ testMode = false }: { testMode?: boolean }) {
     const [history, setHistory] = useState<Bet[][]>([]);
     const [lastRound, setLastRound] = useState<Bet[]>([]);
     const [chip, setChip] = useState(10);
+    const [staging, setStaging] = useState(false); // SPIN clicked, bet round-trip in flight
     const [spinning, setSpinning] = useState(false);
     const [winningIndex, setWinningIndex] = useState<number | null>(null);
     const [showResult, setShowResult] = useState(false);
     const [winnings, setWinnings] = useState(0);
     const [recent, setRecent] = useState<number[]>([]);
     const [toast, setToast] = useState("");
-    const [banner, setBanner] = useState<{ num: number; delta: number } | null>(null);
+    const [banner, setBanner] = useState<{ num: number; delta: number; away?: boolean } | null>(null);
     const [hover, setHover] = useState<number[] | null>(null);
 
     const wheelRef = useRef<SVGSVGElement>(null);
@@ -103,6 +107,10 @@ export default function Roulette({ testMode = false }: { testMode?: boolean }) {
     const winSound = useRef<HTMLAudioElement | null>(null);
     const audioCtx = useRef<AudioContext | null>(null);
     const bannerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    /* the drawn result while a spin is live — written to sessionStorage if the player leaves mid-spin */
+    const pendingResult = useRef<{ number: number; color: "red" | "black" | "green"; net: number } | null>(null);
+    /* hosts the shared HowToPlay modal; its own trigger is hidden — GameHeader opens it */
+    const howtoHost = useRef<HTMLSpanElement>(null);
 
     useEffect(() => {
         spinSound.current = new Audio("/sounds/roulette.mp3");
@@ -112,6 +120,44 @@ export default function Roulette({ testMode = false }: { testMode?: boolean }) {
             if (bannerTimer.current) clearTimeout(bannerTimer.current);
         };
     }, []);
+
+    /* a spin left rolling on a previous visit — replay its result in the banner slot */
+    useEffect(() => {
+        let raw: string | null = null;
+        try {
+            raw = sessionStorage.getItem("rl:awayResult");
+            if (raw) sessionStorage.removeItem("rl:awayResult");
+        } catch { /* ignore */ }
+        if (!raw) return;
+        try {
+            const r = JSON.parse(raw) as { number: number; net: number };
+            if (typeof r.number !== "number" || typeof r.net !== "number") return;
+            if (bannerTimer.current) clearTimeout(bannerTimer.current);
+            setBanner({ num: r.number, delta: r.net, away: true });
+            bannerTimer.current = setTimeout(() => setBanner(null), 4000);
+        } catch { /* ignore */ }
+    }, []);
+
+    /* leaving mid-spin is safe (the win is credited the moment the result is
+       drawn) — the guard is about perception: offer to show the result later */
+    useLeaveGuard({
+        when: staging || spinning,
+        title: "The ball is still rolling",
+        message: "Your bets settle on their own — the result will be waiting when you return.",
+        actions: [
+            { label: "Stay", tone: "ghost", leave: false },
+            {
+                label: "Leave — settle in background",
+                tone: "gold",
+                leave: true,
+                run: () => {
+                    // recordWin already fired when the result was drawn — just leave a note
+                    const r = pendingResult.current;
+                    if (r) sessionStorage.setItem("rl:awayResult", JSON.stringify(r));
+                },
+            },
+        ],
+    });
 
     const spotsH = useMemo(() => makeSpots("h"), []);
     const spotsV = useMemo(() => makeSpots("v"), []);
@@ -172,7 +218,7 @@ export default function Roulette({ testMode = false }: { testMode?: boolean }) {
 
     const place = useCallback(
         (b: Omit<Bet, "amount">) => {
-            if (spinning || showResult) return;
+            if (staging || spinning || showResult) return;
             chipClick();
             setHistory((h) => [...h, bets]);
             setBets((prev) => {
@@ -185,10 +231,10 @@ export default function Roulette({ testMode = false }: { testMode?: boolean }) {
                 return [...prev, { ...b, amount: chip }];
             });
         },
-        [spinning, showResult, bets, chip],
+        [staging, spinning, showResult, bets, chip],
     );
     const removeKey = (key: string) => {
-        if (spinning || showResult) return;
+        if (staging || spinning || showResult) return;
         setHistory((h) => [...h, bets]);
         setBets((prev) => {
             const i = prev.findIndex((x) => x.key === key);
@@ -199,10 +245,11 @@ export default function Roulette({ testMode = false }: { testMode?: boolean }) {
             return next;
         });
     };
-    const undo = () => { if (spinning || !history.length) return; setBets(history[history.length - 1]); setHistory((h) => h.slice(0, -1)); };
-    const clear = () => { if (spinning || !bets.length) return; setHistory((h) => [...h, bets]); setBets([]); };
-    const double = () => { if (spinning || !bets.length) return; if (totalBet * 2 > wallet) return notify("Not enough balance to double"); setHistory((h) => [...h, bets]); setBets((prev) => prev.map((b) => ({ ...b, amount: b.amount * 2 }))); };
-    const rebet = () => { if (spinning || !lastRound.length) return; const t = lastRound.reduce((s, b) => s + b.amount, 0); if (t > wallet) return notify("Not enough balance to rebet"); setBets(lastRound); };
+    const busy = staging || spinning;
+    const undo = () => { if (busy || !history.length) return; setBets(history[history.length - 1]); setHistory((h) => h.slice(0, -1)); };
+    const clear = () => { if (busy || !bets.length) return; setHistory((h) => [...h, bets]); setBets([]); };
+    const double = () => { if (busy || !bets.length) return; if (totalBet * 2 > wallet) return notify("Not enough balance to double"); setHistory((h) => [...h, bets]); setBets((prev) => prev.map((b) => ({ ...b, amount: b.amount * 2 }))); };
+    const rebet = () => { if (busy || !lastRound.length) return; const t = lastRound.reduce((s, b) => s + b.amount, 0); if (t > wallet) return notify("Not enough balance to rebet"); setBets(lastRound); };
     const betOn = (key: string) => bets.find((b) => b.key === key);
 
     /* ---------- shared bet-spot props ----------
@@ -245,8 +292,10 @@ export default function Roulette({ testMode = false }: { testMode?: boolean }) {
        roulette wheel — no fixed top pointer). The result is still a fair uniform
        draw; only its on-screen position is random. */
     const runSpin = (resultIndex: number, won: number, winPromise: Promise<boolean>) => {
-        const wheelEl = wheelRef.current!;
-        const ballEl = ballRef.current!;
+        const wheelEl = wheelRef.current;
+        const ballEl = ballRef.current;
+        if (!wheelEl || !ballEl) return; // player left mid-staging — the credit already fired
+
         const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
         const duration = reduce ? 1500 : 10000;
 
@@ -297,20 +346,23 @@ export default function Roulette({ testMode = false }: { testMode?: boolean }) {
         setRecent((r) => [num, ...r].slice(0, 14));
         if (won > 0 && !credited) {
             setWinnings(0);
+            pendingResult.current = null;
             notify("Couldn't credit your win — please refresh");
             return;
         }
         setWinnings(won);
         if (won > 0) winSound.current?.play().catch(() => {});
         showBanner(num, won > 0 ? won : -totalBet);
+        pendingResult.current = null; // settled in-session — nothing to replay later
     };
 
     const spin = async () => {
-        if (spinning) return;
+        if (staging || spinning) return;
         if (!bets.length) return notify("Place at least one bet");
         if (totalBet > wallet) return notify("Insufficient balance");
+        setStaging(true); // "NO MORE BETS" — the croupier takes the bets to the server
         const ok = await recordBet(totalBet, "ROULETTE");
-        if (!ok) return notify("Couldn't place bets — are you signed in?");
+        if (!ok) { setStaging(false); return notify("Couldn't place bets — are you signed in?"); }
         setLastRound(bets);
         setHistory([]);
         setShowResult(false);
@@ -318,11 +370,13 @@ export default function Roulette({ testMode = false }: { testMode?: boolean }) {
         setWinnings(0);
         setBanner(null);
         setSpinning(true);
+        setStaging(false); // bets confirmed — the wheel takes over
         if (spinSound.current) { spinSound.current.currentTime = 0; spinSound.current.play().catch(() => {}); }
         const resultIndex = Math.floor(Math.random() * WHEEL.length);
         const num = WHEEL[resultIndex];
         let won = 0;
         for (const b of bets) if (b.numbers.includes(num)) won += b.amount * b.mult;
+        pendingResult.current = { number: num, color: colorOf(num), net: won > 0 ? won : -totalBet };
         // credit the win now, in parallel with the ball-settle animation
         const winPromise = won > 0 ? recordWin(won, totalBet, "ROULETTE").catch(() => false) : Promise.resolve(true);
         runSpin(resultIndex, won, winPromise);
@@ -412,11 +466,14 @@ export default function Roulette({ testMode = false }: { testMode?: boolean }) {
                     )}
                 </AnimatePresence>
 
-                <div className="rl-head">
-                    <div className="rl-eyebrow"><span className="rl-dot" /> EUROPEAN ROULETTE · SINGLE ZERO</div>
-                    <h1 className="rl-title">ROULETTE</h1>
-                    <HowToPlay game="roulette" />
-                </div>
+                <GameHeader
+                    eyebrow="EUROPEAN ROULETTE · SINGLE ZERO"
+                    title="ROULETTE"
+                    tagline="Place your chips. No more bets. Watch the ball decide."
+                    onHowToPlay={() => howtoHost.current?.querySelector("button")?.click()}
+                />
+                {/* shared rules modal — its own trigger is hidden, the header button opens it */}
+                <span className="rl-howto-host" ref={howtoHost}><HowToPlay game="roulette" /></span>
 
                 <div className="rl-stat-row">
                     <div className="rl-stat"><span>Balance</span><b>₹{wallet.toFixed(2)}</b></div>
@@ -435,6 +492,7 @@ export default function Roulette({ testMode = false }: { testMode?: boolean }) {
                     <AnimatePresence>
                         {banner && (
                             <motion.div key={`${banner.num}-${banner.delta}`} className={`rl-banner ${colorOf(banner.num)}`} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.3 }}>
+                                {banner.away && <span className="rl-banner__away">While you were away:</span>}
                                 <span className="rl-banner__n">{banner.num}</span>
                                 <span className="rl-banner__c">{colorOf(banner.num)}</span>
                                 <span className={`rl-banner__amt ${banner.delta > 0 ? "up" : "down"}`}>
@@ -445,7 +503,7 @@ export default function Roulette({ testMode = false }: { testMode?: boolean }) {
                     </AnimatePresence>
                 </div>
 
-                <div className="rl-stage">
+                <div className={`rl-stage ${staging ? "is-staging" : ""}`}>
                     {/* WHEEL */}
                     <div className="rl-wheelwrap">
                         <div className="rl-wheel">
@@ -502,13 +560,15 @@ export default function Roulette({ testMode = false }: { testMode?: boolean }) {
                                 ))}
                             </div>
                             <div className="rl-actions">
-                                <button className="rl-act" onClick={undo} disabled={spinning || !history.length} title="Undo"><Undo2 size={18} /></button>
-                                <button className="rl-act" onClick={double} disabled={spinning || !bets.length} title="Double">2×</button>
-                                <button className="rl-act" onClick={rebet} disabled={spinning || !lastRound.length} title="Rebet"><Copy size={18} /></button>
-                                <button className="rl-act" onClick={clear} disabled={spinning || !bets.length} title="Clear"><RotateCcw size={18} /></button>
+                                <button className="rl-act" onClick={undo} disabled={busy || !history.length} title="Undo"><Undo2 size={18} /></button>
+                                <button className="rl-act" onClick={double} disabled={busy || !bets.length} title="Double">2×</button>
+                                <button className="rl-act" onClick={rebet} disabled={busy || !lastRound.length} title="Rebet"><Copy size={18} /></button>
+                                <button className="rl-act" onClick={clear} disabled={busy || !bets.length} title="Clear"><RotateCcw size={18} /></button>
                             </div>
                         </div>
                     </div>
+
+                    {staging && <p className="staging-note">The croupier takes your bets…</p>}
                 </div>
 
                 <div className="rl-footer">
@@ -516,7 +576,9 @@ export default function Roulette({ testMode = false }: { testMode?: boolean }) {
                     {showResult ? (
                         <button className="rl-spin" onClick={newRound}>NEW ROUND</button>
                     ) : (
-                        <button className="rl-spin" onClick={spin} disabled={spinning || !bets.length}>{spinning ? "NO MORE BETS" : "SPIN"}</button>
+                        <PendingButton className="rl-spin" pending={staging} pendingLabel="NO MORE BETS" onClick={spin} disabled={spinning || !bets.length}>
+                            {spinning ? "NO MORE BETS" : "SPIN"}
+                        </PendingButton>
                     )}
                 </div>
 

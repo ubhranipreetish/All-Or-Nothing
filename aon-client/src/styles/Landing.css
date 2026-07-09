@@ -1128,18 +1128,12 @@ body.fe-cursor-on button {
   top: 42%;
 }
 
-/* full-bleed effect layer — desktop only, sits between bg and content */
+/* full-bleed effect layer — all sizes (Canvas 2D, cheap), sits between bg and content */
 .fe-hero__fx {
   position: absolute;
   inset: 0;
   z-index: 0;
-  display: none;
   pointer-events: none;
-}
-@media (min-width: 1025px) {
-  .fe-hero__fx {
-    display: block;
-  }
 }
 .fe-hero__visual {
   position: absolute;

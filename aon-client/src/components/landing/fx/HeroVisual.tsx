@@ -7,14 +7,15 @@ import type { HeroHandle, HeroMount } from "./types";
  * Full-bleed hero visual — the card-suit constellations. Mounted behind a
  * dynamic import (nothing lands in the main bundle), runs a single rAF loop
  * that pauses off-screen / in hidden tabs, and feeds it a smoothed pointer.
- * Desktop only — on ≤1024px the wrapper is display:none and we never mount.
+ * All screen sizes — the scene is Canvas 2D and cheap, and it lays the sigils
+ * out with a dedicated portrait layout on phones (see heroConstellations.ts).
  */
 export default function HeroVisual() {
   const wrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const wrap = wrapRef.current;
-    if (!wrap || window.matchMedia("(max-width: 1024px)").matches) return;
+    if (!wrap) return;
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     const canvas = document.createElement("canvas");

@@ -295,14 +295,20 @@
     box-shadow: inset 0 0 0 1px rgba(255, 216, 119, 0.08);
 }
 
+/* One visual family for every rank: same condensed display face and tracking.
+   The podium wears roman numerals in metal tones; 4+ are zero-padded digits
+   ("04", "05" — set in the markup) in the same face, just dimmer and a touch
+   smaller so the hierarchy reads without a style break. */
 .rank {
     min-width: 34px;
     text-align: center;
     flex-shrink: 0;
     font-family: var(--font-display);
-    font-size: 1.05rem;
-    letter-spacing: 0.04em;
-    color: var(--bone-faint);
+    font-size: 1.1rem;
+    font-weight: 400;
+    letter-spacing: 0.06em;
+    color: var(--bone-dim);
+    font-variant-numeric: tabular-nums;
 }
 
 .rank-1,
@@ -345,6 +351,18 @@
     letter-spacing: 0.1em;
     text-transform: uppercase;
     font-weight: 700;
+}
+
+/* Masked account-id chip shown only when two rows share a display name. */
+.lb-disc {
+    flex-shrink: 0;
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.08em;
+    color: var(--bone-faint);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 1px 6px;
 }
 
 .lb-earnings {
@@ -964,6 +982,8 @@
     var(--void, #07060a);
   color: var(--bone, #f2ecdd);
   padding: 132px clamp(18px, 5vw, 64px) 96px;
+  /* The page itself never scrolls sideways — anything wide scrolls in-panel. */
+  overflow-x: hidden;
 }
 body.has-promo .pfx { padding-top: 178px; }
 .pfx__wrap {
@@ -1139,6 +1159,10 @@ body.has-promo .pfx { padding-top: 178px; }
   gap: clamp(1.2rem, 3vw, 2rem);
   align-items: start;
 }
+/* Grid items default to min-width auto, so the ledger table's min-width would
+   force the column (and the whole page) wider than the viewport on phones.
+   Let panels shrink; the table scrolls inside .pfx-ledger__scroll instead. */
+.pfx-grid > * { min-width: 0; }
 .pfx-rail { display: flex; flex-direction: column; gap: clamp(1.2rem, 3vw, 2rem); }
 .pfx-panel {
   position: relative;
@@ -1232,7 +1256,11 @@ a.pfx-panel__aside:hover { color: var(--gold-bright, #ffd877); }
 .pfx-tabs button:hover { color: var(--bone, #f2ecdd); }
 .pfx-tabs button.is-on { color: var(--gold-bright, #ffd877); border-bottom-color: var(--gold, #e9b949); }
 
-.pfx-ledger__scroll { overflow-x: auto; }
+.pfx-ledger__scroll {
+  overflow-x: auto;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
+}
 .pfx-ledger table {
   width: 100%;
   border-collapse: collapse;
@@ -1372,19 +1400,70 @@ a.pfx-panel__aside:hover { color: var(--gold-bright, #ffd877); }
 .loan-modal .repay-info .repay-total { color: var(--bone, #f2ecdd); }
 .loan-modal .repay-info .repay-total span:last-child { color: var(--ember, #ff4438); }
 
-/* ------------------------------ responsive ------------------------------ */
+/* ------------------------------ responsive ------------------------------
+   One cascade, four gates:
+   960px — the two-column dossier folds to a single column (rail under ledger)
+           and the stat strip goes 2×2.
+   640px — phone: tighter type, plate stacks allowed, tabs wrap, strip stays 2×2.
+   480px — narrow phone: avatar row stacks, loan rows stack their button,
+           table rows tighten, repay modal actions go full-width.
+   380px — smallest: stat strip goes single-column, hairline padding. */
 @media (max-width: 960px) {
   .pfx-grid { grid-template-columns: 1fr; }
   .pfx-strip { grid-template-columns: repeat(2, 1fr); }
-  .pfx-strip__cell:nth-child(3) { border-left: none; }
+  .pfx-strip__cell:nth-child(odd) { border-left: none; }
   .pfx-strip__cell:nth-child(n + 3) { border-top: 1px solid rgba(242, 236, 221, 0.08); }
 }
-@media (max-width: 600px) {
+
+@media (max-width: 640px) {
   .pfx { padding-top: 116px; }
   body.has-promo .pfx { padding-top: 186px; }
+
+  /* identity plate: eyebrow + logout may share a line or wrap, long names wrap */
   .pfx-id__top { flex-wrap: wrap; }
+  .pfx-id__name { font-size: clamp(2.4rem, 11.5vw, 3.6rem); }
   .pfx-seal { margin-left: 0; }
+
+  /* stat strip: still 2×2, but the display numerals scale with the viewport
+     and may break rather than overflow their cell */
+  .pfx-strip__cell { padding: 1.1rem 0.9rem; }
+  .pfx-strip__num { font-size: clamp(1.3rem, 6vw, 1.8rem); overflow-wrap: anywhere; }
+
+  /* panel heads stack their aside/tabs cleanly (flex-wrap already on) */
+  .pfx-panel__head { align-items: flex-start; }
+  .pfx-tabs { flex-wrap: wrap; row-gap: 0.55rem; }
+
+  /* ledger scrolls inside its panel; slightly narrower floor on phones */
+  .pfx-ledger table { min-width: 480px; }
+}
+
+@media (max-width: 480px) {
+  /* identity plate stacks: avatar above facts, seal on its own line */
+  .pfx-id__row { flex-direction: column; align-items: flex-start; gap: 1rem; }
+
+  /* debts: button drops under the text, full-width tap target */
+  .pfx-loan { flex-direction: column; align-items: stretch; gap: 0.8rem; }
+  .pfx-repay { width: 100%; padding: 12px 14px; }
+
+  /* the table: tighter rows so rank + avatar + name + figure all fit */
+  .leaderboard-item { gap: 8px; padding: 9px 8px; }
+  .rank { min-width: 26px; }
+  .lb-avatar { width: 30px; height: 30px; }
+  .lb-earnings { font-size: 0.82rem; }
+
+  /* repay modal: fits a 360px viewport, stacked full-width actions
+     (confirm first — column-reverse flips the DOM order) */
+  .loan-modal { width: calc(100vw - 2rem); min-width: 0; max-width: calc(100vw - 2rem); padding: 1.6rem 1.2rem; }
+  .loan-modal .modal-buttons { flex-direction: column-reverse; gap: 0.6rem; }
+  .loan-modal .modal-buttons .modal-cancel,
+  .loan-modal .modal-buttons .modal-confirm { width: 100%; flex: none; }
+}
+
+@media (max-width: 380px) {
+  .pfx { padding-left: 14px; padding-right: 14px; }
   .pfx-strip { grid-template-columns: 1fr; }
   .pfx-strip__cell { border-left: none; }
   .pfx-strip__cell:nth-child(n + 2) { border-top: 1px solid rgba(242, 236, 221, 0.08); }
+  .pfx-strip__num { font-size: 1.5rem; }
+  .pfx-panel { padding: 1.1rem 0.9rem; }
 }

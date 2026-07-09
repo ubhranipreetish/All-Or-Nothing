@@ -52,32 +52,14 @@ body.has-promo .rl-page { padding-top: 168px; }
     box-shadow: 0 14px 40px -16px rgba(0, 0, 0, 0.85);
 }
 
-/* ───────────────────── head + stats ───────────────────── */
-.rl-head { text-align: center; }
-.rl-eyebrow {
-    font-family: var(--font-mono, monospace);
-    font-size: 0.66rem;
-    letter-spacing: 0.3em;
-    text-transform: uppercase;
-    color: var(--gold, #e9b949);
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-.rl-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ember, #ff4438); box-shadow: 0 0 10px var(--ember, #ff4438); }
-.rl-title {
-    font-family: var(--font-display, sans-serif);
-    text-transform: uppercase;
-    font-size: clamp(2.2rem, 6vw, 4rem);
-    letter-spacing: 0.02em;
-    line-height: 1;
-    margin-top: 0.3rem;
-    background: linear-gradient(110deg, var(--gold-bright, #ffd877) 0%, var(--gold, #e9b949) 45%, var(--gold-deep, #a9791f) 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-    text-shadow: 0 0 60px rgba(233, 185, 73, 0.18);
-}
+/* ───────────────────── head + stats ─────────────────────
+   The header itself is the shared GameHeader chrome (`.gh-` in Game.css);
+   here it only gets sized to the page column. The page's own 14px flex gap
+   governs the rhythm down to the stat row / banner slot, as before. */
+.rl-page .gh { width: 100%; max-width: 1140px; margin-bottom: 0; }
+/* the shared HowToPlay modal rides along invisibly — GameHeader triggers it */
+.rl-howto-host { display: contents; }
+.rl-howto-host > .howto-btn { display: none; }
 
 .rl-stat-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
 .rl-stat {
@@ -109,12 +91,55 @@ body.has-promo .rl-page { padding-top: 168px; }
 
 /* ───────────────────── stage layout ───────────────────── */
 .rl-stage {
+    position: relative;
     display: grid;
     grid-template-columns: minmax(280px, 380px) 1fr;
     gap: 26px;
     width: 100%;
     max-width: 1140px;
     align-items: start;
+}
+/* staging veil + gold "dealing" sheen while the croupier records the bets —
+   same treatment as `.game-board.is-staging` in Game.css, scoped to the
+   roulette stage (wheel + felt) which isn't a `.game-board`. */
+.rl-stage::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 6;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+    background-color: rgba(4, 3, 8, 0.32);
+    background-image: linear-gradient(
+        115deg,
+        transparent 32%,
+        rgba(233, 185, 73, 0.06) 45%,
+        rgba(255, 216, 119, 0.13) 50%,
+        rgba(233, 185, 73, 0.06) 55%,
+        transparent 68%
+    );
+    background-size: 250% 100%;
+    background-repeat: no-repeat;
+    background-position: 200% 0;
+}
+.rl-stage.is-staging::after {
+    opacity: 1;
+    animation: rl-deal 1.2s linear infinite;
+}
+@keyframes rl-deal {
+    from { background-position: 200% 0; }
+    to { background-position: -100% 0; }
+}
+/* the `.staging-note` base look (pulsing gold mono) comes from Game.css;
+   pin it to the bottom of the stage like `.game-board` does for its own */
+.rl-stage > .staging-note {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: clamp(10px, 2vw, 18px);
+    z-index: 7;
+    margin: 0;
 }
 
 /* ───────────────────── wheel ───────────────────── */
@@ -188,6 +213,8 @@ body.has-promo .rl-page { padding-top: 168px; }
 .rl-banner.black .rl-banner__n { background: linear-gradient(180deg, #181221, #0b0910); border: 1px solid rgba(233, 185, 73, 0.25); }
 .rl-banner.green .rl-banner__n { background: linear-gradient(180deg, #12996e, #0b6b4c); }
 .rl-banner__c { font-family: var(--font-mono, monospace); font-size: 0.62rem; letter-spacing: 0.26em; text-transform: uppercase; color: var(--bone-dim, #a79fb2); }
+/* "While you were away:" prefix on a result replayed after returning mid-spin */
+.rl-banner__away { font-family: var(--font-mono, monospace); font-size: 0.62rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--bone-dim, #a79fb2); }
 .rl-banner__amt { font-family: var(--font-mono, monospace); font-size: 0.95rem; letter-spacing: 0.08em; font-weight: 700; }
 .rl-banner__amt.up { color: var(--gold-bright, #ffd877); }
 .rl-banner__amt.down { color: var(--ember, #ff4438); }
@@ -401,6 +428,11 @@ body.has-promo .rl-page { padding-top: 168px; }
 }
 .rl-spin:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 16px 38px -10px rgba(233, 185, 73, 0.75); }
 .rl-spin:disabled { opacity: 0.5; cursor: not-allowed; }
+/* the SPIN button is a PendingButton, which also carries `.game-primary`
+   (Game.css) — re-assert the roulette look where the two disagree */
+.rl-spin.game-primary { width: auto; margin-top: 0; border-radius: 3px; font-size: 0.95rem; letter-spacing: 0.14em; font-weight: 800; }
+.rl-spin.game-primary:hover:not(:disabled) { box-shadow: 0 16px 38px -10px rgba(233, 185, 73, 0.75); }
+.rl-spin.game-primary:disabled:not(.is-pending) { opacity: 0.5; } /* while pending, Game.css keeps it "busy, not dead" */
 
 .rl-tip {
     font-family: var(--font-serif, serif);
@@ -429,8 +461,9 @@ body.has-promo .rl-page { padding-top: 168px; }
 @media (max-width: 600px) {
     .rl-page { padding-top: 104px; }
     body.has-promo .rl-page { padding-top: 156px; }
-    .rl-title { font-size: 2rem; }
     .rl-chipbtn { width: 44px; height: 44px; font-size: 0.74rem; }
     .rl-act { min-width: 42px; height: 42px; }
     .rl-controls { justify-content: center; }
+    /* the "While you were away:" banner is wider — let it wrap inside the slot */
+    .rl-banner { flex-wrap: wrap; justify-content: center; row-gap: 2px; padding: 8px 14px; max-width: calc(100vw - 32px); }
 }

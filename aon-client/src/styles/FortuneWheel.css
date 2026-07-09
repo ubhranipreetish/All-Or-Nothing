@@ -21,17 +21,9 @@ body.has-promo .fw-stage.game-stage {
 }
 
 /* ------------------------------ header ------------------------------ */
-.fw-stage .game-title {
-  background: linear-gradient(110deg, var(--gold-bright) 0%, var(--gold) 45%, var(--gold-deep) 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  text-shadow: 0 0 60px rgba(233, 185, 73, 0.16);
-}
-.fw-stage .game-title em { color: var(--gold); }
-
-/* wheel's accent is violet — the live dot signals electric fate */
-.fw-stage .game-eyebrow .dot {
+/* Shared GameHeader (.gh- in Game.css) carries the chrome; the wheel only
+   keeps its violet accent — the live dot signals electric fate. */
+.fw-stage .gh-eyebrow__dot {
   background: var(--violet-bright);
   box-shadow: 0 0 10px var(--violet);
 }
@@ -167,17 +159,18 @@ body.has-promo .fw-stage.game-stage {
   transition: opacity 0.4s ease, filter 0.4s ease;
 }
 
-/* pointer (top, pointing down) */
-.fw-pointer {
+/* pin (top, pointing down) — base mounted ABOVE the rim, tip reaching INTO
+   the segment band so the selected segment is unambiguous. The band is
+   26/500 = 5.2% of the wheel; the pin is 12% tall starting at -7.8%, so the
+   tip lands ~4.2% deep — inside the band at every responsive size, since
+   .fw-wrap is a square and all units are % of it. */
+.fw-pin {
   position: absolute;
-  top: -2px;
+  top: -7.8%;
   left: 50%;
   transform: translateX(-50%);
-  width: 0;
-  height: 0;
-  border-left: 14px solid transparent;
-  border-right: 14px solid transparent;
-  border-top: 26px solid var(--gold-bright);
+  width: 7.5%;
+  height: 12%;
   z-index: 4;
   filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.6));
 }
@@ -194,32 +187,114 @@ body.has-promo .fw-stage.game-stage {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.35rem;
   pointer-events: none;
   z-index: 3;
 }
-.fw-overlay__result {
+
+/* hub result — numbers, not prose: the multiplier big, the money small */
+.fw-hub-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+}
+.fw-hub-result__mult {
   font-family: var(--font-display);
-  font-size: clamp(1.7rem, 4.5vw, 2.6rem);
+  font-size: clamp(1.9rem, 5.5vw, 3.1rem);
   line-height: 1;
   letter-spacing: 0.02em;
   color: var(--gold-bright);
   text-shadow: 0 0 24px rgba(233, 185, 73, 0.35);
 }
-.fw-overlay__amt {
+.fw-hub-result__amt {
   font-family: var(--font-mono);
-  font-size: clamp(0.85rem, 1.6vw, 1.05rem);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   line-height: 1;
 }
-.fw-overlay__amt.is-win { color: var(--jade); }
-.fw-overlay__amt.is-loss { color: var(--ember); }
+.fw-hub-result__amt.is-win {
+  color: var(--jade);
+  font-size: clamp(0.9rem, 1.7vw, 1.1rem);
+}
+.fw-hub-result__amt.is-loss {
+  color: var(--ember);
+  font-size: clamp(0.72rem, 1.3vw, 0.85rem);
+}
 /* honest ember on a 0.00× — no gold glow for the house's round */
-.fw-overlay__result--loss {
+.fw-hub-result__mult--loss {
   color: var(--ember);
   text-shadow: 0 0 24px rgba(255, 68, 56, 0.3);
 }
+
+/* one subtle shake on a loss — the hub text flinches, nothing else */
+@keyframes fw-hub-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-5px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(2px); }
+}
+.fw-hub-result--shake {
+  animation: fw-hub-shake 0.45s ease-out 1;
+}
+
+/* brief gold ring pulse hugging the hub circle (hub = wheel/3 ≈ 33.3%) */
+@keyframes fw-hub-ring {
+  0% { transform: translate(-50%, -50%) scale(0.96); opacity: 0.9; }
+  100% { transform: translate(-50%, -50%) scale(1.28); opacity: 0; }
+}
+.fw-hub-pulse {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 34%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 2px solid var(--gold);
+  transform: translate(-50%, -50%);
+  opacity: 0;
+  animation: fw-hub-ring 0.9s ease-out 2;
+}
+
+/* "while you were away" — background-settled spin, dismissible, above the wheel */
+.fw-away {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-bottom: 0.9rem;
+  padding: 8px 10px 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: rgba(242, 236, 221, 0.04);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  z-index: 3;
+}
+.fw-away.is-win {
+  border-color: rgba(233, 185, 73, 0.35);
+  color: var(--gold-bright);
+}
+.fw-away.is-loss {
+  border-color: rgba(255, 68, 56, 0.3);
+  color: var(--ember);
+}
+.fw-away__dismiss {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 2px;
+  color: var(--bone-faint);
+  cursor: pointer;
+  transition: color 0.2s;
+}
+.fw-away__dismiss:hover { color: var(--bone); }
 
 /* segment win/loss feedback — winner flashes under the pointer */
 @keyframes fw-win-pulse {
@@ -240,7 +315,8 @@ body.has-promo .fw-stage.game-stage {
   flex-wrap: wrap;
   justify-content: center;
   gap: 0.5rem;
-  margin-bottom: 1.4rem;
+  /* roomy: the pin's mounting base rises ~8% of the wheel above the rim */
+  margin-bottom: clamp(2.2rem, 9%, 3.4rem);
 }
 .fw-multi {
   font-family: var(--font-mono);
@@ -311,7 +387,7 @@ body.has-promo .fw-stage.game-stage {
     /* cap by viewport height too so wheel + controls share the screen */
     width: min(72vw, 60vh, 400px);
   }
-  .fw-legend { margin-bottom: 1rem; }
+  .fw-legend { margin-bottom: 2.2rem; }
   /* comfortable single-column panel that doesn't stretch full width awkwardly */
   .fw-panel.game-panel {
     width: 100%;
@@ -328,7 +404,7 @@ body.has-promo .fw-stage.game-stage {
   }
   .fw-legend {
     gap: 0.4rem;
-    margin-bottom: 0.85rem;
+    margin-bottom: 2rem;
   }
   .fw-multi {
     font-size: 0.72rem;

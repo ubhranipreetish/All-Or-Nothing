@@ -53,18 +53,8 @@
   border-right: 2px solid var(--gold);
 }
 
-/* ---- header: molten gold display title, serif flavor copy ---- */
-.mines-page .game-title {
-  background: linear-gradient(110deg, var(--gold-bright), var(--gold) 45%, var(--gold-deep));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  -webkit-text-fill-color: transparent;
-}
-.mines-page .game-eyebrow {
-  font-size: 0.66rem;
-  letter-spacing: 0.28em;
-}
+/* header: the shared GameHeader (`.gh-` in Game.css) now owns all header
+   chrome — back link, eyebrow, molten gold title, tagline, how-to-play. */
 
 /* ---- fields: mono labels, dark squared inputs ---- */
 .mines-page .game-label {
@@ -90,6 +80,47 @@
   border-radius: 3px;
   text-transform: uppercase;
   letter-spacing: 0.1em;
+}
+
+/* ---- mine-count stepper: [−] [value] [+] ----
+   The bare number input read as a static readout; explicit gold-ghost
+   nudge buttons (same voice as the ½/2× bet adjusters) make it obviously
+   adjustable while the middle stays a directly typeable input. */
+.mines-stepper {
+  display: grid;
+  grid-template-columns: 40px 1fr 40px;
+  gap: 0.6rem;
+  align-items: stretch;
+}
+.mines-stepper__btn {
+  min-width: 40px;
+  min-height: 40px;
+  background: rgba(242, 236, 221, 0.04);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  color: var(--bone-dim);
+  font-family: var(--font-mono);
+  font-size: 1.1rem;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.mines-stepper__btn:hover:not(:disabled) {
+  border-color: var(--gold);
+  color: var(--gold-bright);
+}
+.mines-stepper__btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.mines-stepper__input {
+  text-align: center;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+/* the +/- buttons replace the (absent) native spinner — hide it everywhere */
+.mines-stepper__input::-webkit-outer-spin-button,
+.mines-stepper__input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 /* ---- buttons: gold primary/cash-out, ghost "new round" ---- */
@@ -436,14 +467,6 @@
     padding: 84px 14px 40px;
   }
 
-  .mines-page .game-head {
-    margin-bottom: 1rem;
-  }
-  .mines-page .game-title {
-    font-size: clamp(2rem, 11vw, 2.8rem);
-    margin-top: 0.35rem;
-  }
-
   .mines-grid { gap: 7px; max-width: min(100%, 70vh); }
 
   /* Compact the live result / stats so the cash-out button stays above the
@@ -460,6 +483,10 @@
     font-size: 16px;     /* prevents iOS zoom-on-focus */
   }
   .mines-page .game-adjust button { min-height: 44px; }
+  /* stepper buttons stretch to the 48px input height; keep the 44px floor
+     and a touch more width for thumbs */
+  .mines-stepper { grid-template-columns: 44px 1fr 44px; }
+  .mines-stepper__btn { min-height: 44px; }
   .mines-page .game-primary,
   .mines-page .game-cashout,
   .mines-page .game-clear { min-height: 50px; padding: 14px; }

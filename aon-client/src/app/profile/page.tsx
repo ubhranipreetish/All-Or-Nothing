@@ -125,7 +125,11 @@ export default function ProfilePage() {
     };
 
     const formatDate = (s: string) => new Date(s).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
-    const formatAmount = (amount: number) => `${amount >= 0 ? "+ " : "- "}₹${Math.abs(amount).toFixed(2)}`;
+    // Indian digit grouping everywhere money is shown. Two decimals for ledger
+    // precision, whole rupees for the board (matches the leaderboard page).
+    const inr = (n: number) => Math.abs(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const inrWhole = (n: number) => Math.round(Math.abs(n)).toLocaleString("en-IN");
+    const formatAmount = (amount: number) => `${amount >= 0 ? "+ " : "- "}₹${inr(amount)}`;
     const getTransactionNote = (tx: Transaction) => {
         if (tx.meta?.bonusType === "WELCOME_100") return "Welcome Bonus";
         if (tx.meta?.bonusType === "LOAN") return "Loan Taken";
@@ -145,6 +149,10 @@ export default function ProfilePage() {
 
     const medals = ["I", "II", "III"];
     const displayedTransactions = showAllTransactions ? transactions : transactions.slice(0, 5);
+    // Two accounts can share a display name — flag repeats among the rows we
+    // actually show so a masked id can tell them apart (the API has no email).
+    const tablePreview = leaderboard.slice(0, 5);
+    const previewDupNames = new Set(tablePreview.filter((e, _, arr) => arr.some((o) => o.userId !== e.userId && o.username === e.username)).map((e) => e.username));
     const owed = activeLoans.reduce((s, l) => s + (l.repaymentAmount ?? l.amount), 0);
     const netWorth = wallet - owed;
     const rank = getUserRank();
@@ -181,22 +189,22 @@ export default function ProfilePage() {
                     <section className="pfx-strip">
                         <div className="pfx-strip__cell">
                             <span className="pfx-strip__label">Balance</span>
-                            <span className="pfx-strip__num">₹{wallet.toFixed(2)}</span>
+                            <span className="pfx-strip__num">₹{inr(wallet)}</span>
                             <span className="pfx-strip__note">ready to stake</span>
                         </div>
                         <div className="pfx-strip__cell">
                             <span className="pfx-strip__label">Net worth</span>
-                            <span className={`pfx-strip__num ${netWorth < 0 ? "is-ember" : ""}`}>₹{netWorth.toFixed(2)}</span>
+                            <span className={`pfx-strip__num ${netWorth < 0 ? "is-ember" : ""}`}>{netWorth < 0 ? "−" : ""}₹{inr(netWorth)}</span>
                             <span className="pfx-strip__note">balance − debts</span>
                         </div>
                         <div className="pfx-strip__cell">
                             <span className="pfx-strip__label">Lifetime P&L</span>
-                            <span className={`pfx-strip__num ${totalEarnings < 0 ? "is-ember" : "is-gold"}`}>{totalEarnings >= 0 ? "+" : "−"}₹{Math.abs(totalEarnings).toFixed(2)}</span>
+                            <span className={`pfx-strip__num ${totalEarnings < 0 ? "is-ember" : "is-gold"}`}>{totalEarnings >= 0 ? "+" : "−"}₹{inr(totalEarnings)}</span>
                             <span className="pfx-strip__note">wins − stakes − interest</span>
                         </div>
                         <div className="pfx-strip__cell">
                             <span className="pfx-strip__label">Biggest win</span>
-                            <span className="pfx-strip__num is-gold">{profile?.biggestWin ? `₹${profile.biggestWin.amount.toFixed(2)}` : "—"}</span>
+                            <span className="pfx-strip__num is-gold">{profile?.biggestWin ? `₹${inr(profile.biggestWin.amount)}` : "—"}</span>
                             <span className="pfx-strip__note">{profile?.biggestWin ? `on ${formatGame(profile.biggestWin.gameType)}` : "still hunting"}</span>
                         </div>
                     </section>
@@ -234,7 +242,7 @@ export default function ProfilePage() {
                                                         <td>{getTransactionNote(tx) || formatGame(tx.gameType)}</td>
                                                         <td><span className={`pfx-stamp pfx-stamp--${tx.type.toLowerCase()}`}>{tx.type}</span></td>
                                                         <td className={tx.amount >= 0 ? "pfx-amt--in" : "pfx-amt--out"}>{formatAmount(tx.amount)}</td>
-                                                        <td>₹{tx.balanceAfter.toFixed(2)}</td>
+                                                        <td>₹{inr(tx.balanceAfter)}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -275,14 +283,14 @@ export default function ProfilePage() {
                                             return (
                                                 <div key={loan._id} className="pfx-loan">
                                                     <div className="pfx-loan__info">
-                                                        <span className="pfx-loan__main">₹{loan.amount.toFixed(2)} owed — settle for <b>₹{repayAmount.toFixed(2)}</b></span>
+                                                        <span className="pfx-loan__main">₹{inr(loan.amount)} owed — settle for <b>₹{inr(repayAmount)}</b></span>
                                                         <span className="pfx-loan__meta">
                                                             taken {new Date(loan.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}
-                                                            {interest > 0 && <> · +₹{interest.toFixed(2)} interest ({loan.interestDays ?? 1}d)</>}
+                                                            {interest > 0 && <> · +₹{inr(interest)} interest ({loan.interestDays ?? 1}d)</>}
                                                         </span>
                                                     </div>
-                                                    <button className="pfx-repay" onClick={() => openRepayModal(loan)} disabled={repayingLoanId === loan._id || wallet < repayAmount} title={wallet < repayAmount ? `Need ₹${repayAmount.toFixed(2)}` : "Repay this loan"}>
-                                                        {repayingLoanId === loan._id ? "…" : `Settle ₹${repayAmount.toFixed(0)}`}
+                                                    <button className="pfx-repay" onClick={() => openRepayModal(loan)} disabled={repayingLoanId === loan._id || wallet < repayAmount} title={wallet < repayAmount ? `Need ₹${inr(repayAmount)}` : "Repay this loan"}>
+                                                        {repayingLoanId === loan._id ? "…" : `Settle ₹${inrWhole(repayAmount)}`}
                                                     </button>
                                                 </div>
                                             );
@@ -301,12 +309,16 @@ export default function ProfilePage() {
                                     <Link className="pfx-panel__aside" href="/leaderboard">full standings →</Link>
                                 </header>
                                 <div className="leaderboard-list">
-                                    {leaderboard.slice(0, 5).map((entry) => (
-                                        <div key={entry.userId} className={`leaderboard-item ${entry.userId === user.id ? "is-you" : ""} ${entry.rank <= 3 ? `is-top is-top-${entry.rank}` : ""}`}>
-                                            <span className={`rank rank-${entry.rank}`}>{entry.rank <= 3 ? medals[entry.rank - 1] : entry.rank}</span>
+                                    {tablePreview.map((entry) => (
+                                        <div key={entry.userId} className={`leaderboard-item ${entry.userId === user.id ? "is-you" : ""} ${entry.rank <= 3 ? `is-top is-top-${entry.rank}` : ""}`} title={`Rank #${entry.rank} — ${entry.username}`}>
+                                            <span className={`rank rank-${entry.rank}`}>{entry.rank <= 3 ? medals[entry.rank - 1] : String(entry.rank).padStart(2, "0")}</span>
                                             <img src={entry.avatar} alt={entry.username} className="lb-avatar" />
-                                            <span className="lb-name">{entry.username}{entry.userId === user.id && <span className="you-badge">You</span>}</span>
-                                            <span className={`lb-earnings ${entry.netWorth < 0 ? "negative" : ""}`}>{entry.netWorth >= 0 ? "+" : ""}₹{entry.netWorth.toFixed(0)}</span>
+                                            <span className="lb-name">
+                                                {entry.username}
+                                                {entry.userId === user.id && <span className="you-badge">You</span>}
+                                                {previewDupNames.has(entry.username) && entry.userId !== user.id && <span className="lb-disc">#{String(entry.userId).slice(-4)}</span>}
+                                            </span>
+                                            <span className={`lb-earnings ${entry.netWorth < 0 ? "negative" : ""}`}>{entry.netWorth >= 0 ? "+" : "−"}₹{Math.round(Math.abs(entry.netWorth)).toLocaleString("en-IN")}</span>
                                         </div>
                                     ))}
                                 </div>
@@ -325,9 +337,9 @@ export default function ProfilePage() {
                                 <h3>Repay loan</h3>
                                 <p className="loan-subtitle">Confirm your loan repayment.</p>
                                 <div className="repay-info">
-                                    <div className="repay-principal"><span>Principal</span><span>₹{selectedLoan.amount.toFixed(2)}</span></div>
-                                    <div className="repay-interest"><span>Interest ({selectedLoan.interestDays ?? 1} day{(selectedLoan.interestDays ?? 1) > 1 ? "s" : ""})</span><span>₹{((selectedLoan.repaymentAmount ?? selectedLoan.amount) - selectedLoan.amount).toFixed(2)}</span></div>
-                                    <div className="repay-total"><span>Total repay</span><span>₹{(selectedLoan.repaymentAmount ?? selectedLoan.amount).toFixed(2)}</span></div>
+                                    <div className="repay-principal"><span>Principal</span><span>₹{inr(selectedLoan.amount)}</span></div>
+                                    <div className="repay-interest"><span>Interest ({selectedLoan.interestDays ?? 1} day{(selectedLoan.interestDays ?? 1) > 1 ? "s" : ""})</span><span>₹{inr((selectedLoan.repaymentAmount ?? selectedLoan.amount) - selectedLoan.amount)}</span></div>
+                                    <div className="repay-total"><span>Total repay</span><span>₹{inr(selectedLoan.repaymentAmount ?? selectedLoan.amount)}</span></div>
                                 </div>
                                 <div className="modal-buttons">
                                     <button className="modal-cancel" onClick={closeRepayModal}>Cancel</button>
@@ -336,10 +348,10 @@ export default function ProfilePage() {
                             </>
                         )}
                         {repayState === "processing" && (
-                            <div className="loan-processing"><div className="processing-spinner" /><h3>Processing…</h3><p>Repaying ₹{(selectedLoan.repaymentAmount ?? selectedLoan.amount).toFixed(2)}</p></div>
+                            <div className="loan-processing"><div className="processing-spinner" /><h3>Processing…</h3><p>Repaying ₹{inr(selectedLoan.repaymentAmount ?? selectedLoan.amount)}</p></div>
                         )}
                         {repayState === "success" && (
-                            <div className="loan-success"><div className="success-icon">✅</div><h3>Loan repaid</h3><p className="success-amount">₹{(selectedLoan.repaymentAmount ?? selectedLoan.amount).toFixed(2)} deducted</p><p className="success-hint">Debt cleared — only the interest is the house&apos;s.</p></div>
+                            <div className="loan-success"><div className="success-icon">✅</div><h3>Loan repaid</h3><p className="success-amount">₹{inr(selectedLoan.repaymentAmount ?? selectedLoan.amount)} deducted</p><p className="success-hint">Debt cleared — only the interest is the house&apos;s.</p></div>
                         )}
                     </div>
                 </div>

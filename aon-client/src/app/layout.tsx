@@ -6,6 +6,7 @@ import { AuthProvider } from "../contexts/AuthContext";
 import { WalletProvider } from "../contexts/WalletContext";
 import ScrollToTop from "../components/ScrollToTop";
 import ServerWakeup from "../components/ServerWakeup";
+import { LeaveGuardProvider } from "../components/game/LeaveGuard";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -65,9 +66,11 @@ export default function RootLayout({
         <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!}>
           <AuthProvider>
             <WalletProvider>
-              <ScrollToTop />
-              {children}
-              <ServerWakeup />
+              <LeaveGuardProvider>
+                <ScrollToTop />
+                {children}
+                <ServerWakeup />
+              </LeaveGuardProvider>
             </WalletProvider>
           </AuthProvider>
         </GoogleOAuthProvider>
