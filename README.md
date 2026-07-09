@@ -6,7 +6,7 @@
 
 A full-stack, play-money casino with real-time multiplayer poker, a rupee-accurate ledger, and a noir-luxe design system — built as a systems-design showcase.
 
-[**▶ Play it live**](https://all-or-nothing-plum.vercel.app) · [Architecture deep-dive](context.md)
+[**▶ Play it live**](https://all-or-nothing-plum.vercel.app)
 
 ![Next.js](https://img.shields.io/badge/Next.js%2016-000000?logo=nextdotjs&logoColor=white)
 ![React](https://img.shields.io/badge/React%2019-087ea4?logo=react&logoColor=white)
