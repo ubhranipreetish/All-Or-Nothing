@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
-import { useWallet } from "../contexts/WalletContext";
+import { useWallet, type SpinResult } from "../contexts/WalletContext";
 import { useAuth } from "../contexts/AuthContext";
 import "../styles/FortuneWheel.css";
 import Navbar from "./Navbar";
@@ -39,7 +39,7 @@ const WHEEL_RULES = [
 ];
 
 const FortuneWheel = () => {
-    const { wallet, recordBet, recordWin } = useWallet();
+    const { wallet, startGameSession, wheelSpin } = useWallet();
     const { user } = useAuth();
     const [showSignInDialog, setShowSignInDialog] = useState(false);
     const [showRules, setShowRules] = useState(false);
@@ -64,10 +64,11 @@ const FortuneWheel = () => {
     const spinSound = useRef<HTMLAudioElement | null>(null);
     const wheelRef = useRef<SVGSVGElement | null>(null);
     const wrapRef = useRef<HTMLDivElement | null>(null);
-    const hasAddedWinnings = useRef<boolean>(false);
-    // The spin outcome is decided client-side at spin start — held here so the
-    // leave guard can settle it immediately if the player walks away mid-spin.
-    const pendingSpinRef = useRef<{ mult: number; betAmount: number; totalReturn: number } | null>(null);
+    // The server owns the outcome. We hold the live session id and the in-flight
+    // spin promise so the leave guard can settle the SAME server call if the
+    // player walks away between placing the wager and the spin resolving.
+    const sessionIdRef = useRef<string | null>(null);
+    const spinPromiseRef = useRef<Promise<SpinResult | null> | null>(null);
 
     const showNotification = (message: string) => {
         setNotification(message);
@@ -128,9 +129,9 @@ const FortuneWheel = () => {
         }
     }, []);
 
-    // Leave guard — armed only while a confirmed bet is riding on an
-    // unresolved spin. The outcome is already known client-side, so leaving
-    // settles it immediately and parks the result for the next visit.
+    // Leave guard — armed only between a confirmed wager (startGameSession) and
+    // the spin resolving. A spin is a single atomic server call, so leaving just
+    // awaits that same call server-side, parks the result, and walks away.
     useLeaveGuard({
         when: unsettled,
         title: "Spin in flight",
@@ -142,23 +143,23 @@ const FortuneWheel = () => {
                 tone: "gold",
                 leave: true,
                 run: async () => {
-                    const spin = pendingSpinRef.current;
-                    if (!spin) return;
-                    if (!hasAddedWinnings.current) {
-                        hasAddedWinnings.current = true;
-                        if (spin.totalReturn > 0) {
-                            await recordWin(spin.totalReturn, spin.betAmount, "WHEEL", spin.mult);
-                        }
+                    const sid = sessionIdRef.current;
+                    if (!sid) return;
+                    // Reuse the in-flight spin if there is one; otherwise settle the
+                    // session now. Either way the server credits exactly once.
+                    const res = await (spinPromiseRef.current ?? wheelSpin(sid)).catch(() => null);
+                    if (res) {
+                        sessionStorage.setItem(
+                            AWAY_RESULT_KEY,
+                            JSON.stringify({
+                                mult: res.multiplier,
+                                amount: res.payout > 0 ? res.payout : staked,
+                                win: res.payout > 0,
+                            } satisfies AwayResult)
+                        );
                     }
-                    sessionStorage.setItem(
-                        AWAY_RESULT_KEY,
-                        JSON.stringify({
-                            mult: spin.mult,
-                            amount: spin.totalReturn > 0 ? spin.totalReturn : spin.betAmount,
-                            win: spin.totalReturn > 0,
-                        } satisfies AwayResult)
-                    );
-                    pendingSpinRef.current = null;
+                    sessionIdRef.current = null;
+                    spinPromiseRef.current = null;
                     setUnsettled(false);
                 },
             },
@@ -225,16 +226,13 @@ const FortuneWheel = () => {
         await new Promise((resolve) => setTimeout(resolve, 450));
     };
 
-    const spinWheel = () => {
+    // Drive the wheel to the SERVER-chosen segment. The money (payout/newBalance)
+    // is already settled by wheelSpin — this only animates and presents.
+    const animateToWinner = (index: number, multiplier: number, payout: number) => {
         const n = segments.length;
         if (!n) return;
         const anglePerSegment = 360 / n;
         const spins = Math.floor(Math.random() * 5) + 5;
-        const picked = Math.floor(Math.random() * n);
-
-        const label = segments[picked]?.label || "0.00x";
-        const mult = parseFloat(label) || 0;
-        pendingSpinRef.current = { mult, betAmount: amount, totalReturn: amount * mult };
 
         if (spinSound.current) {
             spinSound.current.currentTime = 0;
@@ -242,29 +240,22 @@ const FortuneWheel = () => {
         }
 
         setRotation((prevRotation) => {
-            // Land the CENTER of `picked` exactly under the top pointer, several full
-            // spins beyond the current angle. The result is then read from the SAME
-            // segment the pointer points at — no more pointer/result mismatch.
+            // Land the CENTER of `index` exactly under the top pointer, several full
+            // spins beyond the current angle.
             const base = Math.ceil(prevRotation / 360) * 360;
-            const newRotation = base + spins * 360 + (n - picked) * anglePerSegment;
+            const newRotation = base + spins * 360 + (n - index) * anglePerSegment;
             if (wheelRef.current) wheelRef.current.style.transform = `rotate(${newRotation}deg)`;
 
             setTimeout(() => {
-                const resultText = segments[picked]?.label || "Unknown";
-                setResult(resultText);
-                const multiplierVal = parseFloat(segments[picked]?.label || "0x");
-                const totalReturn = amount * (isNaN(multiplierVal) ? 0 : multiplierVal);
-
-                if (!hasAddedWinnings.current) {
-                    hasAddedWinnings.current = true;
-                    if (totalReturn > 0) recordWin(totalReturn, amount, "WHEEL", multiplierVal);
-                }
+                // Trust the server multiplier/payout for the presentation.
+                setResult(`${multiplier.toFixed(2)}x`);
                 setStarted(false);
                 setUnsettled(false);
-                pendingSpinRef.current = null;
-                setEarnings(totalReturn);
-                setWinningIndex(picked);
-                if (multiplierVal !== 0 && winSound.current) {
+                sessionIdRef.current = null;
+                spinPromiseRef.current = null;
+                setEarnings(payout);
+                setWinningIndex(index);
+                if (payout > 0 && winSound.current) {
                     winSound.current.currentTime = 0;
                     winSound.current.play().catch(() => {});
                 }
@@ -316,17 +307,48 @@ const FortuneWheel = () => {
         setAnticipating(true);
         // Mobile: the wheel must be watchable before anything spins.
         await ensureWheelVisible();
-        const success = await recordBet(amount, "WHEEL");
+        // Place the wager server-side. The server owns the segment ring and the
+        // outcome — the client never decides the win.
+        const session = await startGameSession(amount, "WHEEL", { risk: difficulty, segments: segmentCount });
         setAnticipating(false);
-        if (!success) {
+        if (!session.success || !session.sessionId) {
             setStarted(false);
             showNotification("Failed to place bet");
             return;
         }
-        hasAddedWinnings.current = false;
+
+        const sid = session.sessionId;
+        sessionIdRef.current = sid;
         setStaked(amount);
-        setUnsettled(true); // bet confirmed — money is riding until the spin settles
-        spinWheel();
+        setUnsettled(true); // wager confirmed — money is riding until the spin settles
+
+        // Ask the server for the outcome. Keep the promise so the leave guard can
+        // settle the SAME call if the player walks away mid-spin.
+        const spin = wheelSpin(sid);
+        spinPromiseRef.current = spin;
+        const res = await spin;
+
+        // The player left mid-spin — the leave guard already settled this session.
+        if (sessionIdRef.current !== sid) return;
+
+        if (!res) {
+            setStarted(false);
+            setUnsettled(false);
+            sessionIdRef.current = null;
+            spinPromiseRef.current = null;
+            showNotification("Spin failed — please try again");
+            return;
+        }
+
+        // `index` maps directly into the segment ring the client drew. Sanity-check
+        // against the drawn label, but always trust the server for the money.
+        const drawn = parseFloat(segments[res.index]?.label ?? "");
+        if (Number.isNaN(drawn) || drawn !== res.multiplier) {
+            console.warn(
+                `[FortuneWheel] segment/server mismatch at index ${res.index}: drawn ${drawn} vs server ${res.multiplier} — trusting server.`
+            );
+        }
+        animateToWinner(res.index, res.multiplier, res.payout);
     };
 
     const handleHalf = (e: React.MouseEvent) => {

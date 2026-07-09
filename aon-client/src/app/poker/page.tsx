@@ -15,6 +15,51 @@ import "../../styles/Poker.css";
 
 type SessionStart = { mode: "create"; buyIn: number } | { mode: "join"; code: string };
 
+/* --------------------------------------------------------- money plumbing */
+/* Poker money moves ONLY over these two authenticated HTTP endpoints — never
+   over the socket. buyin debits the user's OWN balance and returns a secret
+   seatToken; settle credits the SERVER's authoritative final stack (recorded by
+   the socket layer when the seat was vacated), never a client-named amount.
+   WalletContext can't be edited, so these live here as direct fetches. */
+const POKER_API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api";
+const authToken = () => (typeof window !== "undefined" ? localStorage.getItem("token") : null);
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+type BuyInResult = { sessionId: string; seatToken: string; newBalance: number };
+type SettleResult = { ready: boolean; credited: number; newBalance: number };
+
+/** Debit the buy-in and open a POKER session. Returns null on any failure (nothing charged). */
+async function pokerBuyIn(amount: number): Promise<BuyInResult | null> {
+    const token = authToken();
+    if (!token) return null;
+    try {
+        const res = await fetch(`${POKER_API}/game/poker/buyin`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ amount }),
+        });
+        const data = await res.json();
+        if (!res.ok) { console.error("poker buyin error:", data?.message); return null; }
+        return data as BuyInResult;
+    } catch (e) { console.error("poker buyin failed:", e); return null; }
+}
+
+/** Credit the SERVER's authoritative final stack. ready:false → not finalized yet, retry. */
+async function pokerSettle(sessionId: string): Promise<SettleResult | null> {
+    const token = authToken();
+    if (!token) return null;
+    try {
+        const res = await fetch(`${POKER_API}/game/poker/settle`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ sessionId }),
+        });
+        const data = await res.json();
+        if (!res.ok) { console.error("poker settle error:", data?.message); return null; }
+        return data as SettleResult;
+    } catch (e) { console.error("poker settle failed:", e); return null; }
+}
+
 /* ---------------------------------------------------------------- rules */
 /* Poker's how-to content, shown from GameHeader's "? How to play" button.
    Reuses the shared howto- modal chrome (globals.css). */
@@ -94,20 +139,27 @@ function PokerSession({
     token: string;
     onExit: () => void;
 }) {
-    const { wallet, recordBet, recordWin, refundBet, refreshWallet } = useWallet();
+    const { wallet, refundBet, refreshWallet } = useWallet();
     const poker = usePoker(name, { playerId, token });
-    const { state, connected, error, joinStatus, admittedBuyIn } = poker;
+    const { state, connected, error, joinStatus } = poker;
 
     type Phase = "connecting" | "notfound" | "entering" | "waiting" | "denied" | "room";
     const [phase, setPhase] = useState<Phase>("connecting");
     const [hostName, setHostName] = useState("the host");
     const [buyIn, setBuyIn] = useState(start.mode === "create" ? start.buyIn : Math.min(1000, Math.floor(wallet) || 1000));
     const [err, setErr] = useState("");
+    // Set once the real cash-out completes, so we can show the settled amount
+    // before the player returns to the lobby.
+    const [cashedOut, setCashedOut] = useState<number | null>(null);
     const code = start.mode === "join" ? start.code : "";
 
     const initedRef = useRef(false);
     const chargedRef = useRef(false);
     const stakeRef = useRef(start.mode === "create" ? start.buyIn : 0);
+    // The server-issued session id + secret seatToken for THIS buy-in — needed to
+    // settle (cash-out) or refund exactly this session's money.
+    const sessionIdRef = useRef<string | null>(null);
+    const seatTokenRef = useRef<string | null>(null);
     // Render-safe mirror of chargedRef/stakeRef for the leave-guard copy:
     // the ₹ currently held by the house, or null while nothing is charged.
     const [heldStake, setHeldStake] = useState<number | null>(null);
@@ -115,27 +167,61 @@ function PokerSession({
     const started = state?.started ?? false;
     const myStack = state?.seats.find((s) => s?.isYou)?.stack ?? 0;
 
-    /* Tells the table we're gone, then settles the money. Shared by the
-       in-UI LEAVE button and the leave-guard dialog — one routine, one truth. */
-    const settleRoom = useCallback(async () => {
-        // Emit the leave to the socket FIRST — if the component unmounts while
-        // the wallet call is in flight, the table must already know we're gone.
+    /* Tells the table we're gone, then settles the money. Shared by the in-UI
+       LEAVE button and the leave-guard dialog — one routine, one truth. Returns
+       whether this was a real cash-out (post-start) and the amount involved.
+
+       CRITICAL: the socket NEVER moves money. We emit table:leave so the SERVER
+       finalizes our authoritative stack, then read that stack back over the
+       authenticated settle endpoint. The credited amount is the server's value —
+       we never send a number. If the game never started, the buy-in is refunded
+       (its own betAmount, server-authoritative) instead. */
+    const settleRoom = useCallback(async (): Promise<{ settled: boolean; amount: number }> => {
+        // Emit the leave FIRST so the table finalizes our seat's stack before we
+        // ask the server to credit it.
         if (joinStatus === "pending") poker.cancelWait();
         poker.leave();
-        if (started) {
-            // Real game-end settlement: cash the remaining stack out as a win.
-            if (myStack > 0) await recordWin(myStack, stakeRef.current || myStack, "POKER");
-        } else if (chargedRef.current) {
-            // Waiting room — the buy-in never hit the felt, so hand it straight
-            // back and stamp the ledger REFUND instead of WIN.
-            await refundBet("POKER");
-        }
-        await refreshWallet();
-    }, [started, myStack, joinStatus, poker, recordWin, refundBet, refreshWallet]);
 
-    const exitRoom = useCallback(() => {
-        void settleRoom();
-        onExit();
+        if (started && chargedRef.current) {
+            // Real cash-out. Settle against the SERVER-recorded final stack, with a
+            // short retry: the settle HTTP call can race the leave over the socket,
+            // and the server replies ready:false until the stack is recorded.
+            const sid = sessionIdRef.current;
+            let credited = 0;
+            if (sid) {
+                let r = await pokerSettle(sid);
+                for (let i = 0; i < 5 && r && r.ready === false; i++) {
+                    await sleep(400);
+                    r = await pokerSettle(sid);
+                }
+                if (r && r.ready) credited = r.credited;
+            }
+            chargedRef.current = false;
+            setHeldStake(null);
+            await refreshWallet();
+            return { settled: true, amount: credited };
+        }
+
+        if (chargedRef.current) {
+            // Pre-game leave — the buy-in never hit the felt, so hand it straight
+            // back (ledger stamps REFUND) using this session's own betAmount.
+            await refundBet("POKER", sessionIdRef.current || undefined);
+            chargedRef.current = false;
+            setHeldStake(null);
+            await refreshWallet();
+            return { settled: false, amount: stakeRef.current };
+        }
+
+        await refreshWallet();
+        return { settled: false, amount: 0 };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [started, joinStatus, poker, refundBet, refreshWallet]);
+
+    const exitRoom = useCallback(async () => {
+        const res = await settleRoom();
+        // After a real cash-out, show the settled amount; otherwise go straight back.
+        if (res.settled) setCashedOut(res.amount);
+        else onExit();
     }, [settleRoom, onExit]);
 
     /* Leave guard — armed for the whole room session (entering / waiting /
@@ -152,7 +238,9 @@ function PokerSession({
         message: guardMessage,
         actions: [
             { label: "Stay", tone: "ghost", leave: false },
-            { label: "Leave & settle", tone: "ember", leave: true, run: settleRoom },
+            // The guard navigates away entirely after run(), so we don't show the
+            // cash-out card here — settleRoom still settles/refunds the money.
+            { label: "Leave & settle", tone: "ember", leave: true, run: async () => { await settleRoom(); } },
         ],
     });
 
@@ -163,25 +251,29 @@ function PokerSession({
         if (start.mode === "create") {
             const amt = start.buyIn;
             (async () => {
-                // Hold the buy-in first — the "₹X held by the house" copy below
-                // is only honest if the house is actually holding it.
-                const ok = await recordBet(amt, "POKER");
-                if (!ok) { setErr("Couldn't hold your buy-in — nothing was charged. Try again."); return; }
+                // Hold the buy-in over authenticated HTTP FIRST — this debits the
+                // wallet and issues the secret seatToken. The "₹X held by the
+                // house" copy is only honest once the server confirms the debit.
+                const res = await pokerBuyIn(amt);
+                if (!res) { setErr("Couldn't hold your buy-in — nothing was charged. Try again."); return; }
+                sessionIdRef.current = res.sessionId;
+                seatTokenRef.current = res.seatToken;
                 chargedRef.current = true;
                 stakeRef.current = amt;
                 setHeldStake(amt);
-                poker.createRoom(amt, async (c) => {
+                await refreshWallet();
+                // THEN create the room over the socket, carrying the seatToken.
+                poker.createRoom(amt, res.seatToken, async (c) => {
                     if (!c) {
-                        // Room creation failed after the stake was taken — hand it
-                        // back (ledger stamps REFUND) and say so.
-                        await refundBet("POKER");
+                        // Room creation failed after the buy-in — hand it back
+                        // (ledger stamps REFUND) and say so.
+                        await refundBet("POKER", sessionIdRef.current || undefined);
                         chargedRef.current = false;
                         setHeldStake(null);
                         await refreshWallet();
                         setErr(`Couldn't create the room — your ₹${amt} buy-in has been returned.`);
                         return;
                     }
-                    await refreshWallet();
                     setPhase("room");
                 });
             })();
@@ -195,43 +287,87 @@ function PokerSession({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [connected]);
 
-    // React to the host's decision once we're waiting.
+    // React to the host's decision once we're waiting. The buy-in was already
+    // taken up front (on Enter), so admit simply seats us; a decline hands the
+    // held buy-in straight back.
     useEffect(() => {
-        if (joinStatus === "admitted" && !chargedRef.current) {
-            chargedRef.current = true;
-            const amt = admittedBuyIn ?? buyIn;
+        if (joinStatus === "admitted") {
+            setPhase("room");
+        }
+        if (joinStatus === "denied") {
             (async () => {
-                const ok = await recordBet(amt, "POKER");
-                if (!ok) {
-                    // Nothing was charged — step back out and let them retry.
-                    poker.leave();
-                    poker.resetJoin();
+                if (chargedRef.current) {
+                    await refundBet("POKER", sessionIdRef.current || undefined);
                     chargedRef.current = false;
                     setHeldStake(null);
-                    setErr("Couldn't hold your buy-in — nothing was charged. Try again.");
-                    setPhase("entering");
-                    return;
+                    await refreshWallet();
                 }
-                stakeRef.current = amt;
-                setHeldStake(amt);
-                await refreshWallet();
-                setPhase("room");
+                setPhase("denied");
             })();
         }
-        if (joinStatus === "denied") setPhase("denied");
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [joinStatus, admittedBuyIn]);
+    }, [joinStatus]);
 
-    const submitJoin = () => {
+    const submitJoin = async () => {
         setErr("");
         if (buyIn < 100) return setErr("Minimum buy-in is ₹100");
         if (buyIn > wallet) return setErr("Buy-in exceeds your balance");
-        poker.requestJoin(code, buyIn, (r) => {
-            if (!r.ok) { setErr("Couldn't reach the host — try again"); return; }
+        // Hold the buy-in over authenticated HTTP FIRST (debit + seatToken), THEN
+        // ask the host for a seat. If declined/cancelled later, it's refunded.
+        const res = await pokerBuyIn(buyIn);
+        if (!res) { setErr("Couldn't hold your buy-in — nothing was charged. Try again."); return; }
+        sessionIdRef.current = res.sessionId;
+        seatTokenRef.current = res.seatToken;
+        chargedRef.current = true;
+        stakeRef.current = buyIn;
+        setHeldStake(buyIn);
+        await refreshWallet();
+        poker.requestJoin(code, buyIn, res.seatToken, async (r) => {
+            if (!r.ok) {
+                // Couldn't reach the host after charging — hand the buy-in back.
+                await refundBet("POKER", sessionIdRef.current || undefined);
+                chargedRef.current = false;
+                setHeldStake(null);
+                await refreshWallet();
+                setErr("Couldn't reach the host — your buy-in was returned. Try again.");
+                return;
+            }
             setHostName(r.hostName || hostName);
             setPhase("waiting");
         });
     };
+
+    /* Give up waiting for the host — cancel the seat request and, since the
+       buy-in is already held, refund it before returning to the lobby. */
+    const cancelWaiting = async () => {
+        poker.cancelWait();
+        if (chargedRef.current) {
+            await refundBet("POKER", sessionIdRef.current || undefined);
+            chargedRef.current = false;
+            setHeldStake(null);
+        }
+        await refreshWallet();
+        onExit();
+    };
+
+    /* ----- cashed-out confirmation (after a real cash-out) ----- */
+    if (cashedOut !== null) {
+        return (
+            <>
+                <Navbar />
+                <LobbyShell>
+                    <div className="pk-panel-card">
+                        <h2 className="pk-panel-card__h">Cashed out</h2>
+                        <p className="pk-panel-card__p">
+                            Your remaining stack of <strong>₹{cashedOut}</strong> has been settled to your wallet.
+                        </p>
+                        <button className="pk-cta" onClick={onExit}>Back to lobby</button>
+                    </div>
+                </LobbyShell>
+                <Footer />
+            </>
+        );
+    }
 
     /* ----- pre-admit screens (inside the lobby shell) ----- */
     if (phase === "connecting" || phase === "notfound" || phase === "entering" || phase === "waiting" || phase === "denied") {
@@ -291,7 +427,7 @@ function PokerSession({
                             {err && <div className="pk-lobby__err">{err}</div>}
                             <button className="pk-cta" onClick={submitJoin}>Enter</button>
                             <button className="pk-mini pk-mini--wide" onClick={onExit}>Back</button>
-                            <p className="pk-lobby__hint">Your buy-in is taken only once {hostName} lets you in.</p>
+                            <p className="pk-lobby__hint">Your buy-in is held when you enter, and returned in full if {hostName} declines.</p>
                         </div>
                     )}
 
@@ -299,8 +435,8 @@ function PokerSession({
                         <div className="pk-panel-card pk-wait">
                             <div className="pk-spinner" />
                             <h2 className="pk-panel-card__h">Waiting for {hostName} to allow you<span className="pk-dots"><i>.</i><i>.</i><i>.</i></span></h2>
-                            <p className="pk-panel-card__p">You&apos;ll join the table as soon as the host admits you. Nothing has been deducted yet.</p>
-                            <button className="pk-mini pk-mini--wide" onClick={() => { poker.cancelWait(); onExit(); }}>Cancel</button>
+                            <p className="pk-panel-card__p">You&apos;ll join the table as soon as the host admits you. Your buy-in is held and returned in full if you cancel or the host declines.</p>
+                            <button className="pk-mini pk-mini--wide" onClick={cancelWaiting}>Cancel</button>
                         </div>
                     )}
 

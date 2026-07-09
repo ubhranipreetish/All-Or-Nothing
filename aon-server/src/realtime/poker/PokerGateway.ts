@@ -22,6 +22,13 @@ export class PokerGateway {
     private turnTimers = new Map<string, NodeJS.Timeout>();
     private handTimers = new Map<string, NodeJS.Timeout>();
     private removeTimers = new Map<string, NodeJS.Timeout>();
+    /**
+     * playerId → seatToken, learned from the client's table:create / table:join
+     * payload. The token is minted by the authenticated HTTP buy-in; the socket
+     * only carries it so we can tie this seat to its GameSession when finalizing
+     * the stack. It is never used to move money here.
+     */
+    private seatTokens = new Map<string, string>();
 
     constructor(private readonly poker: PokerService) {}
 
@@ -61,19 +68,25 @@ export class PokerGateway {
             cb?.(this.poker.peek(data?.tableId || ""));
         });
 
-        // Host creates a private room and is seated immediately.
-        socket.on("table:create", (data: { buyIn?: number }, cb?: (r: unknown) => void) => {
+        // Host creates a private room and is seated immediately. The buy-in was
+        // already debited by the authenticated HTTP endpoint; the seatToken it
+        // issued rides along so we can finalize this seat's stack later.
+        socket.on("table:create", (data: { buyIn?: number; seatToken?: string }, cb?: (r: unknown) => void) => {
             const res = this.poker.createRoom(socket.data.playerId, socket.data.name, data?.buyIn);
+            if (data?.seatToken) this.seatTokens.set(socket.data.playerId, data.seatToken);
             socket.data.tableId = res.table!.id;
             socket.join(this.room(res.table!.id));
             cb?.({ tableId: res.table!.id, seat: res.seat });
             this.afterChange(res.table!);
         });
 
-        // Player requests a seat → parked in the host's approval queue.
-        socket.on("table:join", (data: { tableId?: string; buyIn?: number }, cb?: (r: unknown) => void) => {
+        // Player requests a seat → parked in the host's approval queue. Their
+        // buy-in was already debited over HTTP; carry the seatToken so cash-out
+        // (or a decline → HTTP refund) can be reconciled to this session.
+        socket.on("table:join", (data: { tableId?: string; buyIn?: number; seatToken?: string }, cb?: (r: unknown) => void) => {
             const res = this.poker.requestJoin(socket.data.playerId, socket.data.name, data?.tableId || "", data?.buyIn);
             if (!res.ok) return void cb?.({ error: res.error });
+            if (data?.seatToken) this.seatTokens.set(socket.data.playerId, data.seatToken);
             socket.data.tableId = res.table!.id;
             socket.join(this.room(res.table!.id));
             cb?.({ tableId: res.table!.id, hostName: res.hostName });
@@ -131,7 +144,25 @@ export class PokerGateway {
         if (table) this.afterChange(table);
     }
 
+    /**
+     * MONEY TOUCHPOINT (socket side, read-only w.r.t. wallets). The realtime
+     * layer's ONLY money-adjacent job: snapshot the seat's authoritative final
+     * stack under its seatToken so the authenticated HTTP cash-out can credit
+     * exactly that amount. No wallet is mutated here. Must run BEFORE the seat is
+     * cleared (removePlayer nulls the stack), and ONLY on a FINAL exit (real
+     * leave / grace-period expiry) — never a transient reconnect. One-shot: the
+     * seatToken is dropped after recording so a stack can't be finalized twice.
+     */
+    private finalizeStack(playerId: string): void {
+        const seatToken = this.seatTokens.get(playerId);
+        if (!seatToken) return;
+        const stack = this.poker.stackForPlayer(playerId);
+        this.poker.recordFinalStack(seatToken, stack);
+        this.seatTokens.delete(playerId);
+    }
+
     private leave(socket: Socket): void {
+        this.finalizeStack(socket.data.playerId); // record BEFORE the seat is cleared
         const { table } = this.poker.removePlayer(socket.data.playerId);
         const prev = socket.data.tableId as string | undefined;
         if (prev) socket.leave(this.room(prev));
@@ -147,6 +178,7 @@ export class PokerGateway {
         // Hold the seat for a grace period; the turn clock still auto-folds them.
         const timer = setTimeout(() => {
             this.removeTimers.delete(pid);
+            this.finalizeStack(pid); // grace expired → FINAL exit; record the stack
             const { table: t, deletedTableId } = this.poker.removePlayer(pid);
             if (deletedTableId) { this.clearTimers(deletedTableId); return; }
             if (t) this.afterChange(t);

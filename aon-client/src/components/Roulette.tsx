@@ -81,8 +81,29 @@ export default function Roulette({ testMode = false }: { testMode?: boolean }) {
     const w = useWallet();
     const [testBal, setTestBal] = useState(5000);
     const wallet = testMode ? testBal : w.wallet;
-    const recordBet = testMode ? async (a: number) => { setTestBal((b) => b - a); return true; } : w.recordBet;
-    const recordWin = testMode ? async (win: number) => { setTestBal((b) => b + win); return true; } : w.recordWin;
+
+    /* ---------- server-authoritative wallet bridge ----------
+       The real, signed-in path is fully server-driven: startGameSession stakes
+       the total, rouletteSpin picks the winning number + prices the bets from
+       their KEYS (never client numbers/multipliers) and credits the return.
+       testMode keeps a local shim so the practice table still works offline. */
+    const beginSession = async (amount: number): Promise<{ success: boolean; sessionId?: string }> => {
+        if (testMode) { setTestBal((b) => b - amount); return { success: true, sessionId: "test" }; }
+        const r = await w.startGameSession(amount, "ROULETTE", {});
+        return { success: r.success, sessionId: r.sessionId };
+    };
+    /* Settle a round server-side. Returns the winning pocket + the total return
+       (already credited to the balance) — or null if the spin was rejected. */
+    const settleSpin = async (sessionId: string, activeBets: Bet[]): Promise<{ number: number; won: number } | null> => {
+        if (testMode) {
+            const num = WHEEL[Math.floor(Math.random() * WHEEL.length)];
+            let won = 0;
+            for (const b of activeBets) if (b.numbers.includes(num)) won += b.amount * b.mult;
+            setTestBal((b) => b + won);
+            return { number: num, won };
+        }
+        return w.rouletteSpin(sessionId, activeBets.map((b) => ({ key: b.key, amount: b.amount })));
+    };
 
     const [bets, setBets] = useState<Bet[]>([]);
     const [history, setHistory] = useState<Bet[][]>([]);
@@ -109,6 +130,8 @@ export default function Roulette({ testMode = false }: { testMode?: boolean }) {
     const bannerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     /* the drawn result while a spin is live — written to sessionStorage if the player leaves mid-spin */
     const pendingResult = useRef<{ number: number; color: "red" | "black" | "green"; net: number } | null>(null);
+    /* the active session id from SPIN → used to settle in the background if the player leaves before the ball is drawn */
+    const sessionIdRef = useRef<string | null>(null);
     /* hosts the shared HowToPlay modal; its own trigger is hidden — GameHeader opens it */
     const howtoHost = useRef<HTMLSpanElement>(null);
 
@@ -150,10 +173,23 @@ export default function Roulette({ testMode = false }: { testMode?: boolean }) {
                 label: "Leave — settle in background",
                 tone: "gold",
                 leave: true,
-                run: () => {
-                    // recordWin already fired when the result was drawn — just leave a note
-                    const r = pendingResult.current;
-                    if (r) sessionStorage.setItem("rl:awayResult", JSON.stringify(r));
+                run: async () => {
+                    // If the ball was already drawn, the round is settled server-side
+                    // and pendingResult holds it — just leave a note to replay later.
+                    let r = pendingResult.current;
+                    // Left during staging (before the draw): settle the active session
+                    // now so no money is left stuck, then stash the result.
+                    if (!r && sessionIdRef.current) {
+                        const settled = await settleSpin(sessionIdRef.current, bets);
+                        sessionIdRef.current = null;
+                        if (settled) {
+                            const net = settled.won > 0 ? settled.won : -totalBet;
+                            r = { number: settled.number, color: colorOf(settled.number), net };
+                        }
+                    }
+                    if (r) {
+                        try { sessionStorage.setItem("rl:awayResult", JSON.stringify(r)); } catch { /* ignore */ }
+                    }
                 },
             },
         ],
@@ -291,10 +327,10 @@ export default function Roulette({ testMode = false }: { testMode?: boolean }) {
        the winning pocket wherever that happens to be on screen (like a real
        roulette wheel — no fixed top pointer). The result is still a fair uniform
        draw; only its on-screen position is random. */
-    const runSpin = (resultIndex: number, won: number, winPromise: Promise<boolean>) => {
+    const runSpin = (resultIndex: number, won: number) => {
         const wheelEl = wheelRef.current;
         const ballEl = ballRef.current;
-        if (!wheelEl || !ballEl) return; // player left mid-staging — the credit already fired
+        if (!wheelEl || !ballEl) return; // player left mid-staging — the round already settled server-side
 
         const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
         const duration = reduce ? 1500 : 10000;
@@ -328,28 +364,20 @@ export default function Roulette({ testMode = false }: { testMode?: boolean }) {
             ballEl.style.left = `${50 + r * Math.sin(rad)}%`;
             ballEl.style.top = `${50 - r * Math.cos(rad)}%`;
             if (t < 1) raf.current = requestAnimationFrame(frame);
-            else { wheelAngle.current = wheelEnd; ballAngle.current = ballEnd; settle(resultIndex, won, winPromise); }
+            else { wheelAngle.current = wheelEnd; ballAngle.current = ballEnd; settle(resultIndex, won); }
         };
         raf.current = requestAnimationFrame(frame);
     };
 
-    const settle = async (resultIndex: number, won: number, winPromise: Promise<boolean>) => {
+    const settle = (resultIndex: number, won: number) => {
         const num = WHEEL[resultIndex];
         if (spinSound.current) spinSound.current.pause();
-        // the credit was sent the moment the result was drawn — announce only
-        // once BOTH the ball has landed and the server has confirmed the win,
-        // so the balance and the announcement update in the same moment
-        const credited = await winPromise;
+        // the round is already settled server-side (rouletteSpin credited the
+        // return before the ball started rolling) — the animation just reveals it
         setWinningIndex(resultIndex);
         setShowResult(true);
         setSpinning(false);
         setRecent((r) => [num, ...r].slice(0, 14));
-        if (won > 0 && !credited) {
-            setWinnings(0);
-            pendingResult.current = null;
-            notify("Couldn't credit your win — please refresh");
-            return;
-        }
         setWinnings(won);
         if (won > 0) winSound.current?.play().catch(() => {});
         showBanner(num, won > 0 ? won : -totalBet);
@@ -361,25 +389,41 @@ export default function Roulette({ testMode = false }: { testMode?: boolean }) {
         if (!bets.length) return notify("Place at least one bet");
         if (totalBet > wallet) return notify("Insufficient balance");
         setStaging(true); // "NO MORE BETS" — the croupier takes the bets to the server
-        const ok = await recordBet(totalBet, "ROULETTE");
-        if (!ok) { setStaging(false); return notify("Couldn't place bets — are you signed in?"); }
-        setLastRound(bets);
+        const roundBets = bets;
+
+        // 1) stake the exact total — the server deducts it and opens a session
+        const started = await beginSession(totalBet);
+        if (!started.success || !started.sessionId) {
+            setStaging(false);
+            return notify("Couldn't place bets — are you signed in?");
+        }
+        sessionIdRef.current = started.sessionId;
+        setLastRound(roundBets);
         setHistory([]);
         setShowResult(false);
         setWinningIndex(null);
         setWinnings(0);
         setBanner(null);
+
+        // 2) the server picks the winning number and prices the bets by key,
+        //    crediting the return before the ball ever rolls
+        const result = await settleSpin(started.sessionId, roundBets);
+        if (!result) {
+            // The stake sits in the still-active session — a retry SPIN resumes it.
+            setStaging(false);
+            return notify("Spin failed — tap SPIN to try again");
+        }
+        const { number, won } = result;
+        // 3) find the on-screen pocket from OUR OWN wheel order so the ball lands
+        //    on the right number — never trust the server's index for rendering
+        const resultIndex = WHEEL.indexOf(number);
+        pendingResult.current = { number, color: colorOf(number), net: won > 0 ? won : -totalBet };
+        sessionIdRef.current = null; // settled — nothing left to background-settle
+
         setSpinning(true);
-        setStaging(false); // bets confirmed — the wheel takes over
+        setStaging(false); // bets confirmed + settled — the wheel takes over
         if (spinSound.current) { spinSound.current.currentTime = 0; spinSound.current.play().catch(() => {}); }
-        const resultIndex = Math.floor(Math.random() * WHEEL.length);
-        const num = WHEEL[resultIndex];
-        let won = 0;
-        for (const b of bets) if (b.numbers.includes(num)) won += b.amount * b.mult;
-        pendingResult.current = { number: num, color: colorOf(num), net: won > 0 ? won : -totalBet };
-        // credit the win now, in parallel with the ball-settle animation
-        const winPromise = won > 0 ? recordWin(won, totalBet, "ROULETTE").catch(() => false) : Promise.resolve(true);
-        runSpin(resultIndex, won, winPromise);
+        runSpin(resultIndex, won);
     };
     const newRound = () => { setShowResult(false); setWinningIndex(null); setWinnings(0); setBanner(null); setBets([]); };
     const highlighted = (n: number) => hover?.includes(n) ?? false;
@@ -393,16 +437,16 @@ export default function Roulette({ testMode = false }: { testMode?: boolean }) {
         return (
             <div className={`rl-felt rl-felt--${orient}`}>
                 <div className="rl-felt-main">
-                    <button className={`rl-zero ${betOn("z0") ? "bet" : ""} ${highlighted(0) ? "hl" : ""}`} {...bettable({ key: "z0", label: "Straight", numbers: [0], mult: 36 })}>
+                    <button className={`rl-zero ${betOn("i0") ? "bet" : ""} ${highlighted(0) ? "hl" : ""}`} {...bettable({ key: "i0", label: "Straight", numbers: [0], mult: 36 })}>
                         0
-                        {betOn("z0") && <Chip amount={betOn("z0")!.amount} />}
+                        {betOn("i0") && <Chip amount={betOn("i0")!.amount} />}
                     </button>
                     <div className="rl-grid-wrap">
                         <div className="rl-numbers">
                             {Array.from({ length: rows }).flatMap((_, r) =>
                                 Array.from({ length: cols }).map((_, c) => {
                                     const n = cellNum(r, c);
-                                    const key = `n${n}`;
+                                    const key = `i${n}`; // straight-up = single-pocket inside bet (contract: i<n>)
                                     return (
                                         <button key={n} className={`rl-num ${colorOf(n)} ${betOn(key) ? "bet" : ""} ${highlighted(n) ? "hl" : ""}`} {...bettable({ key, label: "Straight", numbers: [n], mult: 36 })}>
                                             {n}

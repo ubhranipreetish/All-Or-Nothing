@@ -276,6 +276,40 @@
 }
 .tile-container.spotlight { z-index: 5; }
 
+/* ---- pending reveal: the tile is round-tripping to the server ----
+   Each reveal now asks the authoritative server (~100-300ms on the hosted
+   backend). A soft gold sheen sweeps the face so the wait reads as
+   "asking the house", never as a dead/broken tap. */
+.tile-container.pending .tile-front {
+  border-color: rgba(233, 185, 73, 0.5);
+}
+.tile-pending-shimmer {
+  position: absolute;
+  inset: 0;
+  border-radius: 4px;
+  overflow: hidden;
+  pointer-events: none;
+}
+.tile-pending-shimmer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -60%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    rgba(233, 185, 73, 0.28) 50%,
+    transparent 100%
+  );
+  animation: tile-pending-sweep 0.9s ease-in-out infinite;
+}
+@keyframes tile-pending-sweep {
+  0% { left: -60%; }
+  100% { left: 120%; }
+}
+
 .tile-inner {
   position: relative;
   width: 100%;

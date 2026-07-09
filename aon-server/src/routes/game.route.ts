@@ -1,31 +1,44 @@
 import { Router } from "express";
 import {
-    recordBet,
-    recordWin,
     startGame,
-    updateMultiplier,
+    revealMines,
+    revealDragon,
+    spinWheel,
+    spinRoulette,
     cashOut,
-    loseGame,
+    pokerBuyIn,
+    pokerSettle,
     refund,
-    getActiveSession
+    loseGame,
+    getActiveSession,
 } from "../controllers/game.controller";
 import { protect } from "../middlewares/auth.middleware";
 
 const router = Router();
 
-// All game routes are protected
+// All game routes are protected.
 router.use(protect);
 
-// New secure endpoints
 router.get("/active", getActiveSession);
 router.post("/start", startGame);
-router.post("/update-multiplier", updateMultiplier);
-router.post("/cashout", cashOut);
-router.post("/lose", loseGame);
-router.post("/refund", refund);
 
-// Legacy endpoints (secured with session validation)
-router.post("/bet", recordBet);
-router.post("/win", recordWin);
+// Server-authoritative play. The client only names its choice; the server owns
+// the board/number and computes every payout. There is intentionally NO endpoint
+// that accepts a client-supplied win amount or multiplier.
+router.post("/mines/reveal", revealMines);
+router.post("/dragon/reveal", revealDragon);
+router.post("/wheel/spin", spinWheel);
+router.post("/roulette/spin", spinRoulette);
+router.post("/cashout", cashOut);
+
+// Poker money moves ONLY over these authenticated HTTP endpoints. buyin debits
+// the user's own money and issues a secret seatToken; settle credits the
+// SERVER's authoritative final stack (recorded by the socket layer) — never a
+// client-supplied amount. The socket path never mutates a wallet.
+router.post("/poker/buyin", pokerBuyIn);
+router.post("/poker/settle", pokerSettle);
+
+router.post("/refund", refund);
+router.post("/lose", loseGame);
 
 export default router;

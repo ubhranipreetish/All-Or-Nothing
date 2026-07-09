@@ -51,6 +51,48 @@ export interface PeekResult {
 export class PokerService {
     private tables = new Map<string, PokerTable>();
     private playerTable = new Map<string, string>();
+    /**
+     * seatToken → the player's FINAL chip stack, recorded by the realtime layer
+     * the moment a seat is finally vacated (real leave / grace-period expiry).
+     * This is the ONLY money-adjacent state the socket path writes, and it never
+     * touches a wallet. The authenticated HTTP cash-out (GameService.pokerSettle)
+     * reads AND consumes it, then credits exactly this value — so a client can
+     * never name its own cash-out amount.
+     */
+    private finalStacks = new Map<string, number>();
+
+    /* ------------------------------------------------- authoritative stacks */
+
+    /** The player's live authoritative chip stack at their table (0 if unseated). */
+    stackForPlayer(playerId: string): number {
+        const table = this.tableForPlayer(playerId);
+        return table ? table.stackOf(playerId) : 0;
+    }
+
+    /**
+     * Record a seat's final stack so the HTTP cash-out can credit it. Does NOT
+     * mutate any wallet — money only moves in the authenticated HTTP handlers.
+     */
+    recordFinalStack(seatToken: string, stack: number): void {
+        if (!seatToken) return;
+        this.finalStacks.set(seatToken, Math.max(0, Math.floor(stack)));
+    }
+
+    /**
+     * Read AND consume the recorded final stack for a seatToken. Returns
+     * `undefined` when the seat hasn't been finalized yet (the leave is still in
+     * flight) so the caller can ask the client to retry rather than burn a stack.
+     */
+    takeFinalStack(seatToken: string): number | undefined {
+        const v = this.finalStacks.get(seatToken);
+        if (v !== undefined) this.finalStacks.delete(seatToken);
+        return v;
+    }
+
+    /** Read the recorded final stack WITHOUT consuming it. */
+    peekFinalStack(seatToken: string): number | undefined {
+        return this.finalStacks.get(seatToken);
+    }
 
     /* ----------------------------------------------------------- lookups */
     getTable(id: string): PokerTable | undefined {

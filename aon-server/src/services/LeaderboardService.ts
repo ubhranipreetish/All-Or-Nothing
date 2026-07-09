@@ -1,6 +1,10 @@
 import { InterestCalculator } from "../domain/loans/InterestCalculator";
 import { LoanRepository } from "../repositories/LoanRepository";
 import { UserRepository } from "../repositories/UserRepository";
+import { cache } from "../config/cache";
+
+const LEADERBOARD_CACHE_KEY = "leaderboard:all-time";
+const LEADERBOARD_TTL_SECONDS = 15;
 
 export interface LeaderboardEntry {
     rank: number;
@@ -34,7 +38,25 @@ export class LeaderboardService {
         private readonly interest: InterestCalculator
     ) {}
 
+    /** Drop the cached board so the next read recomputes (called on any change). */
+    async invalidate(): Promise<void> {
+        await cache.del(LEADERBOARD_CACHE_KEY);
+    }
+
     async getLeaderboard(): Promise<LeaderboardResult> {
+        // The board is a full user + active-loan scan; cache it briefly so a burst
+        // of viewers (or the socket re-broadcast) doesn't re-scan on every hit.
+        // Every win/loan invalidates it, so it's fresh in practice and the TTL
+        // only bounds the worst case.
+        const cached = await cache.get<LeaderboardResult>(LEADERBOARD_CACHE_KEY);
+        if (cached) return cached;
+
+        const result = await this.computeLeaderboard();
+        await cache.set(LEADERBOARD_CACHE_KEY, result, LEADERBOARD_TTL_SECONDS);
+        return result;
+    }
+
+    private async computeLeaderboard(): Promise<LeaderboardResult> {
         const users = await this.users.findAllForLeaderboard();
         const activeLoans = await this.loans.findAllActive();
 

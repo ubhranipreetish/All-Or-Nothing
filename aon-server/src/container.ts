@@ -54,7 +54,7 @@ const gameService = new GameService(
     transactionRepository,
     gameStrategyFactory
 );
-const walletService = new WalletService(userRepository, transactionRepository);
+const walletService = new WalletService(userRepository);
 const loanService = new LoanService(
     userRepository,
     loanRepository,

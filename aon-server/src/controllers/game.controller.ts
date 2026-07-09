@@ -3,7 +3,7 @@ import { container } from "../container";
 import { asyncHandler } from "../middlewares/asyncHandler";
 import { GameType } from "../domain/games/GameStrategy";
 
-/** POST /api/game/start — open a tracked session and deduct the bet. */
+/** POST /api/game/start — open a tracked session, deduct the bet, resolve the SECRET outcome. */
 export const startGame = asyncHandler(async (req: Request, res: Response) => {
     const userId = req.user!.userId;
     const { amount, gameType, gameConfig } = req.body as {
@@ -15,19 +15,66 @@ export const startGame = asyncHandler(async (req: Request, res: Response) => {
     res.status(201).json(result);
 });
 
-/** POST /api/game/update-multiplier — track the server-side multiplier mid-game. */
-export const updateMultiplier = asyncHandler(async (req: Request, res: Response) => {
+/** POST /api/game/mines/reveal — reveal one tile; server checks its own board. */
+export const revealMines = asyncHandler(async (req: Request, res: Response) => {
     const userId = req.user!.userId;
-    const { sessionId, multiplier } = req.body as { sessionId: string; multiplier: number };
-    const result = await container.gameService.updateMultiplier(userId, sessionId, multiplier);
+    const { sessionId, tileIndex } = req.body as { sessionId: string; tileIndex: number };
+    const result = await container.gameService.revealMines(userId, sessionId, tileIndex);
     res.json(result);
 });
 
-/** POST /api/game/cashout — settle the session at the tracked multiplier. */
+/** POST /api/game/dragon/reveal — pick one tile on the current floor. */
+export const revealDragon = asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.user!.userId;
+    const { sessionId, tileIndex } = req.body as { sessionId: string; tileIndex: number };
+    const result = await container.gameService.revealDragon(userId, sessionId, tileIndex);
+    res.json(result);
+});
+
+/** POST /api/game/wheel/spin — server picks the segment and settles. */
+export const spinWheel = asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.user!.userId;
+    const { sessionId } = req.body as { sessionId: string };
+    const result = await container.gameService.spinWheel(userId, sessionId);
+    res.json(result);
+});
+
+/** POST /api/game/roulette/spin — server picks the number and prices the bets. */
+export const spinRoulette = asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.user!.userId;
+    const { sessionId, bets } = req.body as {
+        sessionId: string;
+        bets: { key: string; amount: number }[];
+    };
+    const result = await container.gameService.spinRoulette(userId, sessionId, bets);
+    res.json(result);
+});
+
+/** POST /api/game/cashout — settle at the SERVER-tracked multiplier (mines / dragon tower). */
 export const cashOut = asyncHandler(async (req: Request, res: Response) => {
     const userId = req.user!.userId;
     const { sessionId } = req.body as { sessionId: string };
     const result = await container.gameService.cashOut(userId, sessionId);
+    res.json(result);
+});
+
+/** POST /api/game/poker/buyin — debit the user's OWN money, open a POKER session, issue a seatToken. */
+export const pokerBuyIn = asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.user!.userId;
+    const { amount } = req.body as { amount: number };
+    const result = await container.gameService.pokerBuyIn(userId, amount);
+    res.status(201).json(result);
+});
+
+/**
+ * POST /api/game/poker/settle — credit the SERVER's authoritative final stack.
+ * The poker service singleton is handed in from the container so GameService
+ * stays free of a container import (no dependency cycle).
+ */
+export const pokerSettle = asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.user!.userId;
+    const { sessionId } = req.body as { sessionId: string };
+    const result = await container.gameService.pokerSettle(userId, sessionId, container.pokerService);
     res.json(result);
 });
 
@@ -47,44 +94,10 @@ export const loseGame = asyncHandler(async (req: Request, res: Response) => {
     res.json(result);
 });
 
-/** GET /api/game/active — fetch the user's active session (if any). */
+/** GET /api/game/active — sanitized resume payload (never leaks the board). */
 export const getActiveSession = asyncHandler(async (req: Request, res: Response) => {
     const userId = req.user!.userId;
     const { gameType } = req.query as { gameType?: GameType };
     const result = await container.gameService.getActiveSession(userId, gameType);
     res.json(result);
-});
-
-// ============ LEGACY ENDPOINTS (backward compatibility) ============
-
-/** POST /api/game/bet — @deprecated use /start. */
-export const recordBet = asyncHandler(async (req: Request, res: Response) => {
-    const userId = req.user!.userId;
-    const { amount, gameId, gameType } = req.body as {
-        amount: number;
-        gameId?: string;
-        gameType: GameType;
-    };
-    const result = await container.gameService.recordBet(userId, amount, gameId, gameType);
-    res.status(201).json(result);
-});
-
-/** POST /api/game/win — secured win recording validated against an active session. */
-export const recordWin = asyncHandler(async (req: Request, res: Response) => {
-    const userId = req.user!.userId;
-    const { sessionId, winAmount, betAmount, gameType, multiplier } = req.body as {
-        sessionId?: string;
-        winAmount: number;
-        betAmount: number;
-        gameType: GameType;
-        multiplier?: number;
-    };
-    const result = await container.gameService.recordWin(userId, {
-        sessionId,
-        winAmount,
-        betAmount,
-        gameType,
-        multiplier,
-    });
-    res.status(201).json(result);
 });

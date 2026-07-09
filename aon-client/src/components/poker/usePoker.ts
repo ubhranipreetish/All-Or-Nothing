@@ -58,8 +58,11 @@ export function usePoker(name: string, opts?: { playerId?: string; token?: strin
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const createRoom = useCallback((buyIn: number, cb?: (code: string | null) => void) => {
-        socketRef.current?.emit("table:create", { buyIn }, (r: { error?: string; tableId?: string }) => {
+    // seatToken is minted by the authenticated HTTP buy-in and rides along on the
+    // create/join emit so the server can tie this seat to its GameSession. The
+    // socket never moves money — it only carries this token.
+    const createRoom = useCallback((buyIn: number, seatToken?: string, cb?: (code: string | null) => void) => {
+        socketRef.current?.emit("table:create", { buyIn, seatToken }, (r: { error?: string; tableId?: string }) => {
             if (r?.error) { setError(r.error); cb?.(null); }
             else cb?.(r?.tableId ?? null);
         });
@@ -72,8 +75,8 @@ export function usePoker(name: string, opts?: { playerId?: string; token?: strin
         [],
     );
     /** Ask the host for a seat → parks us in the approval queue. */
-    const requestJoin = useCallback((code: string, buyIn: number, cb?: (r: { ok: boolean; hostName?: string }) => void) => {
-        socketRef.current?.emit("table:join", { tableId: code, buyIn }, (r: { error?: string; hostName?: string }) => {
+    const requestJoin = useCallback((code: string, buyIn: number, seatToken?: string, cb?: (r: { ok: boolean; hostName?: string }) => void) => {
+        socketRef.current?.emit("table:join", { tableId: code, buyIn, seatToken }, (r: { error?: string; hostName?: string }) => {
             if (r?.error) { setError(r.error); cb?.({ ok: false }); }
             else { setJoinStatus("pending"); cb?.({ ok: true, hostName: r?.hostName }); }
         });

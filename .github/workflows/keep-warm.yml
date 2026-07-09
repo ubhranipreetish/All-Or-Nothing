@@ -1,0 +1,41 @@
+name: Keep backend warm
+
+# Render's free tier spins a web service down after 15 minutes with no inbound
+# traffic; the next request then eats a ~1-minute cold start. A sleeping dyno
+# can't ping itself, so the ping has to come from OUTSIDE — this scheduled job
+# hits the health endpoint every 10 minutes to keep it awake.
+#
+# Setup: add a repo variable BACKEND_URL (Settings → Secrets and variables →
+# Actions → Variables) set to your Render URL, e.g. https://aon-server.onrender.com
+# No secret needed — /api/health is public and unauthenticated.
+#
+# Caveats:
+#  - GitHub disables scheduled workflows after 60 days of repo inactivity; a
+#    single manual run (or any push) re-enables them.
+#  - Cron on GitHub Actions can be delayed a few minutes under load; 10 min keeps
+#    a safe margin under the 15-min sleep threshold.
+#  - Keeping the dyno awake 24/7 uses instance hours — Render free gives ~750/mo,
+#    enough for one always-on service. If you want it to sleep overnight, narrow
+#    the cron schedule.
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {} # allow a manual "Run workflow" to re-arm / test
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping /api/health
+        run: |
+          URL="${{ vars.BACKEND_URL }}"
+          if [ -z "$URL" ]; then
+            echo "BACKEND_URL repo variable is not set — skipping."
+            exit 0
+          fi
+          echo "Pinging $URL/api/health"
+          code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 60 "$URL/api/health" || echo "000")
+          echo "HTTP $code"
+          # 200 = awake. Anything else (incl. a cold-start timeout) still counts as
+          # the wake-up request that spins it back up, so we don't fail the job.

@@ -43,11 +43,11 @@ export class LoanService {
         const user = await this.users.findById(userId);
         if (!user) throw AppError.notFound("User not found");
 
-        const newBalance = user.walletBalance + amount;
-        user.walletBalance = newBalance;
         // Loan principal never touches lifetime P&L (totalEarnings) — the
-        // leaderboard already accounts for outstanding debt via net worth.
-        await this.users.save(user);
+        // leaderboard already accounts for outstanding debt via net worth. Atomic $inc.
+        const credited = await this.users.creditWallet(userId, amount, 0);
+        if (!credited) throw AppError.notFound("User not found");
+        const newBalance = credited.walletBalance;
 
         const loan = await this.loans.create({ userId: user._id, amount, status: "ACTIVE" });
 
@@ -93,18 +93,19 @@ export class LoanService {
         const loan = await this.loans.findActiveByIdForUser(loanId, userId);
         if (!loan) throw AppError.notFound("Active loan not found");
 
-        const user = await this.users.findById(userId);
-        if (!user) throw AppError.notFound("User not found");
-
         const { amount: repaymentAmount, days } = this.interest.compute(loan.amount, loan.createdAt);
         const interestPaid = repaymentAmount - loan.amount;
 
-        if (user.walletBalance < repaymentAmount) {
+        // Atomic debit with balance guard — principal in/out cancels, only the
+        // interest is a real P&L loss (so earnings drop by interest, not repayment).
+        const debited = await this.users.tryDebit(userId, repaymentAmount, interestPaid);
+        if (!debited) {
+            const cur = await this.users.findById(userId);
             throw AppError.badRequest(
                 `Insufficient balance. You need ₹${repaymentAmount.toFixed(2)} to repay this loan.`,
                 {
                     required: repaymentAmount,
-                    available: user.walletBalance,
+                    available: cur?.walletBalance ?? 0,
                     principal: loan.amount,
                     interest: interestPaid,
                     days,
@@ -112,19 +113,18 @@ export class LoanService {
             );
         }
 
-        const newBalance = user.walletBalance - repaymentAmount;
-        user.walletBalance = newBalance;
-        // Principal in/out cancels itself; only the interest is a real loss,
-        // so it's the only part of a loan that hits lifetime P&L.
-        user.totalEarnings = user.totalEarnings - interestPaid;
-        await this.users.save(user);
+        // Atomically flip the loan REPAID. If a concurrent repay already did it,
+        // refund the debit we just took — never double-charge.
+        const claimed = await this.loans.claimForRepay(loanId, userId);
+        if (!claimed) {
+            await this.users.creditWallet(userId, repaymentAmount, interestPaid);
+            throw AppError.badRequest("This loan was already repaid");
+        }
 
-        loan.status = "REPAID";
-        loan.repaidAt = new Date();
-        await this.loans.save(loan);
+        const newBalance = debited.walletBalance;
 
         await this.transactions.create({
-            userId: user._id,
+            userId: claimed.userId,
             type: "WITHDRAW",
             amount: -repaymentAmount,
             balanceAfter: newBalance,
@@ -144,18 +144,18 @@ export class LoanService {
         eventBus.publish(DomainEvent.WalletUpdated, {
             userId,
             balance: newBalance,
-            totalEarnings: user.totalEarnings,
+            totalEarnings: debited.totalEarnings,
         });
 
         return {
             message: "Loan repaid successfully",
-            loan,
-            principalPaid: loan.amount,
+            loan: claimed,
+            principalPaid: claimed.amount,
             interestPaid,
             totalPaid: repaymentAmount,
             days,
             newBalance,
-            totalEarnings: user.totalEarnings,
+            totalEarnings: debited.totalEarnings,
             activeLoans: remainingLoans,
         };
     }

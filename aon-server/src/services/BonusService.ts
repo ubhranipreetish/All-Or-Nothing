@@ -1,3 +1,4 @@
+import { Types } from "mongoose";
 import { TransactionRepository } from "../repositories/TransactionRepository";
 import { UserRepository } from "../repositories/UserRepository";
 import { AppError } from "../shared/errors/AppError";
@@ -17,20 +18,19 @@ export class BonusService {
     ) {}
 
     async claimWelcomeBonus(userId: string) {
-        const user = await this.users.findById(userId);
-        if (!user) throw AppError.notFound("User not found");
-
-        if (user.hasClaimed100Bonus) {
+        // Atomic claim: the flag flips and the credit lands in one operation, so
+        // two concurrent claims can't both pass the "already claimed?" check.
+        const totals = await this.users.claimWelcomeBonus(userId, WELCOME_BONUS_AMOUNT);
+        if (!totals) {
+            const exists = await this.users.findById(userId);
+            if (!exists) throw AppError.notFound("User not found");
             throw AppError.badRequest("Welcome bonus already claimed", { alreadyClaimed: true });
         }
 
-        const newBalance = user.walletBalance + WELCOME_BONUS_AMOUNT;
-        user.walletBalance = newBalance;
-        user.hasClaimed100Bonus = true;
-        await this.users.save(user);
+        const newBalance = totals.walletBalance;
 
         const transaction = await this.transactions.create({
-            userId: user._id,
+            userId: new Types.ObjectId(userId),
             type: "DEPOSIT",
             amount: WELCOME_BONUS_AMOUNT,
             balanceAfter: newBalance,

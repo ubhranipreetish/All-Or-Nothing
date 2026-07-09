@@ -22,9 +22,14 @@ interface WalletContextType {
   activeLoansCount: number;
   canTakeLoan: boolean;
   deductMoney: (amount: number) => boolean;
-  recordBet: (amount: number, gameType: string, gameId?: string) => Promise<boolean>;
   startGameSession: (amount: number, gameType: string, gameConfig?: any) => Promise<{ success: boolean; sessionId?: string; newBalance?: number }>;
-  recordWin: (winAmount: number, betAmount: number, gameType: string, multiplier?: number, gameId?: string) => Promise<boolean>;
+  // Server-authoritative play — the client only names its choice; the server owns
+  // the board/number and returns the outcome. No client-supplied amounts.
+  minesReveal: (sessionId: string, tileIndex: number) => Promise<MinesRevealResult | null>;
+  dragonReveal: (sessionId: string, tileIndex: number) => Promise<DragonRevealResult | null>;
+  wheelSpin: (sessionId: string) => Promise<SpinResult | null>;
+  rouletteSpin: (sessionId: string, bets: { key: string; amount: number }[]) => Promise<RouletteResult | null>;
+  cashOutGame: (sessionId: string) => Promise<{ winAmount: number; newBalance: number } | null>;
   claimWelcomeBonus: () => Promise<boolean>;
   takeLoan: (amount: number) => Promise<boolean>;
   repayLoan: (loanId: string) => Promise<boolean>;
@@ -32,6 +37,37 @@ interface WalletContextType {
   refundBet: (gameType: string, sessionId?: string) => Promise<boolean>;
   refreshWallet: () => Promise<void>;
   fetchLoans: () => Promise<void>;
+}
+
+export interface MinesRevealResult {
+  hit: boolean;
+  tileIndex: number;
+  multiplier?: number;
+  safeReveals?: number;
+  potentialWin?: number;
+  mines?: number[]; // present only when hit — the full board reveal
+  gemsRevealed?: number[];
+}
+export interface DragonRevealResult {
+  hit: boolean;
+  tileIndex: number;
+  floor?: number;
+  multiplier?: number;
+  potentialWin?: number;
+  maxed?: boolean;
+  dragons?: number[]; // present only when hit
+}
+export interface SpinResult {
+  index: number;
+  multiplier: number;
+  payout: number;
+  newBalance: number;
+}
+export interface RouletteResult {
+  index: number;
+  number: number;
+  won: number;
+  newBalance: number;
 }
 
 const WalletContext = createContext<WalletContextType | null>(null);
@@ -124,32 +160,25 @@ export function WalletProvider({ children }: WalletProviderProps) {
     return true;
   };
 
-  // Record a bet
-  const recordBet = async (amount: number, gameType: string, gameId?: string): Promise<boolean> => {
+  // Authenticated POST helper for game endpoints.
+  const gamePost = async (path: string, body: unknown): Promise<any | null> => {
     const token = getToken();
-    if (!token) return deductMoney(amount);
-
+    if (!token) return null;
     try {
-      const res = await fetch(`${API_URL}/game/bet`, {
+      const res = await fetch(`${API_URL}${path}`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ amount, gameType, gameId }),
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
       });
-
       const data = await res.json();
-      if (res.ok) {
-        setWallet(data.newBalance);
-        if (typeof data.totalEarnings === "number") setTotalEarnings(data.totalEarnings);
-        return true;
+      if (!res.ok) {
+        console.error(`${path} error:`, data?.message);
+        return null;
       }
-      console.error("Bet error:", data.message);
-      return false;
+      return data;
     } catch (error) {
-      console.error("Record bet error:", error);
-      return false;
+      console.error(`${path} request failed:`, error);
+      return null;
     }
   };
 
@@ -205,42 +234,41 @@ export function WalletProvider({ children }: WalletProviderProps) {
     }
   };
 
-  // Record a win
-  const recordWin = async (
-    winAmount: number,
-    betAmount: number,
-    gameType: string,
-    multiplier?: number,
-    gameId?: string
-  ): Promise<boolean> => {
-    const token = getToken();
-    if (!token) {
-      setWallet((prev) => prev + winAmount);
-      return true;
-    }
+  // Reveal one Mines tile — the server checks its own board.
+  const minesReveal = async (sessionId: string, tileIndex: number): Promise<MinesRevealResult | null> => {
+    return gamePost("/game/mines/reveal", { sessionId, tileIndex });
+  };
 
-    try {
-      const res = await fetch(`${API_URL}/game/win`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ winAmount, betAmount, gameType, multiplier, gameId }),
-      });
+  // Pick one Dragon Tower tile on the current floor.
+  const dragonReveal = async (sessionId: string, tileIndex: number): Promise<DragonRevealResult | null> => {
+    return gamePost("/game/dragon/reveal", { sessionId, tileIndex });
+  };
 
-      const data = await res.json();
-      if (res.ok) {
-        setWallet(data.newBalance);
-        setTotalEarnings(data.totalEarnings);
-        return true;
-      }
-      console.error("Win error:", data.message);
-      return false;
-    } catch (error) {
-      console.error("Record win error:", error);
-      return false;
+  // Spin the wheel — server picks the segment and settles.
+  const wheelSpin = async (sessionId: string): Promise<SpinResult | null> => {
+    const data = await gamePost("/game/wheel/spin", { sessionId });
+    if (data && typeof data.newBalance === "number") setWallet(data.newBalance);
+    return data;
+  };
+
+  // Spin roulette — server picks the number and prices the bets by key.
+  const rouletteSpin = async (
+    sessionId: string,
+    bets: { key: string; amount: number }[]
+  ): Promise<RouletteResult | null> => {
+    const data = await gamePost("/game/roulette/spin", { sessionId, bets });
+    if (data && typeof data.newBalance === "number") setWallet(data.newBalance);
+    return data;
+  };
+
+  // Cash out a Mines / Dragon Tower session at the SERVER-tracked multiplier.
+  const cashOutGame = async (sessionId: string): Promise<{ winAmount: number; newBalance: number } | null> => {
+    const data = await gamePost("/game/cashout", { sessionId });
+    if (data && typeof data.newBalance === "number") {
+      setWallet(data.newBalance);
+      if (typeof data.totalEarnings === "number") setTotalEarnings(data.totalEarnings);
     }
+    return data;
   };
 
   // Claim welcome bonus
@@ -406,9 +434,12 @@ export function WalletProvider({ children }: WalletProviderProps) {
         activeLoansCount: activeLoans.length,
         canTakeLoan,
         deductMoney,
-        recordBet,
         startGameSession,
-        recordWin,
+        minesReveal,
+        dragonReveal,
+        wheelSpin,
+        rouletteSpin,
+        cashOutGame,
         claimWelcomeBonus,
         takeLoan,
         repayLoan,

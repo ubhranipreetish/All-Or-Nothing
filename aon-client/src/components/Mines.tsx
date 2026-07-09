@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 import Tile from "./Tile";
@@ -22,9 +22,12 @@ const MAX_MINES = 24;
 const SWAP_GUARD_MS = 600; // primary button is inert this long after it swaps state
 const RESET_WINDOW_MS = 450; // board stays gated while a new round settles in
 
+// Render state only. The client NEVER holds the board — a tile's `kind` is
+// unknown until a server reveal response names it. This is the whole point of
+// the security rewrite: no client-side outcome logic to forge.
 interface TileData {
-    isMine: boolean;
     revealed: boolean;
+    kind?: "gem" | "mine";
 }
 
 /** Clamp a typed/derived mine count into the legal 1–24 range (empty → 3). */
@@ -44,21 +47,9 @@ const MINES_RULES = {
     tip: "More mines = bigger multiplier per gem, but a higher chance of busting.",
 };
 
-const generateBoard = (mineCount: number): TileData[] => {
-    const board: TileData[] = Array.from({ length: TILE_COUNT }, () => ({
-        isMine: false,
-        revealed: false,
-    }));
-    let minesPlaced = 0;
-    while (minesPlaced < mineCount) {
-        const index = Math.floor(Math.random() * TILE_COUNT);
-        if (!board[index].isMine) {
-            board[index] = { ...board[index], isMine: true };
-            minesPlaced++;
-        }
-    }
-    return board;
-};
+/** A fresh 25-tile board — every tile face-down and of unknown kind. */
+const freshBoard = (): TileData[] =>
+    Array.from({ length: TILE_COUNT }, () => ({ revealed: false }));
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -66,7 +57,7 @@ export default function Mines() {
     const gemSound = useRef<HTMLAudioElement | null>(null);
     const mineSound = useRef<HTMLAudioElement | null>(null);
 
-    const { wallet, startGameSession, recordWin, recordLoss } = useWallet();
+    const { wallet, startGameSession, minesReveal, cashOutGame, recordLoss } = useWallet();
     const { user } = useAuth();
     const [showSignInDialog, setShowSignInDialog] = useState(false);
 
@@ -84,10 +75,11 @@ export default function Mines() {
     const [notification, setNotification] = useState<string>("");
     const [notificationTone, setNotificationTone] = useState<"info" | "error">("info");
     const [spotlightIndex, setSpotlightIndex] = useState<number | null>(null);
+    const [pendingIndex, setPendingIndex] = useState<number | null>(null); // reveal round-trip in flight
     // --- round-flow gates ---
     const [hydrated, setHydrated] = useState<boolean>(false); // server round-state sync finished
     const [resetting, setResetting] = useState<boolean>(false); // brief window after New Round
-    const [cashingOut, setCashingOut] = useState<boolean>(false); // recordWin in flight
+    const [cashingOut, setCashingOut] = useState<boolean>(false); // cashOutGame in flight
     const [swapGuard, setSwapGuard] = useState<boolean>(false); // primary button just swapped state
     const [resultReady, setResultReady] = useState<boolean>(false); // BOOM panel gated behind the reveal
     const [killerIndex, setKillerIndex] = useState<number | null>(null); // the mine that ended the round
@@ -114,7 +106,10 @@ export default function Mines() {
         guardTimer.current = setTimeout(() => setSwapGuard(false), SWAP_GUARD_MS);
     };
 
-    // Restore an in-flight session on mount.
+    // Restore an in-flight session on mount. The server owns the board, so the
+    // restore payload only carries the SAFE tiles already flipped (`revealed`) —
+    // never a mine position. We rebuild those as face-up gems; the rest stay
+    // face-down and unknown, exactly as the player left them.
     useEffect(() => {
         gemSound.current = new Audio("/sounds/gem.mp3");
         mineSound.current = new Audio("/sounds/mine.mp3");
@@ -133,18 +128,21 @@ export default function Mines() {
                     if (data.active) {
                         sessionIdRef.current = data.sessionId;
                         setAmount(data.betAmount);
-                        setMultiplier(data.multiplier.toFixed(2));
-                        if (data.gameConfig?.board) {
-                            setBoard(data.gameConfig.board);
-                            setMineCount(data.gameConfig.mineCount || 3);
-                            const revealed = data.gameConfig.board.filter((t: TileData) => t.revealed).length;
-                            setRevealedCount(revealed);
-                            setEarnings(data.betAmount * data.multiplier);
-                            setStarted(true);
-                            setGameOver(false);
-                            setCashedOut(false);
-                            setResumed(true);
+                        setMultiplier((data.multiplier ?? 1).toFixed(2));
+                        setMineCount(data.gameConfig?.mineCount || 3);
+
+                        const restored = freshBoard();
+                        const safe: number[] = Array.isArray(data.revealed) ? data.revealed : [];
+                        for (const i of safe) {
+                            if (i >= 0 && i < TILE_COUNT) restored[i] = { revealed: true, kind: "gem" };
                         }
+                        setBoard(restored);
+                        setRevealedCount(safe.length);
+                        setEarnings(data.betAmount * (data.multiplier ?? 1));
+                        setStarted(true);
+                        setGameOver(false);
+                        setCashedOut(false);
+                        setResumed(true);
                     }
                 }
             } catch (err) {
@@ -156,33 +154,6 @@ export default function Mines() {
         };
         restoreSession();
     }, []);
-
-    // Auto-close a headless/legacy active session so the player can start fresh.
-    const checkActiveSession = useCallback(async () => {
-        try {
-            const token = localStorage.getItem("token");
-            if (!token) return;
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api"}/game/active?gameType=MINES`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            if (res.ok) {
-                const data = await res.json();
-                if (data.active && !data.gameConfig?.board) {
-                    await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api"}/game/cashout`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-                        body: JSON.stringify({ sessionId: data.sessionId }),
-                    });
-                }
-            }
-        } catch (err) {
-            console.error("Failed to check active session:", err);
-        }
-    }, []);
-
-    useEffect(() => {
-        checkActiveSession();
-    }, [checkActiveSession]);
 
     // Stepper for the mine count — a bare number input gave no cue it was
     // adjustable, so [−]/[+] nudge it while the middle stays typeable.
@@ -209,14 +180,10 @@ export default function Mines() {
 
         const mines = clampMines(mineCount);
         setMineCount(mines);
-        const initialBoard = generateBoard(mines);
-        // The hosted backend takes 1–3s to open the session — stage the board
-        // and hold Place Bet in its pending state until the round is confirmed.
+        // Server-authoritative: we send only the mine count. The server generates
+        // and keeps the board — the client never sees it.
         setPlacingBet(true);
-        const { success, sessionId } = await startGameSession(amount, "MINES", {
-            board: initialBoard,
-            mineCount: mines,
-        });
+        const { success, sessionId } = await startGameSession(amount, "MINES", { mineCount: mines });
         if (!success) {
             setPlacingBet(false);
             // Board untouched — the idle tiles keep rendering.
@@ -228,7 +195,7 @@ export default function Mines() {
 
         roundRef.current += 1; // invalidate any still-running reveal from the prior round
         setRoundKey((k) => k + 1); // fresh face-down tiles, no flip-back artifacts
-        setBoard(initialBoard);
+        setBoard(freshBoard());
         setStarted(true);
         setGameOver(false);
         setRevealedCount(0);
@@ -239,12 +206,16 @@ export default function Mines() {
         setKillerIndex(null);
         setResumed(false);
         setSpotlightIndex(null);
+        setPendingIndex(null);
         armSwapGuard(); // Place Bet just became Cash Out — swallow a stray second click
 
         setTimeout(() => gridRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 100);
     };
 
-    const waveReveal = async (lastIndex: number) => {
+    // Flip the whole board open behind the BOOM panel using the server's reveal:
+    // `mineSet` are the mine indices; everything else is a gem. Ripples out from
+    // the killer tile. Already-flipped gems keep their kind.
+    const waveReveal = async (lastIndex: number, mineSet: Set<number>) => {
         const myRound = roundRef.current;
         // Iterate fixed indices (not the board snapshot) so all 25 tiles always flip.
         const tilesWithDistance = Array.from({ length: TILE_COUNT }, (_, i) => ({
@@ -259,7 +230,10 @@ export default function Mines() {
             if (roundRef.current !== myRound) return; // a new round started — stop animating the old board
             setBoard((prev) => {
                 const next = [...prev];
-                next[item.index] = { ...next[item.index], revealed: true };
+                next[item.index] = {
+                    revealed: true,
+                    kind: mineSet.has(item.index) ? "mine" : "gem",
+                };
                 return next;
             });
             await sleep(40);
@@ -267,26 +241,35 @@ export default function Mines() {
 
         if (roundRef.current !== myRound) return;
         // Safety sweep: guarantee no tile is left face-down after the round ends.
-        setBoard((prev) => prev.map((t) => (t.revealed ? t : { ...t, revealed: true })));
-    };
-
-    const calculateMultiplier = (revealed: number, mines: number): number => {
-        const safeTiles = TILE_COUNT - mines;
-        let mult = 1;
-        for (let i = 0; i < revealed; i++) {
-            mult *= (TILE_COUNT - i) / (safeTiles - i);
-        }
-        return mult * 0.96;
+        setBoard((prev) =>
+            prev.map((t, i) =>
+                t.revealed ? t : { revealed: true, kind: mineSet.has(i) ? "mine" : "gem" }
+            )
+        );
     };
 
     const revealTile = async (index: number) => {
         if (!hydrated || resetting || cashingOut) return;
         if (!started || board[index]?.revealed || gameOver || cashedOut) return;
+        if (pendingIndex !== null) return; // a reveal is already round-tripping to the server
 
-        setSpotlightIndex(index);
-        setTimeout(() => setSpotlightIndex(null), 600);
+        const sid = sessionIdRef.current;
+        if (!sid) return;
 
-        if (board[index].isMine) {
+        // Ask the house. While in flight, this tile shimmers and the board is inert.
+        setPendingIndex(index);
+        const response = await minesReveal(sid, index);
+        setPendingIndex(null);
+
+        if (!response) {
+            // Request failed — leave the tile face-down, let the player retry.
+            showNotification("Reveal failed — try again.", "error");
+            return;
+        }
+
+        if (response.hit) {
+            // This tile is the killer mine. The server already settled the loss —
+            // DO NOT call recordLoss here.
             if (mineSound.current) {
                 mineSound.current.currentTime = 0;
                 mineSound.current.play().catch(() => {});
@@ -295,23 +278,20 @@ export default function Mines() {
             setMultiplier("0.00");
             setEarnings(0);
             setKillerIndex(index);
-            // Settle the loss immediately (the reveal animation below takes ~1s);
-            // otherwise a fast "New Round → Place Bet" hits a still-active session.
-            const lostSession = sessionIdRef.current;
             sessionIdRef.current = null;
-            if (lostSession) recordLoss(lostSession);
 
+            const mineSet = new Set(response.mines ?? []);
             const myRound = roundRef.current;
             // 1) Detonate the clicked tile first — the explosion is the headline.
             setBoard((prev) => {
                 const next = [...prev];
-                next[index] = { ...next[index], revealed: true };
+                next[index] = { revealed: true, kind: "mine" };
                 return next;
             });
             await sleep(700);
             if (roundRef.current !== myRound) return;
-            // 2) Then wash the rest of the board open.
-            await waveReveal(index);
+            // 2) Then wash the rest of the board open — mines and gems from the server.
+            await waveReveal(index, mineSet);
             if (roundRef.current !== myRound) return;
             await sleep(250);
             if (roundRef.current !== myRound) return;
@@ -319,18 +299,23 @@ export default function Mines() {
             setResultReady(true);
             armSwapGuard(); // Cash Out just became New Round
         } else {
+            // Safe gem — trust the server's multiplier / potential win, never compute.
             if (gemSound.current) {
                 gemSound.current.currentTime = 0;
                 gemSound.current.play().catch(() => {});
             }
-            const newRevealed = revealedCount + 1;
-            setRevealedCount(newRevealed);
-            const newMult = calculateMultiplier(newRevealed, mineCount);
-            setMultiplier(newMult.toFixed(2));
-            setEarnings(amount * newMult);
+            setSpotlightIndex(index);
+            setTimeout(() => setSpotlightIndex(null), 600);
+
+            if (typeof response.safeReveals === "number") setRevealedCount(response.safeReveals);
+            else setRevealedCount((c) => c + 1);
+            if (typeof response.multiplier === "number") setMultiplier(response.multiplier.toFixed(2));
+            if (typeof response.potentialWin === "number") setEarnings(response.potentialWin);
+            else if (typeof response.multiplier === "number") setEarnings(amount * response.multiplier);
+
             setBoard((prev) => {
                 const next = [...prev];
-                next[index] = { ...next[index], revealed: true };
+                next[index] = { revealed: true, kind: "gem" };
                 return next;
             });
         }
@@ -347,6 +332,7 @@ export default function Mines() {
         setResultReady(false);
         setKillerIndex(null);
         setResumed(false);
+        setPendingIndex(null);
         setBoard([]);
         setMultiplier("1.00");
         setEarnings(0);
@@ -362,16 +348,21 @@ export default function Mines() {
         }
         if (cashingOut || swapGuard || revealedCount === 0) return;
 
-        // The server is the ledger: no Banked panel until it confirms the credit.
+        const sid = sessionIdRef.current;
+        if (!sid) return;
+
+        // The server is the ledger: no Banked panel until it confirms the credit
+        // and tells us the win amount.
         setCashingOut(true);
-        const credited = await recordWin(earnings, amount, "MINES", parseFloat(multiplier));
-        if (!credited) {
+        const response = await cashOutGame(sid);
+        if (!response) {
             setCashingOut(false);
             showNotification("The house rejected that cash-out — try again.", "error");
             return; // round stays alive
         }
         sessionIdRef.current = null;
-        showNotification(`Cashed out ₹${earnings.toFixed(2)}!`);
+        setEarnings(response.winAmount);
+        showNotification(`Cashed out ₹${response.winAmount.toFixed(2)}!`);
         gridRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
         await sleep(300);
         setStarted(false);
@@ -379,7 +370,6 @@ export default function Mines() {
         setCashingOut(false);
         setResumed(false);
         armSwapGuard(); // Cash Out just became New Round
-        await waveReveal(Math.floor(TILE_COUNT / 2));
     };
 
     // Navigation guard while money is on the board (issue #15). `when` disarms
@@ -461,12 +451,13 @@ export default function Mines() {
                                 {[...Array(TILE_COUNT)].map((_, index) => (
                                     <Tile
                                         key={`${roundKey}-${index}`}
-                                        tile={board[index] || { revealed: false, isMine: false }}
+                                        tile={board[index] || { revealed: false }}
                                         onClick={() => revealTile(index)}
-                                        disabled={gameOver || cashedOut || !started || spotlightIndex !== null || !boardReady || cashingOut}
+                                        disabled={gameOver || cashedOut || !started || spotlightIndex !== null || !boardReady || cashingOut || pendingIndex !== null}
                                         isDimmed={spotlightIndex !== null && spotlightIndex !== index}
                                         isSpotlight={spotlightIndex === index}
                                         isKiller={killerIndex === index}
+                                        isPending={pendingIndex === index}
                                     />
                                 ))}
                             </div>

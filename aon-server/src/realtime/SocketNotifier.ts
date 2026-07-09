@@ -31,6 +31,9 @@ export class SocketNotifier {
         });
 
         eventBus.subscribe(DomainEvent.LeaderboardChanged, async () => {
+            // A win/loan changed net worth — drop the cache, recompute fresh, and
+            // push. The recompute repopulates the cache for HTTP viewers.
+            await this.leaderboard.invalidate();
             const result = await this.leaderboard.getLeaderboard();
             socketServer.emitToAll("leaderboard-update", result);
         });

@@ -24,7 +24,17 @@ class Database {
     async connect(): Promise<void> {
         if (this.connected) return;
         try {
-            await mongoose.connect(env.mongoUri);
+            await mongoose.connect(env.mongoUri, {
+                // A warm connection pool so concurrent requests don't queue on a
+                // single socket. maxPoolSize caps sockets to Atlas; minPoolSize
+                // keeps a few open so the first request after idle isn't slow.
+                maxPoolSize: 20,
+                minPoolSize: 2,
+                // Fail fast instead of hanging a request for 30s if the DB is
+                // briefly unreachable (e.g. Atlas failover).
+                serverSelectionTimeoutMS: 8000,
+                socketTimeoutMS: 45000,
+            });
             this.connected = true;
             console.log("MongoDB connected");
         } catch (error) {

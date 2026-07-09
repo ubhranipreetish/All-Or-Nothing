@@ -78,6 +78,7 @@ npm install
 #   GOOGLE_CLIENT_ID=<your-google-oauth-client-id>
 #   JWT_SECRET=<any-long-random-string>
 #   FRONTEND_URL=http://localhost:3000
+#   REDIS_URL=            # OPTIONAL — only for multi-instance; unset is faster on one instance
 npm run dev
 ```
 
@@ -117,7 +118,11 @@ Direct API access is origin-validated (browser-only by design); the health endpo
 - **Backend** → Render (`aon-server/`, `npm run build && npm start`)
 - **Database** → MongoDB Atlas
 
-The client pings `/api/health` once per session on first load and shows a *"Waking the house…"* toast if the Render dyno is cold. Point a free uptime monitor at `/api/warmup` to keep it warm.
+The client pings `/api/health` once per session on first load and shows a *"Waking the house…"* toast if the Render dyno is cold.
+
+**Keeping the backend warm:** Render's free tier sleeps after 15 minutes of no traffic (≈1-minute cold start). A scheduled GitHub Action (`.github/workflows/keep-warm.yml`) pings `/api/health` every 10 minutes so it never sleeps — set a repo **variable** `BACKEND_URL` to your Render URL to enable it. (Alternatives: UptimeRobot or cron-job.org hitting `/api/warmup`.)
+
+**Scaling & concurrency:** wallet mutations are atomic (`$inc` / conditional updates) so concurrent users can't double-credit or overdraw; settlement is exactly-once via an atomic session-state flip; the Mongoose pool is tuned for parallel requests; the leaderboard is cached (~15s, invalidated on every change). Setting `REDIS_URL` moves rate-limit counters and the cache to Redis for multi-instance deployments — leave it unset for a single instance (it's faster in-process). See [SECURITY.md](SECURITY.md) §6–8.
 
 ## Design notes
 

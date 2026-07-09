@@ -3,9 +3,11 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { Gem, Bomb, Coins } from "lucide-react";
 
+// Render state only — the client never knows a tile's kind until the server
+// reveal response names it. Unrevealed tiles have no `kind`.
 interface TileData {
     revealed: boolean;
-    isMine: boolean;
+    kind?: "gem" | "mine";
 }
 
 interface TileProps {
@@ -15,14 +17,16 @@ interface TileProps {
     isDimmed?: boolean;
     isSpotlight?: boolean;
     isKiller?: boolean;
+    isPending?: boolean; // reveal request for this tile is in flight
     className?: string;
 }
 
-export default function Tile({ tile, onClick, disabled, isDimmed, isSpotlight, isKiller, className }: TileProps) {
+export default function Tile({ tile, onClick, disabled, isDimmed, isSpotlight, isKiller, isPending, className }: TileProps) {
+    const isMine = tile.kind === "mine";
     return (
-        <div className={`tile-container ${tile.revealed ? 'revealed' : ''} ${isDimmed ? 'dimmed' : ''} ${isSpotlight ? 'spotlight' : ''} ${isKiller ? 'killer' : ''} ${className || ''}`}>
+        <div className={`tile-container ${tile.revealed ? 'revealed' : ''} ${isDimmed ? 'dimmed' : ''} ${isSpotlight ? 'spotlight' : ''} ${isKiller ? 'killer' : ''} ${isPending ? 'pending' : ''} ${className || ''}`}>
             <motion.div
-                className={`tile-inner ${tile.revealed ? (tile.isMine ? "mine-reveal" : "gem-reveal") : ""}`}
+                className={`tile-inner ${tile.revealed ? (isMine ? "mine-reveal" : "gem-reveal") : ""}`}
                 onClick={!disabled && !tile.revealed ? onClick : undefined}
                 whileHover={!tile.revealed && !disabled ? {
                     scale: 1.05,
@@ -45,11 +49,14 @@ export default function Tile({ tile, onClick, disabled, isDimmed, isSpotlight, i
                 <div className="tile-front">
                     <div className="tile-front-pattern" />
                     <div className="tile-inner-shadow" />
+                    {/* the reveal round-trips to the server (~100-300ms) — a subtle
+                        shimmer marks the tile as "asking the house", not broken. */}
+                    {isPending && <div className="tile-pending-shimmer" aria-hidden="true" />}
                 </div>
 
                 {/* Back side (Revealed) */}
                 <div className="tile-back">
-                    {tile.isMine ? (
+                    {isMine ? (
                         <div className="icon-wrapper mine-icon">
                             <motion.div
                                 initial={{ scale: 0, opacity: 0 }}
